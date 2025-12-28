@@ -130,6 +130,9 @@ class AirScentingUI:
         self.setup_setup_tab()
         self.setup_entry_tab()
         
+        # Select initial tab based on database existence
+        self.select_initial_tab()
+        
         # Status bar at bottom (create before using it below)
         self.status_var = tk.StringVar(value="Ready")
         status_bar = tk.Label(self.root, textvariable=self.status_var, 
@@ -163,6 +166,101 @@ class AirScentingUI:
             return getuser()
         except:
             return "unknown"
+    
+    def select_initial_tab(self):
+        """Select initial tab based on database existence"""
+        db_type = self.db_type_var.get()
+        database_exists = False
+        
+        # Check if database exists
+        if db_type == "sqlite":
+            # For SQLite, check if database file exists
+            import config as config_module
+            db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
+            if os.path.exists(db_path):
+                # Check if it has tables (not just an empty file)
+                try:
+                    import config
+                    old_db_type = config.DB_TYPE
+                    config.DB_TYPE = db_type
+                    
+                    from database import engine
+                    engine.dispose()
+                    from importlib import reload
+                    import database
+                    reload(database)
+                    
+                    from sqlalchemy import text
+                    
+                    # Try to query a table
+                    with database.get_connection() as conn:
+                        conn.execute(text("SELECT COUNT(*) FROM training_sessions"))
+                    
+                    database_exists = True
+                    
+                    # Restore original DB_TYPE
+                    config.DB_TYPE = old_db_type
+                    database.engine.dispose()
+                    reload(database)
+                except:
+                    # If query fails, database doesn't have proper tables
+                    try:
+                        import config
+                        import database
+                        from importlib import reload
+                        config.DB_TYPE = old_db_type
+                        database.engine.dispose()
+                        reload(database)
+                    except:
+                        pass
+                    database_exists = False
+        else:
+            # For PostgreSQL/Supabase, try to connect and query
+            try:
+                import config
+                old_db_type = config.DB_TYPE
+                config.DB_TYPE = db_type
+                
+                from database import engine
+                engine.dispose()
+                from importlib import reload
+                import database
+                reload(database)
+                
+                from sqlalchemy import text
+                
+                # Try to query a table
+                with database.get_connection() as conn:
+                    conn.execute(text("SELECT COUNT(*) FROM training_sessions"))
+                
+                database_exists = True
+                
+                # Restore original DB_TYPE
+                config.DB_TYPE = old_db_type
+                database.engine.dispose()
+                reload(database)
+            except:
+                # If connection or query fails, database doesn't exist
+                try:
+                    import config
+                    import database
+                    from importlib import reload
+                    config.DB_TYPE = old_db_type
+                    database.engine.dispose()
+                    reload(database)
+                except:
+                    pass
+                database_exists = False
+        
+        # Select appropriate tab
+        if database_exists:
+            # Database exists - show Training Session Entry tab
+            self.notebook.select(self.entry_tab)
+            self.previous_tab_index = 1  # Update to reflect we're on Entry tab
+        else:
+            # No database - show Setup tab (already default)
+            self.notebook.select(self.setup_tab)
+            self.previous_tab_index = 0
     
     def save_session_to_json(self, session_data):
         """Save session data to JSON backup file"""
@@ -663,10 +761,10 @@ class AirScentingUI:
                                 INSERT INTO training_sessions 
                                 (date, session_number, handler, session_purpose, field_support, dog_name, location,
                                  search_area_size, num_subjects, handler_knowledge, weather, temperature, 
-                                 wind_direction, wind_speed, search_type, drive_level, subjects_found, image_files, user_name)
+                                 wind_direction, wind_speed, search_type, drive_level, subjects_found, comments, image_files, user_name)
                                 VALUES (:date, :session_number, :handler, :session_purpose, :field_support, :dog_name, :location,
                                         :search_area_size, :num_subjects, :handler_knowledge, :weather, :temperature, 
-                                        :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, :image_files, :user_name)
+                                        :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, :comments, :image_files, :user_name)
                             """),
                             {
                                 "date": session_data.get('date'),
@@ -686,40 +784,57 @@ class AirScentingUI:
                                 "search_type": session_data.get('search_type'),
                                 "drive_level": session_data.get('drive_level'),
                                 "subjects_found": session_data.get('subjects_found'),
+                                "comments": session_data.get('comments', ''),
                                 "image_files": image_files_json,
                                 "user_name": session_data.get('user_name', self.get_username())
                             }
                         )
                         conn.commit()
                         
-                        # Now insert selected terrains if present in JSON
-                        selected_terrains = session_data.get('selected_terrains', [])
-                        if selected_terrains:
-                            # Get the session_id we just inserted
-                            result = conn.execute(
-                                text("SELECT id FROM training_sessions WHERE session_number = :session_number AND dog_name = :dog_name"),
-                                {"session_number": session_data.get('session_number'), "dog_name": session_data.get('dog_name')}
-                            )
-                            session_row = result.fetchone()
+                        # Get the session_id we just inserted (for terrains and subject responses)
+                        result = conn.execute(
+                            text("SELECT id FROM training_sessions WHERE session_number = :session_number AND dog_name = :dog_name"),
+                            {"session_number": session_data.get('session_number'), "dog_name": session_data.get('dog_name')}
+                        )
+                        session_row = result.fetchone()
+                        
+                        if session_row:
+                            session_id = session_row[0]
                             
-                            if session_row:
-                                session_id = session_row[0]
-                                
-                                # Insert selected terrains
-                                for terrain_name in selected_terrains:
+                            # Insert selected terrains if present in JSON
+                            selected_terrains = session_data.get('selected_terrains', [])
+                            for terrain_name in selected_terrains:
+                                conn.execute(
+                                    text("""
+                                        INSERT INTO selected_terrains (session_id, terrain_name, user_name)
+                                        VALUES (:session_id, :terrain_name, :user_name)
+                                    """),
+                                    {
+                                        "session_id": session_id,
+                                        "terrain_name": terrain_name,
+                                        "user_name": session_data.get('user_name', self.get_username())
+                                    }
+                                )
+                            
+                            # Insert subject responses if present in JSON
+                            subject_responses = session_data.get('subject_responses', [])
+                            for response in subject_responses:
+                                if isinstance(response, dict):
                                     conn.execute(
                                         text("""
-                                            INSERT INTO selected_terrains (session_id, terrain_name, user_name)
-                                            VALUES (:session_id, :terrain_name, :user_name)
+                                            INSERT INTO subject_responses (session_id, subject_number, tfr, refind, user_name)
+                                            VALUES (:session_id, :subject_number, :tfr, :refind, :user_name)
                                         """),
                                         {
                                             "session_id": session_id,
-                                            "terrain_name": terrain_name,
+                                            "subject_number": response.get('subject_number'),
+                                            "tfr": response.get('tfr', ''),
+                                            "refind": response.get('refind', ''),
                                             "user_name": session_data.get('user_name', self.get_username())
                                         }
                                     )
-                                
-                                conn.commit()
+                            
+                            conn.commit()
                     
                     restored_count += 1
                     
@@ -1131,6 +1246,7 @@ class AirScentingUI:
             self.search_type_var.set("")
             self.drive_level_var.set("")
             self.subjects_found_var.set("")
+            self.comments_text.delete("1.0", tk.END)
             # Clear terrain accumulator
             self.accumulated_terrains = []
             self.accumulated_terrain_combo['values'] = []
@@ -1374,17 +1490,35 @@ class AirScentingUI:
         radio_container.pack(pady=5)
         
         tk.Radiobutton(radio_container, text="SQLite", variable=self.db_type_var, 
-                      value="sqlite").pack(side="left", padx=20)
+                      value="sqlite", command=self.on_db_type_changed).pack(side="left", padx=20)
         tk.Radiobutton(radio_container, text="PostgreSQL", variable=self.db_type_var, 
-                      value="postgres").pack(side="left", padx=20)
+                      value="postgres", command=self.on_db_type_changed).pack(side="left", padx=20)
         tk.Radiobutton(radio_container, text="Supabase", variable=self.db_type_var, 
-                      value="supabase").pack(side="left", padx=20)
+                      value="supabase", command=self.on_db_type_changed).pack(side="left", padx=20)
+        tk.Radiobutton(radio_container, text="MySQL", variable=self.db_type_var, 
+                      value="mysql", command=self.on_db_type_changed).pack(side="left", padx=20)
+        
+        # Database Password (for postgres, supabase, mysql)
+        self.db_password_frame = tk.Frame(db_type_frame)
+        self.db_password_frame.pack(pady=5)
+        
+        tk.Label(self.db_password_frame, text="Database Password:").pack(side="left", padx=5)
+        self.db_password_var = tk.StringVar()
+        self.db_password_entry = tk.Entry(self.db_password_frame, textvariable=self.db_password_var, 
+                                          width=30, show="*")
+        self.db_password_entry.pack(side="left", padx=5)
+        
+        # Show/Hide password checkbox
+        self.show_password_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(self.db_password_frame, text="Show", variable=self.show_password_var,
+                      command=self.toggle_password_visibility).pack(side="left", padx=5)
         
         # Add trace to update Create Database button when database type changes
         self.db_type_var.trace_add('write', self.update_create_db_button_state)
         
-        # Initialize button state
+        # Initialize button state and password field visibility
         self.root.after(100, self.update_create_db_button_state)
+        self.root.after(100, self.on_db_type_changed)
         
         # Database folder selection
         db_frame = tk.LabelFrame(frame, text="Database Folder", padx=10, pady=5)
@@ -1764,7 +1898,7 @@ class AirScentingUI:
         tk.Label(search_frame, text="Number of Subjects:").grid(row=0, column=4, sticky="w", padx=5, pady=2)
         self.num_subjects_var = tk.StringVar()
         self.num_subjects_combo = ttk.Combobox(search_frame, textvariable=self.num_subjects_var, width=15, state="readonly",
-                                     values=['0', '1', '2', '3', '4', '5'])
+                                     values=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
         self.num_subjects_combo.grid(row=0, column=5, sticky="w", padx=5, pady=2)
         self.num_subjects_combo.bind('<<ComboboxSelected>>', self.update_subjects_found)
         
@@ -1874,6 +2008,72 @@ class AirScentingUI:
         ConditionalToolTip(self.subjects_found_combo, 
                           "Enter number of subjects found (in Search Parameters)", 
                           show_when_disabled=True)
+        
+        # Bind to update subject responses grid when subjects found changes
+        self.subjects_found_combo.bind('<<ComboboxSelected>>', self.update_subject_responses_grid)
+        
+        # Subject Responses Treeview (row 0, columns 4-7, rowspan=2) - no LabelFrame wrapper
+        # Create container with scrollbar for the treeview
+        tree_container = tk.Frame(results_frame)
+        tree_container.grid(row=0, column=4, columnspan=4, rowspan=2, sticky="nsew", padx=5, pady=5)
+        
+        # Scrollbar
+        tree_scrollbar = ttk.Scrollbar(tree_container, orient="vertical")
+        tree_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Treeview - 3 visible rows (4th row requires scrolling)
+        self.subject_responses_tree = ttk.Treeview(
+            tree_container,
+            columns=('subject', 'tfr', 'refind'),
+            show='headings',
+            height=3,
+            yscrollcommand=tree_scrollbar.set,
+            selectmode='browse'
+        )
+        self.subject_responses_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tree_scrollbar.config(command=self.subject_responses_tree.yview)
+        
+        # Configure columns
+        self.subject_responses_tree.heading('subject', text='Subject #')
+        self.subject_responses_tree.heading('tfr', text='TFR')
+        self.subject_responses_tree.heading('refind', text='Re-find')
+        
+        self.subject_responses_tree.column('subject', width=80, anchor='center')
+        self.subject_responses_tree.column('tfr', width=150, anchor='w')
+        self.subject_responses_tree.column('refind', width=150, anchor='w')
+        
+        # Pre-populate with 10 empty/disabled rows to support up to 10 subjects
+        for i in range(1, 11):
+            # Determine odd/even for alternating shading
+            row_tag = 'odd' if i % 2 == 1 else 'even'
+            self.subject_responses_tree.insert('', tk.END, iid=f'subject_{i}',
+                                              values=(f'Subject {i}', '', ''),
+                                              tags=(row_tag, 'disabled'))
+        
+        # Style for alternating rows
+        self.subject_responses_tree.tag_configure('odd', background='#f0f0f0')  # Light gray
+        self.subject_responses_tree.tag_configure('even', background='#ffffff')  # White
+        
+        # Style for enabled/disabled (text color only, preserves background)
+        self.subject_responses_tree.tag_configure('disabled', foreground='gray')
+        self.subject_responses_tree.tag_configure('enabled', foreground='black')
+        
+        # Bind single-click to edit with inline combobox
+        self.subject_responses_tree.bind('<Button-1>', self.on_treeview_click)
+        
+        # TFR and Re-find options for editing
+        self.tfr_options = ['Strong', 'Fair', 'Required cueing', 'None']
+        self.refind_options = ['Immediate', 'Required cue', 'None']
+        
+        # Track current editing combobox
+        self.tree_edit_combo = None
+        self.tree_edit_item = None
+        self.tree_edit_column = None
+        
+        # Comments textbox (row 1, columns 0-3) - below Drive Level/Subjects Found, aligns with bottom of Subject Responses
+        self.comments_text = tk.Text(results_frame, width=60, height=3, wrap=tk.WORD)
+        self.comments_text.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=5, pady=(0, 5))
+        ToolTip(self.comments_text, "Enter comments about search here")
         
         # Maps and Images
         map_frame = tk.LabelFrame(frame, text="Maps and Images", padx=10, pady=5)
@@ -1987,6 +2187,7 @@ class AirScentingUI:
         # Search results
         drive_level = self.drive_level_var.get()
         subjects_found = self.subjects_found_var.get()
+        comments = self.comments_text.get("1.0", tk.END).strip()  # Get from Text widget
         
         # Map/image files - store as JSON string
         image_files_json = json.dumps(self.map_files_list) if self.map_files_list else ""
@@ -2053,6 +2254,7 @@ class AirScentingUI:
                                 search_type = :search_type,
                                 drive_level = :drive_level,
                                 subjects_found = :subjects_found,
+                                comments = :comments,
                                 image_files = :image_files,
                                 user_name = :user_name,
                                 updated_at = CURRENT_TIMESTAMP
@@ -2075,6 +2277,7 @@ class AirScentingUI:
                             "search_type": search_type,
                             "drive_level": drive_level,
                             "subjects_found": subjects_found,
+                            "comments": comments,
                             "image_files": image_files_json,
                             "user_name": self.get_username(),
                             "session_number": session_number,
@@ -2090,10 +2293,10 @@ class AirScentingUI:
                             INSERT INTO training_sessions 
                             (date, session_number, handler, session_purpose, field_support, dog_name, location,
                              search_area_size, num_subjects, handler_knowledge, weather, temperature, 
-                             wind_direction, wind_speed, search_type, drive_level, subjects_found, image_files, user_name)
+                             wind_direction, wind_speed, search_type, drive_level, subjects_found, comments, image_files, user_name)
                             VALUES (:date, :session_number, :handler, :session_purpose, :field_support, :dog_name, :location,
                                     :search_area_size, :num_subjects, :handler_knowledge, :weather, :temperature, 
-                                    :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, :image_files, :user_name)
+                                    :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, :comments, :image_files, :user_name)
                         """),
                         {
                             "date": date,
@@ -2113,6 +2316,7 @@ class AirScentingUI:
                             "search_type": search_type,
                             "drive_level": drive_level,
                             "subjects_found": subjects_found,
+                            "comments": comments,
                             "image_files": image_files_json,
                             "user_name": self.get_username()
                         }
@@ -2150,6 +2354,40 @@ class AirScentingUI:
                             }
                         )
                     
+                    # Delete existing subject responses for this session
+                    conn.execute(
+                        text("DELETE FROM subject_responses WHERE session_id = :session_id"),
+                        {"session_id": session_id}
+                    )
+                    
+                    # Insert new subject responses from Treeview
+                    for i in range(1, 11):
+                        item_id = f'subject_{i}'
+                        tags = self.subject_responses_tree.item(item_id, 'tags')
+                        
+                        # Only save enabled rows
+                        if 'enabled' in tags:
+                            values = self.subject_responses_tree.item(item_id, 'values')
+                            subject_num = i
+                            tfr = values[1] if len(values) > 1 else ''
+                            refind = values[2] if len(values) > 2 else ''
+                            
+                            # Only save if at least one field is filled
+                            if tfr or refind:
+                                conn.execute(
+                                    text("""
+                                        INSERT INTO subject_responses (session_id, subject_number, tfr, refind, user_name)
+                                        VALUES (:session_id, :subject_number, :tfr, :refind, :user_name)
+                                    """),
+                                    {
+                                        "session_id": session_id,
+                                        "subject_number": subject_num,
+                                        "tfr": tfr,
+                                        "refind": refind,
+                                        "user_name": self.get_username()
+                                    }
+                                )
+                    
                     conn.commit()
             
             # Restore original DB_TYPE
@@ -2163,6 +2401,21 @@ class AirScentingUI:
                 self.save_config()
             
             # Save session to JSON backup
+            # Collect subject responses for backup from Treeview
+            subject_responses_list = []
+            for i in range(1, 11):
+                item_id = f'subject_{i}'
+                tags = self.subject_responses_tree.item(item_id, 'tags')
+                
+                # Only save enabled rows
+                if 'enabled' in tags:
+                    values = self.subject_responses_tree.item(item_id, 'values')
+                    subject_responses_list.append({
+                        "subject_number": i,
+                        "tfr": values[1] if len(values) > 1 else '',
+                        "refind": values[2] if len(values) > 2 else ''
+                    })
+            
             session_backup_data = {
                 "date": date,
                 "session_number": session_number,
@@ -2181,8 +2434,10 @@ class AirScentingUI:
                 "search_type": search_type,
                 "drive_level": drive_level,
                 "subjects_found": subjects_found,
+                "comments": comments,
+                "subject_responses": subject_responses_list,
                 "image_files": self.map_files_list,
-                "selected_terrains": self.accumulated_terrains,  # Add selected terrains
+                "selected_terrains": self.accumulated_terrains,
                 "user_name": self.get_username()
             }
             self.save_session_to_json(session_backup_data)
@@ -2215,6 +2470,7 @@ class AirScentingUI:
             self.search_type_var.set("")
             self.drive_level_var.set("")
             self.subjects_found_var.set("")
+            self.comments_text.delete("1.0", tk.END)
             # Clear terrain accumulator
             self.accumulated_terrains = []
             self.accumulated_terrain_combo['values'] = []
@@ -2267,6 +2523,7 @@ class AirScentingUI:
             self.search_type_var.set("")
             self.drive_level_var.set("")
             self.subjects_found_var.set("")
+            self.comments_text.delete("1.0", tk.END)
             # Clear terrain accumulator
             self.accumulated_terrains = []
             self.accumulated_terrain_combo['values'] = []
@@ -2304,6 +2561,7 @@ class AirScentingUI:
         self.search_type_var.set("")
         self.drive_level_var.set("")
         self.subjects_found_var.set("")
+        self.comments_text.delete("1.0", tk.END)
         # Clear terrain accumulator
         self.accumulated_terrains = []
         self.accumulated_terrain_combo['values'] = []
@@ -2515,7 +2773,7 @@ class AirScentingUI:
                     text("""
                         SELECT date, handler, session_purpose, field_support, dog_name, location,
                                search_area_size, num_subjects, handler_knowledge, weather, temperature,
-                               wind_direction, wind_speed, search_type, drive_level, subjects_found, image_files
+                               wind_direction, wind_speed, search_type, drive_level, subjects_found, comments, image_files
                         FROM training_sessions 
                         WHERE session_number = :session_number AND dog_name = :dog_name
                     """),
@@ -2547,8 +2805,11 @@ class AirScentingUI:
                 self.search_type_var.set(row[13] or "")
                 self.drive_level_var.set(row[14] or "")
                 self.subjects_found_var.set(row[15] or "")
+                # Load comments into Text widget
+                self.comments_text.delete("1.0", tk.END)
+                self.comments_text.insert("1.0", row[16] or "")
                 # Load image files
-                image_files_json = row[16] or ""
+                image_files_json = row[17] or ""
                 if image_files_json:
                     try:
                         self.map_files_list = json.loads(image_files_json)
@@ -2569,6 +2830,10 @@ class AirScentingUI:
                     self.delete_map_button.config(state=tk.DISABLED)
                 # Update subjects found dropdown based on loaded num_subjects
                 self.update_subjects_found()
+                # Re-set subjects_found (update_subjects_found clears it)
+                self.subjects_found_var.set(row[15] or "")
+                # Update subject responses grid based on subjects found
+                self.update_subject_responses_grid()
                 
                 # Load selected terrains for this session
                 try:
@@ -2611,6 +2876,29 @@ class AirScentingUI:
                                 self.accumulated_terrain_var.set(terrains[-1])
                             else:
                                 self.accumulated_terrain_var.set("")
+                            
+                            # Load subject responses
+                            result = conn.execute(
+                                text("""
+                                    SELECT subject_number, tfr, refind 
+                                    FROM subject_responses 
+                                    WHERE session_id = :session_id 
+                                    ORDER BY subject_number
+                                """),
+                                {"session_id": session_id}
+                            )
+                            responses = result.fetchall()
+                            
+                            # Set the values in the Treeview
+                            for row in responses:
+                                subject_num, tfr, refind = row
+                                # Update the corresponding treeview item
+                                if 1 <= subject_num <= 10:
+                                    item_id = f'subject_{subject_num}'
+                                    current_values = self.subject_responses_tree.item(item_id, 'values')
+                                    # Update with loaded data
+                                    self.subject_responses_tree.item(item_id, 
+                                                                    values=(current_values[0], tfr or '', refind or ''))
                     
                     # Restore original DB_TYPE
                     config.DB_TYPE = old_db_type
@@ -2644,6 +2932,7 @@ class AirScentingUI:
                 self.search_type_var.set("")
                 self.drive_level_var.set("")
                 self.subjects_found_var.set("")
+                self.comments_text.delete("1.0", tk.END)
                 # Clear map files list
                 self.map_files_list = []
                 self.map_listbox.delete(0, tk.END)
@@ -2776,6 +3065,123 @@ class AirScentingUI:
             self.subjects_found_combo['values'] = []
             self.subjects_found_combo['state'] = 'disabled'
             self.subjects_found_var.set("")
+        
+        # Update TFR and Re-find state whenever subjects_found changes
+        self.update_subject_responses_grid()
+    
+    def update_subject_responses_grid(self, event=None):
+        """Update subject responses grid - enable/disable rows based on Subjects Found value"""
+        subjects_found = self.subjects_found_var.get()
+        
+        # Parse subjects found value (e.g., "2 out of 3" -> 2 found)
+        num_found = 0
+        if subjects_found and " out of " in subjects_found:
+            try:
+                num_found = int(subjects_found.split(" out of ")[0])
+            except:
+                pass
+        
+        # Update tags on all 10 rows - enable those within num_found, disable others
+        for i in range(1, 11):
+            item_id = f'subject_{i}'
+            # Determine odd/even tag for this row
+            row_tag = 'odd' if i % 2 == 1 else 'even'
+            
+            if i <= num_found:
+                # Enable this row (keep odd/even tag for background shading)
+                self.subject_responses_tree.item(item_id, tags=(row_tag, 'enabled'))
+            else:
+                # Disable this row and clear values (keep odd/even tag for background shading)
+                self.subject_responses_tree.item(item_id, values=(f'Subject {i}', '', ''), tags=(row_tag, 'disabled'))
+    
+    def on_treeview_click(self, event):
+        """Handle click on treeview - show inline combobox for TFR/Re-find columns"""
+        # Identify what was clicked
+        region = self.subject_responses_tree.identify_region(event.x, event.y)
+        if region != 'cell':
+            return
+        
+        item = self.subject_responses_tree.identify_row(event.y)
+        column = self.subject_responses_tree.identify_column(event.x)
+        
+        if not item or not column:
+            return
+        
+        # Check if row is enabled
+        tags = self.subject_responses_tree.item(item, 'tags')
+        if 'disabled' in tags:
+            return  # Don't allow editing disabled rows
+        
+        # Determine which column was clicked (column is like '#1', '#2', '#3')
+        col_index = int(column.replace('#', ''))
+        
+        # Only allow editing TFR (column 2) and Re-find (column 3)
+        if col_index not in [2, 3]:
+            return
+        
+        # Close any existing edit combobox
+        self.close_tree_edit()
+        
+        # Get the bounding box of the cell
+        x, y, width, height = self.subject_responses_tree.bbox(item, column)
+        
+        # Get current values
+        values = list(self.subject_responses_tree.item(item, 'values'))
+        current_value = values[col_index - 1] if col_index <= len(values) else ''
+        
+        # Determine options based on column
+        if col_index == 2:  # TFR column
+            options = self.tfr_options
+        else:  # Re-find column
+            options = self.refind_options
+        
+        # Create combobox positioned over the cell
+        self.tree_edit_combo = ttk.Combobox(
+            self.subject_responses_tree,
+            values=options,
+            state='readonly'
+        )
+        self.tree_edit_combo.set(current_value)
+        
+        # Position the combobox
+        self.tree_edit_combo.place(x=x, y=y, width=width, height=height)
+        
+        # Store editing context
+        self.tree_edit_item = item
+        self.tree_edit_column = col_index
+        
+        # Bind events
+        self.tree_edit_combo.bind('<<ComboboxSelected>>', self.on_tree_edit_select)
+        self.tree_edit_combo.bind('<FocusOut>', lambda e: self.close_tree_edit())
+        self.tree_edit_combo.bind('<Escape>', lambda e: self.close_tree_edit())
+        
+        # Focus and open dropdown
+        self.tree_edit_combo.focus_set()
+        self.tree_edit_combo.event_generate('<Button-1>')
+    
+    def on_tree_edit_select(self, event=None):
+        """Handle selection in inline edit combobox"""
+        if not self.tree_edit_combo or not self.tree_edit_item:
+            return
+        
+        # Get the new value
+        new_value = self.tree_edit_combo.get()
+        
+        # Update the treeview
+        values = list(self.subject_responses_tree.item(self.tree_edit_item, 'values'))
+        values[self.tree_edit_column - 1] = new_value
+        self.subject_responses_tree.item(self.tree_edit_item, values=values)
+        
+        # Close the combobox
+        self.close_tree_edit()
+    
+    def close_tree_edit(self):
+        """Close the inline edit combobox"""
+        if self.tree_edit_combo:
+            self.tree_edit_combo.destroy()
+            self.tree_edit_combo = None
+        self.tree_edit_item = None
+        self.tree_edit_column = None
     
     def drag_enter(self, event):
         """Visual feedback when dragging over drop zone"""
@@ -2976,7 +3382,7 @@ class AirScentingUI:
             else:
                 error_msg = f"Could not find file: {file_path}\n\nSearched in:\n"
                 for p in possible_paths:
-                    error_msg += f"  â€¢ {p}\n"
+                    error_msg += f"  • {p}\n"
                 error_msg += "\nTip: Check your trail maps folder setting in Setup tab."
                 messagebox.showerror("File Not Found", error_msg)
                 return
@@ -3080,9 +3486,9 @@ class AirScentingUI:
         instructions = tk.Label(
             dialog, 
             text="Select sessions to navigate:\n"
-                 "â€¢ Click to select one session\n"
-                 "â€¢ Ctrl+Click to select multiple sessions\n"
-                 "â€¢ Shift+Click to select a range\n"
+                 "• Click to select one session\n"
+                 "• Ctrl+Click to select multiple sessions\n"
+                 "• Shift+Click to select a range\n"
                  "Use Previous/Next buttons to navigate through selected sessions",
             justify=tk.LEFT,
             padx=10,
@@ -3270,8 +3676,38 @@ class AirScentingUI:
                 pass
     
     def open_export_dialog(self):
-        """Open export PDF dialog (placeholder)"""
-        messagebox.showinfo("Export PDF", "Export PDF functionality will be implemented next")
+        """Open export PDF dialog"""
+        # Check if dog is selected
+        if not hasattr(self, 'dog_var') or not self.dog_var.get():
+            messagebox.showwarning("No Dog Selected", "Please select a dog before exporting")
+            return
+        
+        # Check if trail maps folder is configured
+        trail_maps_folder = self.folder_path_var.get().strip()
+        if not trail_maps_folder:
+            messagebox.showwarning("Trail Maps Folder Not Set", 
+                                 "Trail maps folder not configured.\n\n"
+                                 "Images will not be included in the PDF.\n\n"
+                                 "Configure in Setup tab to include images.")
+        
+        # Import the export module
+        import export_pdf
+        
+        # Get database connection function
+        def get_connection():
+            import config
+            from database import engine
+            return engine.connect()
+        
+        # Show export dialog
+        export_pdf.show_export_dialog(
+            parent=self.root,
+            db_type=self.db_type_var.get(),
+            current_dog=self.dog_var.get(),
+            get_connection_func=get_connection,
+            backup_folder=self.backup_path_var.get().strip(),
+            trail_maps_folder=trail_maps_folder
+        )
     
     # File/Folder selection methods
     def select_db_folder(self):
@@ -3300,11 +3736,62 @@ class AirScentingUI:
         db_type = self.db_type_var.get()
         has_folder = bool(self.db_path_var.get().strip())
         
-        # For SQLite, require folder. For postgres/supabase, always enable
+        # For SQLite, require folder. For postgres/supabase/mysql, always enable
         if db_type == "sqlite":
             self.create_db_btn.config(state="normal" if has_folder else "disabled")
-        else:  # postgres or supabase
+        else:  # postgres, supabase, or mysql
             self.create_db_btn.config(state="normal")
+    
+    def on_db_type_changed(self):
+        """Show/hide password field based on database type"""
+        db_type = self.db_type_var.get()
+        
+        # Show password field for postgres, supabase, mysql
+        # Hide for sqlite
+        if db_type in ["postgres", "supabase", "mysql"]:
+            self.db_password_frame.pack(pady=5)
+        else:
+            self.db_password_frame.pack_forget()
+    
+    def toggle_password_visibility(self):
+        """Toggle password visibility in entry field"""
+        if self.show_password_var.get():
+            self.db_password_entry.config(show="")
+        else:
+            self.db_password_entry.config(show="*")
+    
+    def set_db_password(self):
+        """Set database password in config at runtime"""
+        import config
+        
+        db_type = self.db_type_var.get()
+        password = self.db_password_var.get()
+        
+        if db_type in ["postgres", "supabase", "mysql"] and password:
+            # Set the password in config
+            config.DB_PASSWORD = password
+            
+            # Build the connection URL with password
+            url_template = config.DB_CONFIG[db_type].get("url_template", "")
+            if url_template:
+                config.DB_CONFIG[db_type]["url"] = url_template.format(password=password)
+    
+    def prepare_db_connection(self, db_type):
+        """Prepare database connection by setting password if needed"""
+        if db_type in ["postgres", "supabase", "mysql"]:
+            password = self.db_password_var.get().strip()
+            if not password:
+                messagebox.showerror(
+                    "Password Required",
+                    f"Please enter the database password for {db_type} in the Setup tab."
+                )
+                return False
+            
+            # Update the password
+            self.db_password_var.set(password)
+            self.set_db_password()
+        
+        return True
     
     def create_database(self):
         """Create or rebuild database schema"""
@@ -3439,22 +3926,20 @@ class AirScentingUI:
                 import traceback
                 traceback.print_exc()
         
-        else:  # postgres or supabase
-            # For Supabase, check if password has been configured
-            if db_type == "supabase":
-                import config
-                supabase_url = config.DB_CONFIG["supabase"]["url"]
-                if "[YOUR-PASSWORD]" in supabase_url:
-                    messagebox.showerror(
-                        "Password Not Configured",
-                        "Supabase password has not been set!\n\n"
-                        "Please edit config.py line 24 and replace:\n"
-                        "[YOUR-PASSWORD]\n\n"
-                        "with your actual Supabase database password."
-                    )
-                    return
+        else:  # postgres, supabase, or mysql
+            # Check if password has been entered
+            password = self.db_password_var.get().strip()
+            if not password:
+                messagebox.showerror(
+                    "Password Required",
+                    f"Please enter the database password for {db_type}."
+                )
+                return
             
-            # For PostgreSQL/Supabase, check if tables exist and offer to rebuild
+            # Set the password in config at runtime
+            self.set_db_password()
+            
+            # For PostgreSQL/Supabase/MySQL, check if tables exist and offer to rebuild
             try:
                 # Temporarily switch to the selected database type
                 import config
@@ -3567,10 +4052,10 @@ class AirScentingUI:
                     "Database Error",
                     f"Failed to create {db_type} database schema:\n\n{e}\n\n{type(e).__name__}\n\n"
                     f"Make sure:\n"
-                    f"1. Database connection is configured in config.py\n"
-                    f"2. Password is set correctly (replace [YOUR-PASSWORD])\n"
-                    f"3. You have network access to Supabase\n"
-                    f"4. Credentials are correct"
+                    f"1. Database password is correct\n"
+                    f"2. Database server is accessible\n"
+                    f"3. You have proper credentials and permissions\n"
+                    f"4. Connection string in config.py is correct"
                 )
                 import traceback
                 traceback.print_exc()
@@ -4962,20 +5447,20 @@ class AirScentingUI:
         # Build error messages
         errors = []
         if not database_exists:
-            errors.append("â€¢ Database not created")
+            errors.append("• Database not created")
         
         # Check both that folder is set AND exists on disk
         if not backup_folder or not os.path.exists(backup_folder):
             if not backup_folder:
-                errors.append("â€¢ Backup folder not selected")
+                errors.append("• Backup folder not selected")
             else:
-                errors.append(f"â€¢ Backup folder does not exist: {backup_folder}")
+                errors.append(f"• Backup folder does not exist: {backup_folder}")
         
         if not trail_maps_folder or not os.path.exists(trail_maps_folder):
             if not trail_maps_folder:
-                errors.append("â€¢ Trail Maps Storage folder not selected")
+                errors.append("• Trail Maps Storage folder not selected")
             else:
-                errors.append(f"â€¢ Trail Maps Storage folder does not exist: {trail_maps_folder}")
+                errors.append(f"• Trail Maps Storage folder does not exist: {trail_maps_folder}")
         
         # If there are errors, show message and prevent switching
         if errors:

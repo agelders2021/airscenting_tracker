@@ -4,14 +4,15 @@ Defines tables and creates them in the database
 """
 from sqlalchemy import text
 from database import engine, get_connection
-from config import DB_TYPE
+import config  # Import module, not the variable
 
 
 def create_tables():
     """Create all database tables"""
     
     # Auto-increment syntax differs between databases
-    if DB_TYPE == "sqlite":
+    # Check DB_TYPE dynamically at runtime
+    if config.DB_TYPE == "sqlite":
         dog_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
         session_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
         settings_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
@@ -19,6 +20,16 @@ def create_tables():
         terrain_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
         distraction_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
         selected_terrain_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
+        subject_response_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
+    elif config.DB_TYPE == "mysql":
+        dog_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
+        session_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
+        settings_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
+        location_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
+        terrain_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
+        distraction_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
+        selected_terrain_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
+        subject_response_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
     else:  # postgres or supabase
         dog_id_type = "SERIAL PRIMARY KEY"
         session_id_type = "SERIAL PRIMARY KEY"
@@ -27,6 +38,7 @@ def create_tables():
         terrain_id_type = "SERIAL PRIMARY KEY"
         distraction_id_type = "SERIAL PRIMARY KEY"
         selected_terrain_id_type = "SERIAL PRIMARY KEY"
+        subject_response_id_type = "SERIAL PRIMARY KEY"
     
     # Settings table (for database-specific settings like last dog)
     settings_table = f"""
@@ -99,6 +111,7 @@ def create_tables():
         search_type TEXT,
         drive_level TEXT,
         subjects_found TEXT,
+        comments TEXT,
         image_files TEXT,
         user_name TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -113,6 +126,20 @@ def create_tables():
         id {selected_terrain_id_type},
         session_id INTEGER NOT NULL,
         terrain_name TEXT NOT NULL,
+        user_name TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES training_sessions(id) ON DELETE CASCADE
+    )
+    """
+    
+    # Subject responses table (per-subject TFR and Re-find data)
+    subject_responses_table = f"""
+    CREATE TABLE IF NOT EXISTS subject_responses (
+        id {subject_response_id_type},
+        session_id INTEGER NOT NULL,
+        subject_number INTEGER NOT NULL,
+        tfr TEXT,
+        refind TEXT,
         user_name TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (session_id) REFERENCES training_sessions(id) ON DELETE CASCADE
@@ -134,6 +161,8 @@ def create_tables():
         conn.execute(text(sessions_table))
         # Create selected_terrains table (must be after training_sessions due to foreign key)
         conn.execute(text(selected_terrains_table))
+        # Create subject_responses table (must be after training_sessions due to foreign key)
+        conn.execute(text(subject_responses_table))
         conn.commit()
         
         print("Database tables created successfully")
@@ -142,7 +171,8 @@ def create_tables():
 def drop_tables():
     """Drop all tables (use with caution!)"""
     with get_connection() as conn:
-        # Drop selected_terrains first (has foreign key to training_sessions)
+        # Drop tables with foreign keys first
+        conn.execute(text("DROP TABLE IF EXISTS subject_responses"))
         conn.execute(text("DROP TABLE IF EXISTS selected_terrains"))
         conn.execute(text("DROP TABLE IF EXISTS training_sessions"))
         conn.execute(text("DROP TABLE IF EXISTS distraction_types"))
