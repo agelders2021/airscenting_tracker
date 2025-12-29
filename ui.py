@@ -17,6 +17,7 @@ from about_dialog import show_about
 from tips import ToolTip, ConditionalToolTip
 from ui_utils import get_username, get_default_terrain_types, get_default_distraction_types
 from ui_database import get_db_manager
+from working_dialog import WorkingDialog, run_with_working_dialog
 
 class AirScentingUI:
     """Main UI class for Air-Scenting Logger"""
@@ -140,14 +141,19 @@ class AirScentingUI:
                             bd=1, relief=tk.SUNKEN, anchor=tk.W)
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
         
-        # If a dog was loaded from config, update session number for that dog
-        loaded_dog = self.dog_var.get()
-        if loaded_dog:
-            next_session = self.get_next_session_number(loaded_dog)
-            self.session_var.set(str(next_session))
-            self.status_var.set(f"Ready - {loaded_dog} - Next session: #{next_session}")
-            # Update navigation button states
-            self.root.after(200, self.update_navigation_buttons)
+        # Schedule session number update AFTER password is loaded (happens at 100ms)
+        # This prevents database calls before authentication is ready
+        def update_initial_session():
+            loaded_dog = self.dog_var.get()
+            if loaded_dog:
+                next_session = self.get_next_session_number(loaded_dog)
+                self.session_var.set(str(next_session))
+                self.status_var.set(f"Ready - {loaded_dog} - Next session: #{next_session}")
+                # Update navigation button states
+                self.update_navigation_buttons()
+        
+        # Delay until after password is loaded (300ms > 100ms for on_db_type_changed)
+        self.root.after(300, update_initial_session)
         
         # Track form state for unsaved changes detection
         self.form_snapshot = ""
@@ -712,6 +718,14 @@ class AirScentingUI:
             return False
         
         # Restore sessions
+        # Show working dialog for networked databases
+        if db_type in ["postgres", "supabase", "mysql"]:
+            working_dialog = WorkingDialog(self.root, "Restoring", 
+                                         f"Restoring {len(json_files)} sessions to {db_type} database...")
+            self.root.update()
+        else:
+            working_dialog = None
+        
         try:
             import config
             old_db_type = config.DB_TYPE
@@ -989,6 +1003,9 @@ class AirScentingUI:
             import traceback
             traceback.print_exc()
             return False
+        finally:
+            if working_dialog:
+                working_dialog.close(delay_ms=200)
     
     def offer_load_default_types(self, db_type):
         """Offer to load default terrain and distraction types into new database"""
@@ -1007,8 +1024,20 @@ class AirScentingUI:
         # Use DatabaseManager to properly load defaults with sort_order
         db_mgr = get_db_manager(db_type)
         
-        terrain_success, terrain_msg = db_mgr.restore_default_terrain_types()
-        distraction_success, distraction_msg = db_mgr.restore_default_distraction_types()
+        # Show working dialog for networked databases
+        if db_type in ["postgres", "supabase", "mysql"]:
+            working_dialog = WorkingDialog(self.root, "Loading Defaults", 
+                                         f"Loading default types to {db_type} database...")
+            self.root.update()
+        else:
+            working_dialog = None
+        
+        try:
+            terrain_success, terrain_msg = db_mgr.restore_default_terrain_types()
+            distraction_success, distraction_msg = db_mgr.restore_default_distraction_types()
+        finally:
+            if working_dialog:
+                working_dialog.close(delay_ms=200)
         
         # Refresh UI - both Setup tab AND Entry tab
         self.load_terrain_from_database()  # Setup tab treeview
@@ -1065,56 +1094,94 @@ class AirScentingUI:
         dog_name = self.dog_var.get()
         # print(f"DEBUG on_dog_changed: dog_name = '{dog_name}'")  # DEBUG
         if dog_name:
-            # Save dog to database for persistence across sessions
-            self.save_db_setting("last_dog_name", dog_name)
+            db_type = self.db_type_var.get()
             
-            # Update session number to next available for this dog
-            next_session = self.get_next_session_number(dog_name)
-            # print(f"DEBUG on_dog_changed: next_session = {next_session}")  # DEBUG
-            self.session_var.set(str(next_session))
+            # Show working dialog for networked databases
+            if db_type in ["postgres", "supabase", "mysql"]:
+                working_dialog = WorkingDialog(self.root, "Loading Dog Data", 
+                                             f"Loading data for {dog_name}...")
+                self.root.update()
+            else:
+                working_dialog = None
             
-            # Clear form fields for new dog (like "New" button but keep handler and dog)
-            self.set_date(datetime.now().strftime("%Y-%m-%d"))
-            # handler_var is NOT cleared - keep current handler name
-            self.purpose_var.set("")
-            self.field_support_var.set("")
-            # dog_var is already set - don't clear it
-            self.location_var.set("")
-            self.search_area_var.set("")
-            self.num_subjects_var.set("")
-            self.handler_knowledge_var.set("")
-            self.weather_var.set("")
-            self.temperature_var.set("")
-            self.wind_direction_var.set("")
-            self.wind_speed_var.set("")
-            self.search_type_var.set("")
-            self.drive_level_var.set("")
-            self.subjects_found_var.set("")
-            self.comments_text.delete("1.0", tk.END)
-            # Clear terrain accumulator
-            self.accumulated_terrains = []
-            self.accumulated_terrain_combo['values'] = []
-            self.accumulated_terrain_var.set("")
-            self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
-            # Clear map files list
-            self.map_files_list = []
-            self.map_listbox.delete(0, tk.END)
-            self.view_map_button.config(state=tk.DISABLED)
-            self.delete_map_button.config(state=tk.DISABLED)
-            # Update subjects_found combo state
-            self.update_subjects_found()
+            try:
+                # Save dog to database for persistence across sessions
+                self.save_db_setting("last_dog_name", dog_name)
+                
+                # Update session number to next available for this dog
+                next_session = self.get_next_session_number(dog_name)
+                # print(f"DEBUG on_dog_changed: next_session = {next_session}")  # DEBUG
+                self.session_var.set(str(next_session))
+                
+                # Clear form fields for new dog (like "New" button but keep handler and dog)
+                self.set_date(datetime.now().strftime("%Y-%m-%d"))
+                # handler_var is NOT cleared - keep current handler name
+                self.purpose_var.set("")
+                self.field_support_var.set("")
+                # dog_var is already set - don't clear it
+                self.location_var.set("")
+                self.search_area_var.set("")
+                self.num_subjects_var.set("")
+                self.handler_knowledge_var.set("")
+                self.weather_var.set("")
+                self.temperature_var.set("")
+                self.wind_direction_var.set("")
+                self.wind_speed_var.set("")
+                self.search_type_var.set("")
+                self.drive_level_var.set("")
+                self.subjects_found_var.set("")
+                self.comments_text.delete("1.0", tk.END)
+                # Clear terrain accumulator
+                self.accumulated_terrains = []
+                self.accumulated_terrain_combo['values'] = []
+                self.accumulated_terrain_var.set("")
+                self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
+                # Clear map files list
+                self.map_files_list = []
+                self.map_listbox.delete(0, tk.END)
+                self.view_map_button.config(state=tk.DISABLED)
+                self.delete_map_button.config(state=tk.DISABLED)
+                # Update subjects_found combo state
+                self.update_subjects_found()
+                
+                # Clear selected sessions - switching dogs exits navigation mode
+                self.selected_sessions = []
+                self.selected_sessions_index = -1
+                
+                # Update navigation buttons
+                self.update_navigation_buttons()
+                
+                self.status_var.set(f"Switched to {dog_name} - Next session: #{next_session}")
+                
+            finally:
+                if working_dialog:
+                    working_dialog.close(delay_ms=200)  # 200ms delay for UI to update
+    
+    def ensure_db_ready(self):
+        """Ensure database connection is ready (password set for networked DBs)"""
+        db_type = self.db_type_var.get()
+        if db_type in ["postgres", "supabase", "mysql"]:
+            password = self.db_password_var.get().strip()
             
-            # Clear selected sessions - switching dogs exits navigation mode
-            self.selected_sessions = []
-            self.selected_sessions_index = -1
+            # If password not loaded yet, try loading from encrypted storage
+            if not password and hasattr(self, 'config'):
+                from password_manager import get_decrypted_password, check_crypto_available
+                if check_crypto_available():
+                    saved_password = get_decrypted_password(self.config, db_type)
+                    if saved_password:
+                        self.db_password_var.set(saved_password)
+                        password = saved_password
             
-            # Update navigation buttons
-            self.update_navigation_buttons()
-            
-            self.status_var.set(f"Switched to {dog_name} - Next session: #{next_session}")
+            # Set password in database config
+            if password:
+                self.set_db_password()
+
     
     def get_next_session_number(self, dog_name=None):
         """Get the next session number for the specified dog"""
+        # Ensure database is ready (critical for networked databases)
+        self.ensure_db_ready()
+        
         # Handle the optional parameter
         if dog_name is None and hasattr(self, 'dog_var'):
             dog_name = self.dog_var.get()
@@ -1198,30 +1265,44 @@ class AirScentingUI:
 
         # Save to database using DatabaseManager
         db_mgr = get_db_manager(self.db_type_var.get())
-        success, message, session_id = db_mgr.save_session(session_data)
+        
+        # Show working dialog for networked databases
+        db_type = self.db_type_var.get()
+        if db_type in ["postgres", "supabase", "mysql"]:
+            working_dialog = WorkingDialog(self.root, "Saving", 
+                                         f"Saving session to {db_type} database...")
+            self.root.update()
+        else:
+            working_dialog = None
+        
+        try:
+            success, message, session_id = db_mgr.save_session(session_data)
 
-        if not success:
-            messagebox.showerror("Database Error", message)
-            return
+            if not success:
+                messagebox.showerror("Database Error", message)
+                return
 
-        # Save selected terrains
-        db_mgr.save_selected_terrains(session_id, self.accumulated_terrains)
+            # Save selected terrains
+            db_mgr.save_selected_terrains(session_id, self.accumulated_terrains)
 
-        # Save subject responses
-        subject_responses_list = []
-        for i in range(1, 11):
-            item_id = f'subject_{i}'
-            tags = self.subject_responses_tree.item(item_id, 'tags')
+            # Save subject responses
+            subject_responses_list = []
+            for i in range(1, 11):
+                item_id = f'subject_{i}'
+                tags = self.subject_responses_tree.item(item_id, 'tags')
 
-            if 'enabled' in tags:
-                values = self.subject_responses_tree.item(item_id, 'values')
-                subject_responses_list.append({
-                    "subject_number": i,
-                    "tfr": values[1] if len(values) > 1 else '',
-                    "refind": values[2] if len(values) > 2 else ''
-                })
+                if 'enabled' in tags:
+                    values = self.subject_responses_tree.item(item_id, 'values')
+                    subject_responses_list.append({
+                        "subject_number": i,
+                        "tfr": values[1] if len(values) > 1 else '',
+                        "refind": values[2] if len(values) > 2 else ''
+                    })
 
-        db_mgr.save_subject_responses(session_id, subject_responses_list)
+            db_mgr.save_subject_responses(session_id, subject_responses_list)
+        finally:
+            if working_dialog:
+                working_dialog.close(delay_ms=200)
 
         # Save last handler name to config
         if handler:
@@ -1405,10 +1486,21 @@ class AirScentingUI:
                                           width=30, show="*")
         self.db_password_entry.pack(side="left", padx=5)
         
+        # Add right-click context menu for password entry (Cut/Copy/Paste)
+        self.add_entry_context_menu(self.db_password_entry)
+        
         # Show/Hide password checkbox
         self.show_password_var = tk.BooleanVar(value=False)
         tk.Checkbutton(self.db_password_frame, text="Show", variable=self.show_password_var,
                       command=self.toggle_password_visibility).pack(side="left", padx=5)
+        
+        # Remember Password checkbox
+        self.remember_password_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(self.db_password_frame, text="Remember", variable=self.remember_password_var).pack(side="left", padx=5)
+        
+        # Forget Password button
+        tk.Button(self.db_password_frame, text="Forget Saved Password", 
+                 command=self.forget_password, width=18).pack(side="left", padx=5)
         
         # Add trace to update Create Database button when database type changes
         self.db_type_var.trace_add('write', self.update_create_db_button_state)
@@ -1721,7 +1813,8 @@ class AirScentingUI:
         self.date_picker.bind("<<DateEntrySelected>>", self.on_date_changed)
         
         tk.Label(session_frame, text="Session #:").grid(row=0, column=2, sticky="e", padx=5, pady=2)
-        self.session_var = tk.StringVar(value=str(self.get_next_session_number()))
+        # Initialize with "1" for now, will update after password is loaded
+        self.session_var = tk.StringVar(value="1")
         self.session_entry = tk.Entry(session_frame, textvariable=self.session_var, width=10)
         self.session_entry.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         self.session_entry.bind("<FocusOut>", self.on_session_number_changed)
@@ -2292,7 +2385,21 @@ class AirScentingUI:
 
         # Load session from database
         db_mgr = get_db_manager(self.db_type_var.get())
-        session_data = db_mgr.load_session(session_number, dog_name)
+        
+        # Show working dialog for networked databases
+        db_type = self.db_type_var.get()
+        if db_type in ["postgres", "supabase", "mysql"]:
+            working_dialog = WorkingDialog(self.root, "Loading", 
+                                         f"Loading session from {db_type} database...")
+            self.root.update()
+        else:
+            working_dialog = None
+        
+        try:
+            session_data = db_mgr.load_session(session_number, dog_name)
+        finally:
+            if working_dialog:
+                working_dialog.close(delay_ms=200)
 
         if session_data:
             # Populate form with session data
@@ -2887,17 +2994,29 @@ class AirScentingUI:
             
             from sqlalchemy import text
             
-            with database.get_connection() as conn:
-                result = conn.execute(
-                    text("""
-                        SELECT session_number, date, handler, dog_name
-                        FROM training_sessions 
-                        WHERE dog_name = :dog_name
-                        ORDER BY session_number
-                    """),
-                    {"dog_name": dog_name}
-                )
-                sessions = result.fetchall()
+            # Show working dialog for networked databases
+            if db_type in ["postgres", "supabase", "mysql"]:
+                working_dialog = WorkingDialog(self.root, "Loading", 
+                                             f"Loading session list from {db_type} database...")
+                self.root.update()
+            else:
+                working_dialog = None
+            
+            try:
+                with database.get_connection() as conn:
+                    result = conn.execute(
+                        text("""
+                            SELECT session_number, date, handler, dog_name
+                            FROM training_sessions 
+                            WHERE dog_name = :dog_name
+                            ORDER BY session_number
+                        """),
+                        {"dog_name": dog_name}
+                    )
+                    sessions = result.fetchall()
+            finally:
+                if working_dialog:
+                    working_dialog.close(delay_ms=200)
             
             config.DB_TYPE = old_db_type
             database.engine.dispose()
@@ -3160,14 +3279,82 @@ class AirScentingUI:
         else:  # postgres, supabase, or mysql
             self.create_db_btn.config(state="normal")
     
+    def add_entry_context_menu(self, entry_widget):
+        """Add right-click context menu to Entry widget with Cut/Copy/Paste/Select All"""
+        context_menu = tk.Menu(entry_widget, tearoff=0)
+        
+        context_menu.add_command(label="Cut", command=lambda: self.entry_cut(entry_widget))
+        context_menu.add_command(label="Copy", command=lambda: self.entry_copy(entry_widget))
+        context_menu.add_command(label="Paste", command=lambda: self.entry_paste(entry_widget))
+        context_menu.add_separator()
+        context_menu.add_command(label="Select All", command=lambda: self.entry_select_all(entry_widget))
+        
+        def show_context_menu(event):
+            try:
+                context_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                context_menu.grab_release()
+        
+        # Bind right-click (Button-3 on Linux/Windows, Button-2 on Mac)
+        entry_widget.bind("<Button-3>", show_context_menu)
+        # Also bind Control-Button-1 for Mac users
+        entry_widget.bind("<Control-Button-1>", show_context_menu)
+    
+    def entry_cut(self, entry_widget):
+        """Cut selected text from Entry widget"""
+        try:
+            entry_widget.event_generate("<<Cut>>")
+        except:
+            pass
+    
+    def entry_copy(self, entry_widget):
+        """Copy selected text from Entry widget"""
+        try:
+            entry_widget.event_generate("<<Copy>>")
+        except:
+            pass
+    
+    def entry_paste(self, entry_widget):
+        """Paste text into Entry widget"""
+        try:
+            entry_widget.event_generate("<<Paste>>")
+        except:
+            pass
+    
+    def entry_select_all(self, entry_widget):
+        """Select all text in Entry widget"""
+        try:
+            entry_widget.select_range(0, tk.END)
+            entry_widget.icursor(tk.END)
+        except:
+            pass
+    
     def on_db_type_changed(self):
-        """Show/hide password field based on database type"""
+        """Show/hide password field based on database type and load saved password"""
         db_type = self.db_type_var.get()
         
         # Show password field for postgres, supabase, mysql
         # Hide for sqlite
         if db_type in ["postgres", "supabase", "mysql"]:
             self.db_password_frame.pack(pady=5)
+            
+            # Try to load saved encrypted password for this database type
+            from password_manager import get_decrypted_password, check_crypto_available
+            
+            if check_crypto_available():
+                saved_password = get_decrypted_password(self.config, db_type)
+                if saved_password:
+                    self.db_password_var.set(saved_password)
+                    # CRITICAL FIX: Actually set the password in the database configuration
+                    # Without this, the password shows in the field but isn't used for connection
+                    self.set_db_password()
+                    # Only update status if status_var exists (may not during initialization)
+                    if hasattr(self, 'status_var'):
+                        self.status_var.set(f"Loaded saved password for {db_type}")
+                else:
+                    self.db_password_var.set("")
+            else:
+                self.db_password_var.set("")
         else:
             self.db_password_frame.pack_forget()
     
@@ -3179,7 +3366,7 @@ class AirScentingUI:
             self.db_password_entry.config(show="*")
     
     def set_db_password(self):
-        """Set database password in config at runtime"""
+        """Set database password in config at runtime and optionally save encrypted"""
         import config
         
         db_type = self.db_type_var.get()
@@ -3193,6 +3380,49 @@ class AirScentingUI:
             url_template = config.DB_CONFIG[db_type].get("url_template", "")
             if url_template:
                 config.DB_CONFIG[db_type]["url"] = url_template.format(password=password)
+            
+            # Save encrypted password if "Remember" is checked
+            # Check if remember_password_var exists (may not during initialization)
+            if hasattr(self, 'remember_password_var') and self.remember_password_var.get():
+                from password_manager import save_encrypted_password, check_crypto_available
+                
+                if check_crypto_available():
+                    if save_encrypted_password(self.config, db_type, password):
+                        self.save_config()
+                        # Only update status if status_var exists (may not during initialization)
+                        if hasattr(self, 'status_var'):
+                            self.status_var.set(f"Password saved (encrypted) for {db_type}")
+                    else:
+                        messagebox.showwarning(
+                            "Encryption Failed",
+                            "Could not encrypt password. It will not be saved."
+                        )
+                else:
+                    messagebox.showwarning(
+                        "Cryptography Not Available",
+                        "Password encryption requires the 'cryptography' library.\n\n"
+                        "Install with: pip install cryptography\n\n"
+                        "Password will not be saved."
+                    )
+    
+    def forget_password(self):
+        """Clear saved encrypted password for current database type"""
+        db_type = self.db_type_var.get()
+        
+        if db_type not in ["postgres", "supabase", "mysql"]:
+            return
+        
+        from password_manager import clear_saved_password
+        
+        # Clear from config
+        clear_saved_password(self.config, db_type)
+        self.save_config()
+        
+        # Clear from UI
+        self.db_password_var.set("")
+        
+        self.status_var.set(f"Forgot saved password for {db_type}")
+        messagebox.showinfo("Password Cleared", f"Saved password for {db_type} has been cleared.")
     
     def prepare_db_connection(self, db_type):
         """Prepare database connection by setting password if needed"""
@@ -3375,17 +3605,25 @@ class AirScentingUI:
                 from schema import create_tables, drop_tables
                 from sqlalchemy import text
                 
+                # Show working dialog while checking connection
+                working_dialog = WorkingDialog(self.root, "Connecting", 
+                                             f"Connecting to {db_type} database...")
+                self.root.update()
+                
                 # Check if training_sessions table exists
-                with database.get_connection() as conn:
-                    check_query = text("""
-                        SELECT EXISTS (
-                            SELECT FROM information_schema.tables 
-                            WHERE table_name = 'training_sessions'
-                        )
-                    """)
-                    
-                    result = conn.execute(check_query)
-                    table_exists = result.scalar()
+                try:
+                    with database.get_connection() as conn:
+                        check_query = text("""
+                            SELECT EXISTS (
+                                SELECT FROM information_schema.tables 
+                                WHERE table_name = 'training_sessions'
+                            )
+                        """)
+                        
+                        result = conn.execute(check_query)
+                        table_exists = result.scalar()
+                finally:
+                    working_dialog.close(delay_ms=200)
                 
                 if table_exists:
                     result = messagebox.askyesno(
@@ -3403,11 +3641,23 @@ class AirScentingUI:
                         return
                     
                     # Drop existing tables
-                    drop_tables()
-                    self.status_var.set("Dropped existing tables...")
+                    working_dialog = WorkingDialog(self.root, "Deleting", 
+                                                 f"Deleting existing {db_type} tables...")
+                    self.root.update()
+                    try:
+                        drop_tables()
+                        self.status_var.set("Dropped existing tables...")
+                    finally:
+                        working_dialog.close(delay_ms=200)
                 
                 # Create tables
-                create_tables()
+                working_dialog = WorkingDialog(self.root, "Creating Database", 
+                                             f"Creating {db_type} database schema...")
+                self.root.update()
+                try:
+                    create_tables()
+                finally:
+                    working_dialog.close(delay_ms=200)
                 
                 # Restore original DB_TYPE
                 config.DB_TYPE = old_db_type
@@ -3481,6 +3731,9 @@ class AirScentingUI:
     # Training Locations methods
     def load_locations_from_database(self):
         """Load training locations from database into Setup tab listbox"""
+        # Ensure database is ready (critical for networked databases)
+        self.ensure_db_ready()
+        
         db_mgr = get_db_manager(self.db_type_var.get())
         locations = db_mgr.load_locations()
         
@@ -3511,6 +3764,9 @@ class AirScentingUI:
     
     def load_terrain_from_database(self):
         """Load terrain types from database into Setup tab treeview"""
+        # Ensure database is ready (critical for networked databases)
+        self.ensure_db_ready()
+        
         db_mgr = get_db_manager(self.db_type_var.get())
         terrain_types = db_mgr.load_terrain_types()
         
@@ -3521,6 +3777,9 @@ class AirScentingUI:
     
     def load_distraction_from_database(self):
         """Load distraction types from database into Setup tab treeview"""
+        # Ensure database is ready (critical for networked databases)
+        self.ensure_db_ready()
+        
         db_mgr = get_db_manager(self.db_type_var.get())
         distraction_types = db_mgr.load_distraction_types()
         
@@ -3546,7 +3805,21 @@ class AirScentingUI:
             return
         
         db_mgr = get_db_manager(self.db_type_var.get())
-        success, message = db_mgr.add_location(location)
+        db_type = self.db_type_var.get()
+        
+        # Show working dialog for networked databases
+        if db_type in ["postgres", "supabase", "mysql"]:
+            working_dialog = WorkingDialog(self.root, "Adding Location", 
+                                         f"Adding location to {db_type} database...")
+            self.root.update()
+        else:
+            working_dialog = None
+        
+        try:
+            success, message = db_mgr.add_location(location)
+        finally:
+            if working_dialog:
+                working_dialog.close(delay_ms=200)
         
         if success:
             self.load_locations_from_database()
@@ -3585,6 +3858,9 @@ class AirScentingUI:
     
     def load_dogs_from_database(self):
         """Load dog names from database into listbox"""
+        # Ensure database is ready (critical for networked databases)
+        self.ensure_db_ready()
+        
         db_mgr = get_db_manager(self.db_type_var.get())
         dogs = db_mgr.load_dogs()
         
@@ -3624,7 +3900,21 @@ class AirScentingUI:
             return
         
         db_mgr = get_db_manager(self.db_type_var.get())
-        success, message = db_mgr.add_dog(dog_name)
+        db_type = self.db_type_var.get()
+        
+        # Show working dialog for networked databases
+        if db_type in ["postgres", "supabase", "mysql"]:
+            working_dialog = WorkingDialog(self.root, "Adding Dog", 
+                                         f"Adding dog to {db_type} database...")
+            self.root.update()
+        else:
+            working_dialog = None
+        
+        try:
+            success, message = db_mgr.add_dog(dog_name)
+        finally:
+            if working_dialog:
+                working_dialog.close(delay_ms=200)
         
         if success:
             self.load_dogs_from_database()
@@ -3688,7 +3978,21 @@ class AirScentingUI:
             return
         
         db_mgr = get_db_manager(self.db_type_var.get())
-        success, message = db_mgr.add_terrain_type(terrain)
+        db_type = self.db_type_var.get()
+        
+        # Show working dialog for networked databases
+        if db_type in ["postgres", "supabase", "mysql"]:
+            working_dialog = WorkingDialog(self.root, "Adding Terrain", 
+                                         f"Adding terrain type to {db_type} database...")
+            self.root.update()
+        else:
+            working_dialog = None
+        
+        try:
+            success, message = db_mgr.add_terrain_type(terrain)
+        finally:
+            if working_dialog:
+                working_dialog.close(delay_ms=200)
         
         if success:
             self.load_terrain_from_database()
@@ -3834,7 +4138,21 @@ class AirScentingUI:
             return
         
         db_mgr = get_db_manager(self.db_type_var.get())
-        success, message = db_mgr.add_distraction_type(distraction)
+        db_type = self.db_type_var.get()
+        
+        # Show working dialog for networked databases
+        if db_type in ["postgres", "supabase", "mysql"]:
+            working_dialog = WorkingDialog(self.root, "Adding Distraction", 
+                                         f"Adding distraction type to {db_type} database...")
+            self.root.update()
+        else:
+            working_dialog = None
+        
+        try:
+            success, message = db_mgr.add_distraction_type(distraction)
+        finally:
+            if working_dialog:
+                working_dialog.close(delay_ms=200)
         
         if success:
             self.load_distraction_from_database()
@@ -4058,7 +4376,25 @@ class AirScentingUI:
                 self.notebook.select(self.setup_tab)
                 self.previous_tab_index = 0
                 return
-        
+            
+            # CRITICAL: Ensure password is set for networked databases before switching tabs
+            # This prevents authentication errors when Session tab tries to connect
+            db_type = self.db_type_var.get()
+            if db_type in ["postgres", "supabase", "mysql"]:
+                # Make sure password is set in database config
+                password = self.db_password_var.get().strip()
+                if password:
+                    self.set_db_password()
+                
+                # Show working dialog when switching to Training Session tab
+                # This gives time for UI to load and become responsive
+                working_dialog = WorkingDialog(self.root, "Loading Session", 
+                                             f"Loading Training Session tab...")
+                self.root.update()
+                
+                # Small delay to ensure UI is ready
+                self.root.after(300, lambda: working_dialog.close(delay_ms=200))
+            
         # Update previous tab index
         self.previous_tab_index = current_tab_index
     

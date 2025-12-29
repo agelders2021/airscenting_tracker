@@ -11,25 +11,29 @@ DB_TYPE = os.getenv("DB_TYPE", "sqlite")
 if DB_TYPE not in ["sqlite", "postgres", "supabase", "mysql"]:
     raise ValueError(f"Invalid DB_TYPE: '{DB_TYPE}'. Must be 'sqlite', 'postgres', 'supabase', or 'mysql'")
 
-# Runtime password (set by UI, not stored in file)
+# Database password (set at runtime from encrypted storage)
 DB_PASSWORD = None
 
 # Database configuration
+# For databases requiring passwords, use url_template with {password} placeholder
 DB_CONFIG = {
     "sqlite": {
         "url": "sqlite:///air_scenting.db"
     },
     "postgres": {
+        "url": os.getenv("DATABASE_URL", "postgresql://user:PASSWORD@localhost/air_scenting"),
         "url_template": "postgresql://user:{password}@localhost/air_scenting",
-        "url": None  # Will be set at runtime with password
+        "description": "PostgreSQL local database"
     },
     "supabase": {
+        "url": "postgresql://postgres.hhsfivnljmmifmbuddba:PASSWORD@aws-0-us-west-2.pooler.supabase.com:6543/postgres",
         "url_template": "postgresql://postgres.hhsfivnljmmifmbuddba:{password}@aws-0-us-west-2.pooler.supabase.com:6543/postgres",
-        "url": None  # Will be set at runtime with password
+        "description": "Supabase cloud database"
     },
     "mysql": {
+        "url": "mysql+pymysql://user:PASSWORD@localhost/air_scenting",
         "url_template": "mysql+pymysql://user:{password}@localhost/air_scenting",
-        "url": None  # Will be set at runtime with password
+        "description": "MySQL local database"
     }
 }
 
