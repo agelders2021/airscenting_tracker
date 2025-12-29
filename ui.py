@@ -162,6 +162,10 @@ class AirScentingUI:
         # Show main window (splash will be on top due to topmost attribute)
         self.root.deiconify()
         
+        # CRITICAL: Force event loop to start processing
+        # This allows splash screen countdown to begin immediately
+        self.root.update()
+        
         # Schedule initial database loading AFTER password is loaded
         # Password loads at 100ms (on_db_type_changed), so we wait until 500ms
         # This allows event loop to run and splash countdown to animate
@@ -175,31 +179,53 @@ class AirScentingUI:
     
     def load_initial_database_data(self):
         """Load all initial database data after splash screen starts"""
-        # Ensure database is ready (password loaded for networked DBs)
-        self.ensure_db_ready()
+        # Use chained after() calls to let event loop run between operations
+        # This keeps splash countdown and progress bars animating
         
-        # Load all the database data that was skipped during tab setup
-        # This runs after the splash screen starts, so its countdown animates properly
-        self.load_locations_from_database()
-        self.load_dogs_from_database()
-        self.load_terrain_from_database()
-        self.load_distraction_from_database()
+        def step1():
+            self.ensure_db_ready()
+            self.load_locations_from_database()
+            self.root.after(50, step2)  # Schedule next step
         
-        # Load last selected dog from database
-        try:
-            last_dog = self.load_db_setting("last_dog_name", "")
-            if last_dog and hasattr(self, 'dog_var'):
-                self.dog_var.set(last_dog)
-        except Exception as e:
-            print(f"Could not load last dog: {e}")
+        def step2():
+            self.load_dogs_from_database()
+            self.root.after(50, step3)
         
-        # Also refresh Entry tab comboboxes if they exist
-        if hasattr(self, 'dog_combo'):
-            self.refresh_dog_list()
-        if hasattr(self, 'location_combo'):
-            self.refresh_location_list()
-        if hasattr(self, 'terrain_combo'):
-            self.refresh_terrain_list()
+        def step3():
+            self.load_terrain_from_database()
+            self.root.after(50, step4)
+        
+        def step4():
+            self.load_distraction_from_database()
+            self.root.after(50, step5)
+        
+        def step5():
+            # Load last selected dog from database
+            try:
+                last_dog = self.load_db_setting("last_dog_name", "")
+                if last_dog and hasattr(self, 'dog_var'):
+                    self.dog_var.set(last_dog)
+            except Exception as e:
+                print(f"Could not load last dog: {e}")
+            self.root.after(50, step6)
+        
+        def step6():
+            # Refresh Entry tab comboboxes if they exist
+            if hasattr(self, 'dog_combo'):
+                self.refresh_dog_list()
+            self.root.after(50, step7)
+        
+        def step7():
+            if hasattr(self, 'location_combo'):
+                self.refresh_location_list()
+            self.root.after(50, step8)
+        
+        def step8():
+            if hasattr(self, 'terrain_combo'):
+                self.refresh_terrain_list()
+        
+        # Start the chain
+        step1()
     
     
     
@@ -3409,6 +3435,13 @@ class AirScentingUI:
                 self.db_password_var.set("")
         else:
             self.db_password_frame.pack_forget()
+        
+        # Force UI update to keep splash countdown animating
+        if hasattr(self, 'root'):
+            try:
+                self.root.update_idletasks()
+            except:
+                pass
     
     def toggle_password_visibility(self):
         """Toggle password visibility in entry field"""

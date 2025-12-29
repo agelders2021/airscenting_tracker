@@ -83,8 +83,27 @@ class WorkingDialog:
         )
         self.status_label.pack(pady=(5, 0))
         
+        # Flag to track if dialog is still open
+        self.is_open = True
+        
+        # Start aggressive update loop to keep progress bar animating
+        # Uses update_idletasks() which is lighter than full update()
+        self.schedule_fast_update()
+        
         # Update the display
         self.dialog.update()
+    
+    def schedule_fast_update(self):
+        """Schedule very frequent updates to keep progress bar animating during blocking operations"""
+        if self.is_open:
+            try:
+                # Use update_idletasks() - processes widget updates without processing events
+                # This is lighter and can run even during blocking operations
+                self.dialog.update_idletasks()
+            except:
+                pass  # Dialog might be closing
+            # Schedule next update in 20ms (50 fps) for smooth animation
+            self.dialog.after(20, self.schedule_fast_update)
     
     def update_message(self, message):
         """Update the message displayed in the dialog"""
@@ -104,6 +123,9 @@ class WorkingDialog:
             delay_ms: Delay in milliseconds before closing (default 200ms)
                      This ensures UI has time to fully update before dialog closes
         """
+        # Stop the update loop
+        self.is_open = False
+        
         def _do_close():
             try:
                 self.progress.stop()
