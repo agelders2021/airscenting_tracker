@@ -4,15 +4,14 @@ Defines tables and creates them in the database
 """
 from sqlalchemy import text
 from database import engine, get_connection
-import config  # Import module, not the variable
+from config import DB_TYPE
 
 
 def create_tables():
     """Create all database tables"""
     
     # Auto-increment syntax differs between databases
-    # Check DB_TYPE dynamically at runtime
-    if config.DB_TYPE == "sqlite":
+    if DB_TYPE == "sqlite":
         dog_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
         session_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
         settings_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
@@ -21,15 +20,6 @@ def create_tables():
         distraction_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
         selected_terrain_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
         subject_response_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
-    elif config.DB_TYPE == "mysql":
-        dog_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
-        session_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
-        settings_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
-        location_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
-        terrain_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
-        distraction_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
-        selected_terrain_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
-        subject_response_id_type = "INTEGER PRIMARY KEY AUTO_INCREMENT"
     else:  # postgres or supabase
         dog_id_type = "SERIAL PRIMARY KEY"
         session_id_type = "SERIAL PRIMARY KEY"
@@ -76,6 +66,7 @@ def create_tables():
         id {terrain_id_type},
         name TEXT NOT NULL UNIQUE,
         user_name TEXT,
+        sort_order INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """
@@ -86,6 +77,7 @@ def create_tables():
         id {distraction_id_type},
         name TEXT NOT NULL UNIQUE,
         user_name TEXT,
+        sort_order INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """
@@ -120,19 +112,18 @@ def create_tables():
     )
     """
     
-    # Selected terrains table (related to training sessions)
+    # Selected terrains table (many-to-many: sessions to terrain types)
     selected_terrains_table = f"""
     CREATE TABLE IF NOT EXISTS selected_terrains (
         id {selected_terrain_id_type},
         session_id INTEGER NOT NULL,
         terrain_name TEXT NOT NULL,
         user_name TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (session_id) REFERENCES training_sessions(id) ON DELETE CASCADE
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """
     
-    # Subject responses table (per-subject TFR and Re-find data)
+    # Subject responses table (one-to-many: sessions to subject responses)
     subject_responses_table = f"""
     CREATE TABLE IF NOT EXISTS subject_responses (
         id {subject_response_id_type},
@@ -141,8 +132,7 @@ def create_tables():
         tfr TEXT,
         refind TEXT,
         user_name TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (session_id) REFERENCES training_sessions(id) ON DELETE CASCADE
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """
     
@@ -159,9 +149,9 @@ def create_tables():
         conn.execute(text(distraction_table))
         # Create training_sessions table
         conn.execute(text(sessions_table))
-        # Create selected_terrains table (must be after training_sessions due to foreign key)
+        # Create selected_terrains table
         conn.execute(text(selected_terrains_table))
-        # Create subject_responses table (must be after training_sessions due to foreign key)
+        # Create subject_responses table
         conn.execute(text(subject_responses_table))
         conn.commit()
         
@@ -171,7 +161,6 @@ def create_tables():
 def drop_tables():
     """Drop all tables (use with caution!)"""
     with get_connection() as conn:
-        # Drop tables with foreign keys first
         conn.execute(text("DROP TABLE IF EXISTS subject_responses"))
         conn.execute(text("DROP TABLE IF EXISTS selected_terrains"))
         conn.execute(text("DROP TABLE IF EXISTS training_sessions"))

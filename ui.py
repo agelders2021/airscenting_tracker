@@ -15,7 +15,8 @@ from config import APP_TITLE, CONFIG_FILE, BOOTSTRAP_FILE
 from splash_screen import SplashScreen
 from about_dialog import show_about
 from tips import ToolTip, ConditionalToolTip
-
+from ui_utils import get_username, get_default_terrain_types, get_default_distraction_types
+from ui_database import get_db_manager
 
 class AirScentingUI:
     """Main UI class for Air-Scenting Logger"""
@@ -160,12 +161,6 @@ class AirScentingUI:
         # Set up window close handler
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
     
-    def get_username(self):
-        """Get the current system username"""
-        try:
-            return getuser()
-        except:
-            return "unknown"
     
     def select_initial_tab(self):
         """Select initial tab based on database existence"""
@@ -512,7 +507,7 @@ class AirScentingUI:
                             with database.get_connection() as conn:
                                 conn.execute(
                                     text("INSERT INTO dogs (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": dog_name, "user_name": self.get_username()}
+                                    {"name": dog_name, "user_name": get_username()}
                                 )
                                 conn.commit()
                             dogs_added += 1
@@ -550,7 +545,7 @@ class AirScentingUI:
                             with database.get_connection() as conn:
                                 conn.execute(
                                     text("INSERT INTO training_locations (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": location, "user_name": self.get_username()}
+                                    {"name": location, "user_name": get_username()}
                                 )
                                 conn.commit()
                             locations_added += 1
@@ -588,7 +583,7 @@ class AirScentingUI:
                             with database.get_connection() as conn:
                                 conn.execute(
                                     text("INSERT INTO terrain_types (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": terrain, "user_name": self.get_username()}
+                                    {"name": terrain, "user_name": get_username()}
                                 )
                                 conn.commit()
                             terrain_added += 1
@@ -626,7 +621,7 @@ class AirScentingUI:
                             with database.get_connection() as conn:
                                 conn.execute(
                                     text("INSERT INTO distraction_types (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": distraction, "user_name": self.get_username()}
+                                    {"name": distraction, "user_name": get_username()}
                                 )
                                 conn.commit()
                             distraction_added += 1
@@ -786,7 +781,7 @@ class AirScentingUI:
                                 "subjects_found": session_data.get('subjects_found'),
                                 "comments": session_data.get('comments', ''),
                                 "image_files": image_files_json,
-                                "user_name": session_data.get('user_name', self.get_username())
+                                "user_name": session_data.get('user_name', get_username())
                             }
                         )
                         conn.commit()
@@ -812,7 +807,7 @@ class AirScentingUI:
                                     {
                                         "session_id": session_id,
                                         "terrain_name": terrain_name,
-                                        "user_name": session_data.get('user_name', self.get_username())
+                                        "user_name": session_data.get('user_name', get_username())
                                     }
                                 )
                             
@@ -830,7 +825,7 @@ class AirScentingUI:
                                             "subject_number": response.get('subject_number'),
                                             "tfr": response.get('tfr', ''),
                                             "refind": response.get('refind', ''),
-                                            "user_name": session_data.get('user_name', self.get_username())
+                                            "user_name": session_data.get('user_name', get_username())
                                         }
                                     )
                             
@@ -850,7 +845,7 @@ class AirScentingUI:
                     with database.get_connection() as conn:
                         conn.execute(
                             text("INSERT INTO dogs (name, user_name) VALUES (:name, :user_name)"),
-                            {"name": dog_name, "user_name": self.get_username()}
+                            {"name": dog_name, "user_name": get_username()}
                         )
                         conn.commit()
                     dogs_added += 1
@@ -874,7 +869,7 @@ class AirScentingUI:
                     with database.get_connection() as conn:
                         conn.execute(
                             text("INSERT INTO training_locations (name, user_name) VALUES (:name, :user_name)"),
-                            {"name": location, "user_name": self.get_username()}
+                            {"name": location, "user_name": get_username()}
                         )
                         conn.commit()
                     locations_added += 1
@@ -923,7 +918,7 @@ class AirScentingUI:
                             with database.get_connection() as conn:
                                 conn.execute(
                                     text("INSERT INTO terrain_types (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": terrain, "user_name": self.get_username()}
+                                    {"name": terrain, "user_name": get_username()}
                                 )
                                 conn.commit()
                             terrain_added += 1
@@ -938,7 +933,7 @@ class AirScentingUI:
                             with database.get_connection() as conn:
                                 conn.execute(
                                     text("INSERT INTO distraction_types (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": distraction, "user_name": self.get_username()}
+                                    {"name": distraction, "user_name": get_username()}
                                 )
                                 conn.commit()
                             distraction_added += 1
@@ -1009,87 +1004,31 @@ class AirScentingUI:
         if not result:
             return
         
-        try:
-            # Temporarily switch to selected database type
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            # Reload database module
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            terrain_added = 0
-            distraction_added = 0
-            
-            # Insert terrain types
-            terrain_types = self.get_default_terrain_types()
-            for terrain in terrain_types:
-                try:
-                    with database.get_connection() as conn:
-                        conn.execute(
-                            text("INSERT INTO terrain_types (name, user_name) VALUES (:name, :user_name)"),
-                            {"name": terrain, "user_name": self.get_username()}
-                        )
-                        conn.commit()
-                    terrain_added += 1
-                except Exception as e:
-                    if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                        print(f"Failed to add terrain type '{terrain}': {e}")
-            
-            # Insert distraction types
-            distraction_types = self.get_default_distraction_types()
-            for distraction in distraction_types:
-                try:
-                    with database.get_connection() as conn:
-                        conn.execute(
-                            text("INSERT INTO distraction_types (name, user_name) VALUES (:name, :user_name)"),
-                            {"name": distraction, "user_name": self.get_username()}
-                        )
-                        conn.commit()
-                    distraction_added += 1
-                except Exception as e:
-                    if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                        print(f"Failed to add distraction type '{distraction}': {e}")
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            # Refresh UI
-            self.load_terrain_from_database()
-            self.load_distraction_from_database()
-            # Also refresh Entry tab terrain combobox
-            if hasattr(self, 'terrain_combo'):
-                self.refresh_terrain_list()
-            
-            # Show summary
-            msg = f"Default types loaded successfully!\n\n"
-            msg += f"Added {terrain_added} terrain type(s)\n"
-            msg += f"Added {distraction_added} distraction type(s)"
-            
-            messagebox.showinfo("Defaults Loaded", msg)
-            
-        except Exception as e:
-            # Restore original DB_TYPE on error
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            messagebox.showerror("Error", f"Failed to load default types:\n{e}")
-            print(f"Error loading default types: {e}")
+        # Use DatabaseManager to properly load defaults with sort_order
+        db_mgr = get_db_manager(db_type)
+        
+        terrain_success, terrain_msg = db_mgr.restore_default_terrain_types()
+        distraction_success, distraction_msg = db_mgr.restore_default_distraction_types()
+        
+        # Refresh UI - both Setup tab AND Entry tab
+        self.load_terrain_from_database()  # Setup tab treeview
+        self.load_distraction_from_database()  # Setup tab treeview
+        
+        # CRITICAL: Also refresh Entry tab comboboxes!
+        if hasattr(self, 'terrain_combo'):
+            self.refresh_terrain_list()  # Entry tab terrain combobox
+        
+        # Show summary
+        if terrain_success and distraction_success:
+            messagebox.showinfo("Success", 
+                f"{terrain_msg}\n{distraction_msg}")
+        else:
+            errors = []
+            if not terrain_success:
+                errors.append(f"Terrain: {terrain_msg}")
+            if not distraction_success:
+                errors.append(f"Distraction: {distraction_msg}")
+            messagebox.showerror("Error", "\n".join(errors))
     
     def on_date_changed(self, event=None):
         """Called when date picker value changes"""
@@ -1110,111 +1049,16 @@ class AirScentingUI:
             today = datetime.now()
             self.date_picker.set_date(today)
             self.date_var.set(today.strftime("%Y-%m-%d"))
-    
+            
     def save_db_setting(self, key, value):
-        """Save a setting to the database settings table"""
-        db_type = self.db_type_var.get()
-        
-        # For SQLite, check if database file exists before trying to connect
-        if db_type == "sqlite":
-            import config as config_module
-            db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-            if not os.path.exists(db_path):
-                # Database doesn't exist yet - don't create it, just return
-                return
-        
-        try:
-            # Temporarily switch to selected database type
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            # Reload database module
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            with database.get_connection() as conn:
-                # Try to update first
-                result = conn.execute(
-                    text("UPDATE settings SET value = :value, updated_at = CURRENT_TIMESTAMP WHERE key = :key"),
-                    {"key": key, "value": value}
-                )
-                
-                # If no rows updated, insert new
-                if result.rowcount == 0:
-                    conn.execute(
-                        text("INSERT INTO settings (key, value) VALUES (:key, :value)"),
-                        {"key": key, "value": value}
-                    )
-                
-                conn.commit()
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-        except Exception as e:
-            # If settings table doesn't exist, silently fail (database not created yet)
-            if "no such table" not in str(e).lower() and "does not exist" not in str(e).lower():
-                print(f"Error saving database setting '{key}': {e}")
+        """Save a setting to the database"""
+        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr.save_setting(key, value) 
     
     def load_db_setting(self, key, default=None):
-        """Load a setting from the database settings table"""
-        db_type = self.db_type_var.get()
-        
-        # For SQLite, check if database file exists before trying to connect
-        if db_type == "sqlite":
-            import config as config_module
-            db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-            if not os.path.exists(db_path):
-                # Database doesn't exist yet - return default without creating it
-                return default
-        
-        try:
-            # Temporarily switch to selected database type
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            # Reload database module
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            with database.get_connection() as conn:
-                result = conn.execute(
-                    text("SELECT value FROM settings WHERE key = :key"),
-                    {"key": key}
-                )
-                row = result.fetchone()
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            if row:
-                return row[0]
-            else:
-                return default
-                
-        except Exception as e:
-            # If settings table doesn't exist, return default (database not created yet)
-            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
-                return default
-            else:
-                print(f"Error loading database setting '{key}': {e}")
-                return default
+        """Load a setting from the database"""
+        db_mgr = get_db_manager(self.db_type_var.get())
+        return db_mgr.load_setting(key, default)
     
     def on_dog_changed(self, event=None):
         """Called when dog selection changes - update session number and clear form for new dog"""
@@ -1251,6 +1095,7 @@ class AirScentingUI:
             self.accumulated_terrains = []
             self.accumulated_terrain_combo['values'] = []
             self.accumulated_terrain_var.set("")
+            self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
             # Clear map files list
             self.map_files_list = []
             self.map_listbox.delete(0, tk.END)
@@ -1269,100 +1114,167 @@ class AirScentingUI:
             self.status_var.set(f"Switched to {dog_name} - Next session: #{next_session}")
     
     def get_next_session_number(self, dog_name=None):
-        """Get the next session number for the specified dog (MAX + 1)"""
-        db_type = self.db_type_var.get()
-        
-        # If no dog specified, use current dog from UI (if it exists)
-        if dog_name is None:
-            # Check if dog_var exists (it may not during initialization)
-            if hasattr(self, 'dog_var'):
-                dog_name = self.dog_var.get()
-        
-        # Trim whitespace from dog_name
-        if dog_name:
-            dog_name = dog_name.strip()
-        
-        # If still no dog name, return 1
+        """Get the next session number for the specified dog"""
+        # Handle the optional parameter
+        if dog_name is None and hasattr(self, 'dog_var'):
+            dog_name = self.dog_var.get()
+
         if not dog_name:
             return 1
-        
-        # For SQLite, check if database file exists before trying to connect
-        if db_type == "sqlite":
-            import config as config_module
-            db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-            if not os.path.exists(db_path):
-                # Database doesn't exist yet - return 1
-                return 1
-        
-        try:
-            # Temporarily switch to selected database type
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            # Reload database module
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            # Query for max session number for this dog
-            # print(f"DEBUG: Querying sessions for dog: '{dog_name}'")  # DEBUG
-            
-            with database.get_connection() as conn:
-                # First, see ALL sessions in database
-                all_sessions = conn.execute(text("SELECT dog_name, session_number FROM training_sessions ORDER BY dog_name, session_number"))
-                all_rows = all_sessions.fetchall()
-                # print(f"DEBUG: ALL sessions in database: {all_rows}")  # DEBUG
-                
-                # Now query for this specific dog
-                result = conn.execute(
-                    text("SELECT session_number FROM training_sessions WHERE dog_name = :dog_name ORDER BY session_number"),
-                    {"dog_name": dog_name}
-                )
-                dog_sessions = result.fetchall()
-                # print(f"DEBUG: Sessions for '{dog_name}': {dog_sessions}")  # DEBUG
-                
-                # Get the max
-                max_result = conn.execute(
-                    text("SELECT MAX(session_number) FROM training_sessions WHERE dog_name = :dog_name"),
-                    {"dog_name": dog_name}
-                )
-                max_num = max_result.scalar()
-            
-            # print(f"DEBUG: Max session for '{dog_name}': {max_num}, returning {(max_num or 0) + 1}")  # DEBUG
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            # Return max + 1, or 1 if no sessions exist for this dog
-            return (max_num or 0) + 1
-            
-        except Exception as e:
-            # print(f"DEBUG ERROR in get_next_session_number: {e}")  # DEBUG
-            # Restore original DB_TYPE on error
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            # If table doesn't exist yet, return 1
-            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
-                return 1
-            else:
-                print(f"Error getting next session number: {e}")
-                return 1
+
+        # Use DatabaseManager
+        from ui_database import get_db_manager
+        db_mgr = get_db_manager(self.db_type_var.get())
+        return db_mgr.get_next_session_number(dog_name)
     
+    def save_session(self):
+        """Save the current training session"""
+        # Get all form values
+        date = self.date_picker.get_date().strftime("%Y-%m-%d")
+        session_number = self.session_var.get()
+        handler = self.handler_var.get()
+        session_purpose = self.purpose_var.get()
+        field_support = self.field_support_var.get()
+        dog_name = self.dog_var.get().strip() if self.dog_var.get() else ""
+
+        # Search parameters
+        location = self.location_var.get()
+        search_area_size = self.search_area_var.get()
+        num_subjects = self.num_subjects_var.get()
+        handler_knowledge = self.handler_knowledge_var.get()
+        weather = self.weather_var.get()
+        temperature = self.temperature_var.get()
+        wind_direction = self.wind_direction_var.get()
+        wind_speed = self.wind_speed_var.get()
+        search_type = self.search_type_var.get()
+
+        # Search results
+        drive_level = self.drive_level_var.get()
+        subjects_found = self.subjects_found_var.get()
+        comments = self.comments_text.get("1.0", tk.END).strip()
+
+        # Map/image files - store as JSON string
+        image_files_json = json.dumps(self.map_files_list) if self.map_files_list else ""
+
+        # Validate required fields
+        if not date:
+            messagebox.showwarning("Missing Data", "Please enter a date")
+            return
+        if not session_number:
+            messagebox.showwarning("Missing Data", "Please enter a session number")
+            return
+        if not dog_name:
+            messagebox.showwarning("Missing Data", "Please select a dog")
+            return
+
+        try:
+            session_number = int(session_number)
+        except ValueError:
+            messagebox.showwarning("Invalid Data", "Session number must be a number")
+            return
+
+        # Prepare session data dict
+        session_data = {
+            "date": date,
+            "session_number": session_number,
+            "handler": handler,
+            "session_purpose": session_purpose,
+            "field_support": field_support,
+            "dog_name": dog_name,
+            "location": location,
+            "search_area_size": search_area_size,
+            "num_subjects": num_subjects,
+            "handler_knowledge": handler_knowledge,
+            "weather": weather,
+            "temperature": temperature,
+            "wind_direction": wind_direction,
+            "wind_speed": wind_speed,
+            "search_type": search_type,
+            "drive_level": drive_level,
+            "subjects_found": subjects_found,
+            "comments": comments,
+            "image_files": image_files_json
+        }
+
+        # Save to database using DatabaseManager
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message, session_id = db_mgr.save_session(session_data)
+
+        if not success:
+            messagebox.showerror("Database Error", message)
+            return
+
+        # Save selected terrains
+        db_mgr.save_selected_terrains(session_id, self.accumulated_terrains)
+
+        # Save subject responses
+        subject_responses_list = []
+        for i in range(1, 11):
+            item_id = f'subject_{i}'
+            tags = self.subject_responses_tree.item(item_id, 'tags')
+
+            if 'enabled' in tags:
+                values = self.subject_responses_tree.item(item_id, 'values')
+                subject_responses_list.append({
+                    "subject_number": i,
+                    "tfr": values[1] if len(values) > 1 else '',
+                    "refind": values[2] if len(values) > 2 else ''
+                })
+
+        db_mgr.save_subject_responses(session_id, subject_responses_list)
+
+        # Save last handler name to config
+        if handler:
+            self.config["last_handler_name"] = handler
+            self.save_config()
+
+        # Save session to JSON backup
+        session_backup_data = {
+            **session_data,
+            "subject_responses": subject_responses_list,
+            "image_files": self.map_files_list,
+            "selected_terrains": self.accumulated_terrains,
+            "user_name": get_username()
+        }
+        self.save_session_to_json(session_backup_data)
+
+        self.status_var.set(message)
+        messagebox.showinfo("Success", message)
+
+        # Auto-prepare for next entry
+        self.session_var.set(str(self.get_next_session_number()))
+        self.selected_sessions = []
+        self.selected_sessions_index = -1
+
+        # Clear form fields (keep handler and dog)
+        self.set_date(datetime.now().strftime("%Y-%m-%d"))
+        self.purpose_var.set("")
+        self.field_support_var.set("")
+        self.location_var.set("")
+        self.search_area_var.set("")
+        self.num_subjects_var.set("")
+        self.handler_knowledge_var.set("")
+        self.weather_var.set("")
+        self.temperature_var.set("")
+        self.wind_direction_var.set("")
+        self.wind_speed_var.set("")
+        self.search_type_var.set("")
+        self.drive_level_var.set("")
+        self.subjects_found_var.set("")
+        self.comments_text.delete("1.0", tk.END)
+        self.accumulated_terrains = []
+        self.accumulated_terrain_combo['values'] = []
+        self.accumulated_terrain_var.set("")
+        self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
+        self.map_files_list = []
+        self.map_listbox.delete(0, tk.END)
+        self.view_map_button.config(state=tk.DISABLED)
+        self.delete_map_button.config(state=tk.DISABLED)
+        self.update_subjects_found()
+        # Reset tree selection to subject 1 after clearing form
+        self.reset_subject_responses_tree_selection()
+        self.update_navigation_buttons()
+
     def load_bootstrap(self):
         """Load machine-specific paths from bootstrap file"""
         if self.bootstrap_file.exists():
@@ -1409,28 +1321,13 @@ class AirScentingUI:
         """Show the About dialog"""
         show_about(self.root, version="1.0.0-alpha")
     
-    def get_default_terrain_types(self):
-        """Get the default terrain type list"""
-        return [
-            "Urban", "Rural", "Forest", "Scrub", "Desert", "Sandy", "Rocky", 
-            "City park", "Meadow", "Dense brush", "Many cacti", "Stream", 
-            "Roadway", "Marsh", "Mixed", "Industrial", "Residential"
-        ]
-    
-    def get_default_distraction_types(self):
-        """Get the default distraction type list"""
-        return [
-            "Critter", "Horse", "Loud noise", "Motorcycle", "Hikers", 
-            "Cow", "Vehicle"
-        ]
-    
     def load_config(self):
         """Load configuration from file"""
         default_config = {
             "handler_name": "",
             "last_handler_name": "",
-            "terrain_types": self.get_default_terrain_types(),
-            "distraction_types": self.get_default_distraction_types(),
+            "terrain_types": get_default_terrain_types(),
+            "distraction_types": get_default_distraction_types(),
             "training_locations": [],
             "db_type": "sqlite"  # Default database type
         }
@@ -1441,10 +1338,10 @@ class AirScentingUI:
                     saved = json.load(f)
                     # Add terrain_types if not present
                     if "terrain_types" not in saved:
-                        saved["terrain_types"] = self.get_default_terrain_types()
+                        saved["terrain_types"] = get_default_terrain_types()
                     # Add distraction_types if not present
                     if "distraction_types" not in saved:
-                        saved["distraction_types"] = self.get_default_distraction_types()
+                        saved["distraction_types"] = get_default_distraction_types()
                     # Add training_locations if not present
                     if "training_locations" not in saved:
                         saved["training_locations"] = []
@@ -1940,31 +1837,10 @@ class AirScentingUI:
         
         tk.Label(search_frame, text="Add Terrain Type:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
         self.terrain_var = tk.StringVar()
-        # Load terrain types from database for dropdown values
-        terrain_types = []
-        try:
-            db_type = self.db_type_var.get()
-            if db_type == "sqlite":
-                import config as config_module
-                db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-                if os.path.exists(db_path):
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    from sqlalchemy import text
-                    with database.get_connection() as conn:
-                        result = conn.execute(text("SELECT name FROM terrain_types ORDER BY name"))
-                        terrain_types = [row[0] for row in result]
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-        except:
-            pass  # If no terrain types in DB, use empty list
+        # Load terrain types from database using DatabaseManager (respects sort_order)
+        from ui_database import get_db_manager
+        db_mgr = get_db_manager(self.db_type_var.get())
+        terrain_types = db_mgr.load_terrain_types()
         
         self.terrain_combo = ttk.Combobox(search_frame, textvariable=self.terrain_var, width=15, state="readonly",
                                          values=terrain_types)
@@ -1975,7 +1851,7 @@ class AirScentingUI:
         tk.Label(search_frame, text="Selected Terrains:").grid(row=2, column=4, sticky="w", padx=5, pady=2)
         self.accumulated_terrain_var = tk.StringVar()
         self.accumulated_terrain_combo = ttk.Combobox(search_frame, textvariable=self.accumulated_terrain_var, 
-                                                      width=15, state="readonly", values=[])
+                                                      width=15, state="disabled", values=[])  # Start disabled
         self.accumulated_terrain_combo.grid(row=2, column=5, sticky="w", padx=5, pady=2)
         self.accumulated_terrain_combo.bind('<<ComboboxSelected>>', self.remove_terrain_from_list)
         
@@ -2060,6 +1936,11 @@ class AirScentingUI:
         
         # Bind single-click to edit with inline combobox
         self.subject_responses_tree.bind('<Button-1>', self.on_treeview_click)
+        
+        # Add tooltip to explain how to edit cells
+        ToolTip(self.subject_responses_tree, 
+                "Click cell under desired heading on desired row to edit value", 
+                delay=750)
         
         # TFR and Re-find options for editing
         self.tfr_options = ['Strong', 'Fair', 'Required cueing', 'None']
@@ -2161,347 +2042,6 @@ class AirScentingUI:
         self.subjects_found_combo['state'] = 'disabled'
     
     # Placeholder methods for Entry tab buttons
-    def save_session(self):
-        """Save the current training session"""
-        # Get all form values
-        date = self.date_picker.get_date().strftime("%Y-%m-%d")
-        session_number = self.session_var.get()
-        handler = self.handler_var.get()
-        session_purpose = self.purpose_var.get()
-        field_support = self.field_support_var.get()
-        dog_name = self.dog_var.get().strip() if self.dog_var.get() else ""
-        
-        # print(f"DEBUG save_session: dog_name = '{dog_name}', session_number = {session_number}")  # DEBUG
-        
-        # Search parameters
-        location = self.location_var.get()
-        search_area_size = self.search_area_var.get()
-        num_subjects = self.num_subjects_var.get()
-        handler_knowledge = self.handler_knowledge_var.get()
-        weather = self.weather_var.get()
-        temperature = self.temperature_var.get()
-        wind_direction = self.wind_direction_var.get()
-        wind_speed = self.wind_speed_var.get()
-        search_type = self.search_type_var.get()
-        
-        # Search results
-        drive_level = self.drive_level_var.get()
-        subjects_found = self.subjects_found_var.get()
-        comments = self.comments_text.get("1.0", tk.END).strip()  # Get from Text widget
-        
-        # Map/image files - store as JSON string
-        image_files_json = json.dumps(self.map_files_list) if self.map_files_list else ""
-        
-        # Validate required fields
-        if not date:
-            messagebox.showwarning("Missing Data", "Please enter a date")
-            return
-        if not session_number:
-            messagebox.showwarning("Missing Data", "Please enter a session number")
-            return
-        
-        try:
-            session_number = int(session_number)
-        except ValueError:
-            messagebox.showwarning("Invalid Data", "Session number must be a number")
-            return
-        
-        db_type = self.db_type_var.get()
-        
-        try:
-            # Temporarily switch to selected database type
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            # Reload database module
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            # Check if session number already exists FOR THIS DOG
-            with database.get_connection() as conn:
-                result = conn.execute(
-                    text("SELECT id FROM training_sessions WHERE session_number = :session_number AND dog_name = :dog_name"),
-                    {"session_number": session_number, "dog_name": dog_name}
-                )
-                existing = result.fetchone()
-                
-                # print(f"DEBUG save_session: Checking session {session_number} for dog '{dog_name}', existing: {existing is not None}")  # DEBUG
-                
-                if existing:
-                    # Update existing session
-                    conn.execute(
-                        text("""
-                            UPDATE training_sessions 
-                            SET date = :date,
-                                handler = :handler,
-                                session_purpose = :session_purpose,
-                                field_support = :field_support,
-                                dog_name = :dog_name,
-                                location = :location,
-                                search_area_size = :search_area_size,
-                                num_subjects = :num_subjects,
-                                handler_knowledge = :handler_knowledge,
-                                weather = :weather,
-                                temperature = :temperature,
-                                wind_direction = :wind_direction,
-                                wind_speed = :wind_speed,
-                                search_type = :search_type,
-                                drive_level = :drive_level,
-                                subjects_found = :subjects_found,
-                                comments = :comments,
-                                image_files = :image_files,
-                                user_name = :user_name,
-                                updated_at = CURRENT_TIMESTAMP
-                            WHERE session_number = :session_number AND dog_name = :old_dog_name
-                        """),
-                        {
-                            "date": date,
-                            "handler": handler,
-                            "session_purpose": session_purpose,
-                            "field_support": field_support,
-                            "dog_name": dog_name,
-                            "location": location,
-                            "search_area_size": search_area_size,
-                            "num_subjects": num_subjects,
-                            "handler_knowledge": handler_knowledge,
-                            "weather": weather,
-                            "temperature": temperature,
-                            "wind_direction": wind_direction,
-                            "wind_speed": wind_speed,
-                            "search_type": search_type,
-                            "drive_level": drive_level,
-                            "subjects_found": subjects_found,
-                            "comments": comments,
-                            "image_files": image_files_json,
-                            "user_name": self.get_username(),
-                            "session_number": session_number,
-                            "old_dog_name": dog_name  # Use same dog_name for WHERE clause
-                        }
-                    )
-                    conn.commit()
-                    message = f"Session #{session_number} updated successfully!"
-                else:
-                    # Insert new session
-                    conn.execute(
-                        text("""
-                            INSERT INTO training_sessions 
-                            (date, session_number, handler, session_purpose, field_support, dog_name, location,
-                             search_area_size, num_subjects, handler_knowledge, weather, temperature, 
-                             wind_direction, wind_speed, search_type, drive_level, subjects_found, comments, image_files, user_name)
-                            VALUES (:date, :session_number, :handler, :session_purpose, :field_support, :dog_name, :location,
-                                    :search_area_size, :num_subjects, :handler_knowledge, :weather, :temperature, 
-                                    :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, :comments, :image_files, :user_name)
-                        """),
-                        {
-                            "date": date,
-                            "session_number": session_number,
-                            "handler": handler,
-                            "session_purpose": session_purpose,
-                            "field_support": field_support,
-                            "dog_name": dog_name,
-                            "location": location,
-                            "search_area_size": search_area_size,
-                            "num_subjects": num_subjects,
-                            "handler_knowledge": handler_knowledge,
-                            "weather": weather,
-                            "temperature": temperature,
-                            "wind_direction": wind_direction,
-                            "wind_speed": wind_speed,
-                            "search_type": search_type,
-                            "drive_level": drive_level,
-                            "subjects_found": subjects_found,
-                            "comments": comments,
-                            "image_files": image_files_json,
-                            "user_name": self.get_username()
-                        }
-                    )
-                    conn.commit()
-                    message = f"Session #{session_number} saved successfully!"
-                
-                # Now save selected terrains
-                # First, get the session_id
-                result = conn.execute(
-                    text("SELECT id FROM training_sessions WHERE session_number = :session_number AND dog_name = :dog_name"),
-                    {"session_number": session_number, "dog_name": dog_name}
-                )
-                session_row = result.fetchone()
-                if session_row:
-                    session_id = session_row[0]
-                    
-                    # Delete existing selected terrains for this session
-                    conn.execute(
-                        text("DELETE FROM selected_terrains WHERE session_id = :session_id"),
-                        {"session_id": session_id}
-                    )
-                    
-                    # Insert new selected terrains
-                    for terrain_name in self.accumulated_terrains:
-                        conn.execute(
-                            text("""
-                                INSERT INTO selected_terrains (session_id, terrain_name, user_name)
-                                VALUES (:session_id, :terrain_name, :user_name)
-                            """),
-                            {
-                                "session_id": session_id,
-                                "terrain_name": terrain_name,
-                                "user_name": self.get_username()
-                            }
-                        )
-                    
-                    # Delete existing subject responses for this session
-                    conn.execute(
-                        text("DELETE FROM subject_responses WHERE session_id = :session_id"),
-                        {"session_id": session_id}
-                    )
-                    
-                    # Insert new subject responses from Treeview
-                    for i in range(1, 11):
-                        item_id = f'subject_{i}'
-                        tags = self.subject_responses_tree.item(item_id, 'tags')
-                        
-                        # Only save enabled rows
-                        if 'enabled' in tags:
-                            values = self.subject_responses_tree.item(item_id, 'values')
-                            subject_num = i
-                            tfr = values[1] if len(values) > 1 else ''
-                            refind = values[2] if len(values) > 2 else ''
-                            
-                            # Only save if at least one field is filled
-                            if tfr or refind:
-                                conn.execute(
-                                    text("""
-                                        INSERT INTO subject_responses (session_id, subject_number, tfr, refind, user_name)
-                                        VALUES (:session_id, :subject_number, :tfr, :refind, :user_name)
-                                    """),
-                                    {
-                                        "session_id": session_id,
-                                        "subject_number": subject_num,
-                                        "tfr": tfr,
-                                        "refind": refind,
-                                        "user_name": self.get_username()
-                                    }
-                                )
-                    
-                    conn.commit()
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            # Save last handler name to config
-            if handler:
-                self.config["last_handler_name"] = handler
-                self.save_config()
-            
-            # Save session to JSON backup
-            # Collect subject responses for backup from Treeview
-            subject_responses_list = []
-            for i in range(1, 11):
-                item_id = f'subject_{i}'
-                tags = self.subject_responses_tree.item(item_id, 'tags')
-                
-                # Only save enabled rows
-                if 'enabled' in tags:
-                    values = self.subject_responses_tree.item(item_id, 'values')
-                    subject_responses_list.append({
-                        "subject_number": i,
-                        "tfr": values[1] if len(values) > 1 else '',
-                        "refind": values[2] if len(values) > 2 else ''
-                    })
-            
-            session_backup_data = {
-                "date": date,
-                "session_number": session_number,
-                "handler": handler,
-                "session_purpose": session_purpose,
-                "field_support": field_support,
-                "dog_name": dog_name,
-                "location": location,
-                "search_area_size": search_area_size,
-                "num_subjects": num_subjects,
-                "handler_knowledge": handler_knowledge,
-                "weather": weather,
-                "temperature": temperature,
-                "wind_direction": wind_direction,
-                "wind_speed": wind_speed,
-                "search_type": search_type,
-                "drive_level": drive_level,
-                "subjects_found": subjects_found,
-                "comments": comments,
-                "subject_responses": subject_responses_list,
-                "image_files": self.map_files_list,
-                "selected_terrains": self.accumulated_terrains,
-                "user_name": self.get_username()
-            }
-            self.save_session_to_json(session_backup_data)
-            
-            self.status_var.set(message)
-            messagebox.showinfo("Success", message)
-            
-            # Auto-prepare for next entry: clear form except handler and session number
-            # Update session number to next available
-            self.session_var.set(str(self.get_next_session_number()))
-            
-            # Clear selected sessions (exit navigation mode)
-            self.selected_sessions = []
-            self.selected_sessions_index = -1
-            
-            # Clear all fields except handler (for rapid consecutive entries)
-            self.set_date(datetime.now().strftime("%Y-%m-%d"))
-            # handler_var is NOT cleared - keep current handler name
-            self.purpose_var.set("")
-            self.field_support_var.set("")
-            # dog_var is NOT cleared - keep current dog (persists across sessions)
-            self.location_var.set("")
-            self.search_area_var.set("")
-            self.num_subjects_var.set("")
-            self.handler_knowledge_var.set("")
-            self.weather_var.set("")
-            self.temperature_var.set("")
-            self.wind_direction_var.set("")
-            self.wind_speed_var.set("")
-            self.search_type_var.set("")
-            self.drive_level_var.set("")
-            self.subjects_found_var.set("")
-            self.comments_text.delete("1.0", tk.END)
-            # Clear terrain accumulator
-            self.accumulated_terrains = []
-            self.accumulated_terrain_combo['values'] = []
-            self.accumulated_terrain_var.set("")
-            # Clear map files list
-            self.map_files_list = []
-            self.map_listbox.delete(0, tk.END)
-            self.view_map_button.config(state=tk.DISABLED)
-            self.delete_map_button.config(state=tk.DISABLED)
-            # Update subjects_found combo state (will disable since num_subjects is blank)
-            self.update_subjects_found()
-            
-            # Update navigation buttons
-            self.update_navigation_buttons()
-            
-        except Exception as e:
-            # Restore original DB_TYPE on error
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            messagebox.showerror("Database Error", f"Failed to save session:\n{e}")
-            import traceback
-            traceback.print_exc()
-    
     def clear_form(self):
         """Clear the form"""
         result = messagebox.askyesno("Clear Form", "Are you sure you want to clear all fields?")
@@ -2528,6 +2068,7 @@ class AirScentingUI:
             self.accumulated_terrains = []
             self.accumulated_terrain_combo['values'] = []
             self.accumulated_terrain_var.set("")
+            self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
             # Update subjects_found combo state (will disable since num_subjects is blank)
             self.update_subjects_found()
             self.status_var.set("Form cleared")
@@ -2566,6 +2107,7 @@ class AirScentingUI:
         self.accumulated_terrains = []
         self.accumulated_terrain_combo['values'] = []
         self.accumulated_terrain_var.set("")
+        self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
         # Clear map files list
         self.map_files_list = []
         self.map_listbox.delete(0, tk.END)
@@ -2573,6 +2115,8 @@ class AirScentingUI:
         self.delete_map_button.config(state=tk.DISABLED)
         # Update subjects_found combo state (will disable since num_subjects is blank)
         self.update_subjects_found()
+        # Reset tree selection to subject 1
+        self.reset_subject_responses_tree_selection()
         self.status_var.set(f"New session #{next_session}")
         self.update_navigation_buttons()
     
@@ -2680,7 +2224,7 @@ class AirScentingUI:
                     if result is None:  # Cancel
                         return False
                     elif result:  # Yes - save first
-                        self.save_session()
+                        save_session()
                         return True
                     else:  # No - discard changes
                         return True
@@ -2736,230 +2280,121 @@ class AirScentingUI:
     
     def load_session_by_number(self, session_number):
         """Load session data from database by session number and current dog"""
-        db_type = self.db_type_var.get()
-        
-        # Check if dog_var exists (should always exist when this is called, but be safe)
         if not hasattr(self, 'dog_var'):
             print("Warning: load_session_by_number called before dog_var initialized")
             return
-        
+
         dog_name = self.dog_var.get().strip() if self.dog_var.get() else ""
-        
-        # print(f"DEBUG load_session_by_number: session={session_number}, dog='{dog_name}'")  # DEBUG
-        
-        # If no dog selected, can't load session
+
         if not dog_name:
             messagebox.showwarning("No Dog Selected", "Please select a dog first")
             return
-        
-        try:
-            # Temporarily switch to selected database type
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            # Reload database module
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            # Query for session (filter by session_number AND dog_name)
-            with database.get_connection() as conn:
-                result = conn.execute(
-                    text("""
-                        SELECT date, handler, session_purpose, field_support, dog_name, location,
-                               search_area_size, num_subjects, handler_knowledge, weather, temperature,
-                               wind_direction, wind_speed, search_type, drive_level, subjects_found, comments, image_files
-                        FROM training_sessions 
-                        WHERE session_number = :session_number AND dog_name = :dog_name
-                    """),
-                    {"session_number": session_number, "dog_name": dog_name}
-                )
-                row = result.fetchone()
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            if row:
-                # Load data into form fields
-                self.set_date(str(row[0]))
-                self.handler_var.set(row[1] or "")
-                self.purpose_var.set(row[2] or "")
-                self.field_support_var.set(row[3] or "")
-                self.dog_var.set(row[4] or "")
-                # Load search parameters
-                self.location_var.set(row[5] or "")
-                self.search_area_var.set(row[6] or "")
-                self.num_subjects_var.set(row[7] or "")
-                self.handler_knowledge_var.set(row[8] or "")
-                self.weather_var.set(row[9] or "")
-                self.temperature_var.set(row[10] or "")
-                self.wind_direction_var.set(row[11] or "")
-                self.wind_speed_var.set(row[12] or "")
-                self.search_type_var.set(row[13] or "")
-                self.drive_level_var.set(row[14] or "")
-                self.subjects_found_var.set(row[15] or "")
-                # Load comments into Text widget
-                self.comments_text.delete("1.0", tk.END)
-                self.comments_text.insert("1.0", row[16] or "")
-                # Load image files
-                image_files_json = row[17] or ""
-                if image_files_json:
-                    try:
-                        self.map_files_list = json.loads(image_files_json)
-                    except:
-                        self.map_files_list = []
-                else:
-                    self.map_files_list = []
-                # Update listbox
-                self.map_listbox.delete(0, tk.END)
-                for filename in self.map_files_list:
-                    self.map_listbox.insert(tk.END, filename)
-                # Update button states
-                if self.map_files_list:
-                    self.view_map_button.config(state=tk.NORMAL)
-                    self.delete_map_button.config(state=tk.NORMAL)
-                else:
-                    self.view_map_button.config(state=tk.DISABLED)
-                    self.delete_map_button.config(state=tk.DISABLED)
-                # Update subjects found dropdown based on loaded num_subjects
-                self.update_subjects_found()
-                # Re-set subjects_found (update_subjects_found clears it)
-                self.subjects_found_var.set(row[15] or "")
-                # Update subject responses grid based on subjects found
-                self.update_subject_responses_grid()
-                
-                # Load selected terrains for this session
+
+        # Load session from database
+        db_mgr = get_db_manager(self.db_type_var.get())
+        session_data = db_mgr.load_session(session_number, dog_name)
+
+        if session_data:
+            # Populate form with session data
+            self.set_date(session_data["date"])
+            self.handler_var.set(session_data["handler"])
+            self.purpose_var.set(session_data["session_purpose"])
+            self.field_support_var.set(session_data["field_support"])
+            self.dog_var.set(session_data["dog_name"])
+            self.location_var.set(session_data["location"])
+            self.search_area_var.set(session_data["search_area_size"])
+            self.num_subjects_var.set(session_data["num_subjects"])
+            self.handler_knowledge_var.set(session_data["handler_knowledge"])
+            self.weather_var.set(session_data["weather"])
+            self.temperature_var.set(session_data["temperature"])
+            self.wind_direction_var.set(session_data["wind_direction"])
+            self.wind_speed_var.set(session_data["wind_speed"])
+            self.search_type_var.set(session_data["search_type"])
+            self.drive_level_var.set(session_data["drive_level"])
+            self.subjects_found_var.set(session_data["subjects_found"])
+
+            # Load comments
+            self.comments_text.delete("1.0", tk.END)
+            self.comments_text.insert("1.0", session_data["comments"])
+
+            # Load image files
+            if session_data["image_files"]:
                 try:
-                    # Need to get session_id first
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    
-                    from sqlalchemy import text
-                    
-                    with database.get_connection() as conn:
-                        # Get session_id
-                        result = conn.execute(
-                            text("SELECT id FROM training_sessions WHERE session_number = :session_number AND dog_name = :dog_name"),
-                            {"session_number": session_number, "dog_name": dog_name}
-                        )
-                        session_row = result.fetchone()
-                        
-                        if session_row:
-                            session_id = session_row[0]
-                            
-                            # Load selected terrains
-                            result = conn.execute(
-                                text("SELECT terrain_name FROM selected_terrains WHERE session_id = :session_id ORDER BY id"),
-                                {"session_id": session_id}
-                            )
-                            terrains = [row[0] for row in result]
-                            
-                            # Update UI
-                            self.accumulated_terrains = terrains
-                            self.accumulated_terrain_combo['values'] = terrains
-                            # Display the last terrain if any exist
-                            if terrains:
-                                self.accumulated_terrain_var.set(terrains[-1])
-                            else:
-                                self.accumulated_terrain_var.set("")
-                            
-                            # Load subject responses
-                            result = conn.execute(
-                                text("""
-                                    SELECT subject_number, tfr, refind 
-                                    FROM subject_responses 
-                                    WHERE session_id = :session_id 
-                                    ORDER BY subject_number
-                                """),
-                                {"session_id": session_id}
-                            )
-                            responses = result.fetchall()
-                            
-                            # Set the values in the Treeview
-                            for row in responses:
-                                subject_num, tfr, refind = row
-                                # Update the corresponding treeview item
-                                if 1 <= subject_num <= 10:
-                                    item_id = f'subject_{subject_num}'
-                                    current_values = self.subject_responses_tree.item(item_id, 'values')
-                                    # Update with loaded data
-                                    self.subject_responses_tree.item(item_id, 
-                                                                    values=(current_values[0], tfr or '', refind or ''))
-                    
-                    # Restore original DB_TYPE
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                    
-                except Exception as e:
-                    print(f"Error loading selected terrains: {e}")
-                    # If error, just clear terrains
-                    self.accumulated_terrains = []
-                    self.accumulated_terrain_combo['values'] = []
-                    self.accumulated_terrain_var.set("")
-                
-                self.status_var.set(f"Loaded session #{session_number}")
+                    self.map_files_list = json.loads(session_data["image_files"])
+                except:
+                    self.map_files_list = []
             else:
-                # Session doesn't exist - clear form for new entry
-                self.set_date(datetime.now().strftime("%Y-%m-%d"))
-                # handler_var is NOT cleared - keep current handler
-                self.purpose_var.set("")
-                self.field_support_var.set("")
-                # dog_var is NOT cleared - keep current dog (persists)
-                # Clear search parameters
-                self.location_var.set("")
-                self.search_area_var.set("")
-                self.num_subjects_var.set("")
-                self.handler_knowledge_var.set("")
-                self.weather_var.set("")
-                self.temperature_var.set("")
-                self.wind_direction_var.set("")
-                self.wind_speed_var.set("")
-                self.search_type_var.set("")
-                self.drive_level_var.set("")
-                self.subjects_found_var.set("")
-                self.comments_text.delete("1.0", tk.END)
-                # Clear map files list
                 self.map_files_list = []
-                self.map_listbox.delete(0, tk.END)
+
+            # Update map listbox
+            self.map_listbox.delete(0, tk.END)
+            for filename in self.map_files_list:
+                self.map_listbox.insert(tk.END, filename)
+
+            if self.map_files_list:
+                self.view_map_button.config(state=tk.NORMAL)
+                self.delete_map_button.config(state=tk.NORMAL)
+            else:
                 self.view_map_button.config(state=tk.DISABLED)
                 self.delete_map_button.config(state=tk.DISABLED)
-                # Clear terrain accumulator
-                self.accumulated_terrains = []
-                self.accumulated_terrain_combo['values'] = []
-                self.accumulated_terrain_var.set("")
-                # Update subjects_found combo state (will disable since num_subjects is blank)
-                self.update_subjects_found()
-                self.status_var.set(f"New session #{session_number}")
-                
-        except Exception as e:
-            # Restore original DB_TYPE on error
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            print(f"Error loading session: {e}")
-    
+
+            self.update_subjects_found()
+            self.subjects_found_var.set(session_data["subjects_found"])
+            self.update_subject_responses_grid()
+
+            # Load selected terrains
+            session_id = session_data["id"]
+            self.accumulated_terrains = db_mgr.load_selected_terrains(session_id)
+            self.accumulated_terrain_combo['values'] = self.accumulated_terrains
+            # Enable combobox if terrains were loaded, disable if empty
+            if self.accumulated_terrains:
+                self.accumulated_terrain_combo['state'] = 'readonly'
+            else:
+                self.accumulated_terrain_combo['state'] = 'disabled'
+
+            # Load subject responses
+            subject_responses = db_mgr.load_subject_responses(session_id)
+            for response in subject_responses:
+                item_id = f'subject_{response["subject_number"]}'
+                if self.subject_responses_tree.exists(item_id):
+                    self.subject_responses_tree.item(
+                        item_id,
+                        values=(
+                            f'Subject {response["subject_number"]}',
+                            response["tfr"],
+                            response["refind"]
+                        )
+                    )
+
+            self.status_var.set(f"Loaded session #{session_number}")
+        else:
+            # Session doesn't exist - clear for new entry
+            self.set_date(datetime.now().strftime("%Y-%m-%d"))
+            self.purpose_var.set("")
+            self.field_support_var.set("")
+            self.location_var.set("")
+            self.search_area_var.set("")
+            self.num_subjects_var.set("")
+            self.handler_knowledge_var.set("")
+            self.weather_var.set("")
+            self.temperature_var.set("")
+            self.wind_direction_var.set("")
+            self.wind_speed_var.set("")
+            self.search_type_var.set("")
+            self.drive_level_var.set("")
+            self.subjects_found_var.set("")
+            self.comments_text.delete("1.0", tk.END)
+            self.accumulated_terrains = []
+            self.accumulated_terrain_combo['values'] = []
+            self.accumulated_terrain_var.set("")
+            self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
+            self.map_files_list = []
+            self.map_listbox.delete(0, tk.END)
+            self.view_map_button.config(state=tk.DISABLED)
+            self.delete_map_button.config(state=tk.DISABLED)
+            self.update_subjects_found()
+            self.status_var.set(f"New session #{session_number}")
+
     def update_navigation_buttons(self):
         """Enable/disable Previous and Next buttons based on current session number"""
         # If we have selected sessions, use that for navigation
@@ -3013,6 +2448,10 @@ class AirScentingUI:
             # Update combobox values
             self.accumulated_terrain_combo['values'] = self.accumulated_terrains
             
+            # Enable the combobox if this is the first item
+            if len(self.accumulated_terrains) == 1:
+                self.accumulated_terrain_combo['state'] = 'readonly'
+            
             # Display the last (newest) entry
             self.accumulated_terrain_var.set(terrain_type)
             
@@ -3039,8 +2478,9 @@ class AirScentingUI:
             
             # Determine what to display after removal
             if len(self.accumulated_terrains) == 0:
-                # List is now empty - show blank
+                # List is now empty - show blank and disable combobox
                 self.accumulated_terrain_var.set("")
+                self.accumulated_terrain_combo['state'] = 'disabled'
             elif removed_index < len(self.accumulated_terrains):
                 # Show the item that's now at the same index (the one that was below)
                 self.accumulated_terrain_var.set(self.accumulated_terrains[removed_index])
@@ -3182,6 +2622,18 @@ class AirScentingUI:
             self.tree_edit_combo = None
         self.tree_edit_item = None
         self.tree_edit_column = None
+    
+    def reset_subject_responses_tree_selection(self):
+        """Reset tree selection and scroll to subject 1"""
+        if hasattr(self, 'subject_responses_tree'):
+            # Clear any current selection
+            self.subject_responses_tree.selection_remove(self.subject_responses_tree.selection())
+            
+            # Select subject 1 (first item)
+            first_item = 'subject_1'
+            if self.subject_responses_tree.exists(first_item):
+                self.subject_responses_tree.selection_set(first_item)
+                self.subject_responses_tree.see(first_item)  # Scroll to make it visible
     
     def drag_enter(self, event):
         """Visual feedback when dragging over drop zone"""
@@ -3572,61 +3024,23 @@ class AirScentingUI:
                  width=10).pack(side="left", padx=5)
     
     def delete_sessions(self, session_numbers):
-        """Delete multiple sessions from database for current dog"""
-        db_type = self.db_type_var.get()
-        
-        # Check if dog_var exists
+        """Delete multiple sessions for current dog"""
         if not hasattr(self, 'dog_var'):
             messagebox.showerror("Error", "UI not fully initialized")
             return
         
         dog_name = self.dog_var.get()
         
-        try:
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            with database.get_connection() as conn:
-                for session_num in session_numbers:
-                    conn.execute(
-                        text("DELETE FROM training_sessions WHERE session_number = :session_number AND dog_name = :dog_name"),
-                        {"session_number": session_num, "dog_name": dog_name}
-                    )
-                conn.commit()
-            
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            messagebox.showinfo("Success", f"Deleted {len(session_numbers)} session(s)")
-            
-            # Clear selected sessions and reset to new session
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.delete_sessions(session_numbers, dog_name)
+        
+        if success:
+            messagebox.showinfo("Success", message)
             self.selected_sessions = []
             self.selected_sessions_index = -1
             self.new_session()
-            
-        except Exception as e:
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            messagebox.showerror("Database Error", f"Failed to delete sessions:\n{e}")
-            print(f"Error deleting sessions: {e}")
+        else:
+            messagebox.showerror("Database Error", message)
     
     def navigate_previous_session(self):
         """Navigate to previous session"""
@@ -3636,6 +3050,7 @@ class AirScentingUI:
             session_num = self.selected_sessions[self.selected_sessions_index]
             self.session_var.set(str(session_num))
             self.load_session_by_number(session_num)
+            self.reset_subject_responses_tree_selection()  # Reset to subject 1
             self.update_navigation_buttons()
             self.status_var.set(
                 f"Session {self.selected_sessions_index + 1} of {len(self.selected_sessions)} selected"
@@ -3647,6 +3062,7 @@ class AirScentingUI:
                 if current > 1:
                     self.session_var.set(str(current - 1))
                     self.load_session_by_number(current - 1)
+                    self.reset_subject_responses_tree_selection()  # Reset to subject 1
                     self.update_navigation_buttons()
             except ValueError:
                 pass
@@ -3659,6 +3075,7 @@ class AirScentingUI:
             session_num = self.selected_sessions[self.selected_sessions_index]
             self.session_var.set(str(session_num))
             self.load_session_by_number(session_num)
+            self.reset_subject_responses_tree_selection()  # Reset to subject 1
             self.update_navigation_buttons()
             self.status_var.set(
                 f"Session {self.selected_sessions_index + 1} of {len(self.selected_sessions)} selected"
@@ -3671,6 +3088,7 @@ class AirScentingUI:
                 if current < max_session + 1:
                     self.session_var.set(str(current + 1))
                     self.load_session_by_number(current + 1)
+                    self.reset_subject_responses_tree_selection()  # Reset to subject 1
                     self.update_navigation_buttons()
             except ValueError:
                 pass
@@ -4063,322 +3481,53 @@ class AirScentingUI:
     # Training Locations methods
     def load_locations_from_database(self):
         """Load training locations from database into Setup tab listbox"""
-        db_type = self.db_type_var.get()
+        db_mgr = get_db_manager(self.db_type_var.get())
+        locations = db_mgr.load_locations()
         
-        # For SQLite, check if database file exists before trying to connect
-        if db_type == "sqlite":
-            import config as config_module
-            db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-            if not os.path.exists(db_path):
-                # Database doesn't exist - clear listbox and return
-                if hasattr(self, 'location_listbox'):
-                    self.location_listbox.delete(0, tk.END)
-                return
-        
-        try:
-            # Temporarily switch to selected database type
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            # Reload database module
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            # Query training_locations table
-            with database.get_connection() as conn:
-                result = conn.execute(text("SELECT name FROM training_locations ORDER BY name"))
-                locations = [row[0] for row in result]
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            # Clear and populate listbox
-            self.location_listbox.delete(0, tk.END)
-            for location in locations:
-                self.location_listbox.insert(tk.END, location)
-                
-        except Exception as e:
-            # Restore original DB_TYPE on error
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            # If table doesn't exist yet, silently skip (database will be created later)
-            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
-                # Clear the listbox
-                if hasattr(self, 'location_listbox'):
-                    self.location_listbox.delete(0, tk.END)
-                # Don't print - this is expected before database is created
-            else:
-                print(f"Error loading locations: {e}")
+        # Update UI
+        self.location_listbox.delete(0, tk.END)
+        for location in locations:
+            self.location_listbox.insert(tk.END, location)
     
     def refresh_location_list(self):
         """Refresh the location combobox in Entry tab"""
-        db_type = self.db_type_var.get()
+        db_mgr = get_db_manager(self.db_type_var.get())
+        locations = db_mgr.load_locations()
         
-        # For SQLite, check if database file exists before trying to connect
-        if db_type == "sqlite":
-            import config as config_module
-            db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-            if not os.path.exists(db_path):
-                # Database doesn't exist - clear combobox and return
-                if hasattr(self, 'location_combo'):
-                    self.location_combo['values'] = []
-                return
-        
-        try:
-            # Temporarily switch to selected database type
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            # Reload database module
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            # Query training_locations table
-            with database.get_connection() as conn:
-                result = conn.execute(text("SELECT name FROM training_locations ORDER BY name"))
-                locations = [row[0] for row in result]
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            # Update combobox
-            if hasattr(self, 'location_combo'):
-                self.location_combo['values'] = locations
-                
-        except Exception as e:
-            # Restore original DB_TYPE on error
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            # If table doesn't exist yet, silently skip
-            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
-                # Clear the combobox
-                if hasattr(self, 'location_combo'):
-                    self.location_combo['values'] = []
-            else:
-                print(f"Error refreshing location list: {e}")
+        # Update combobox
+        if hasattr(self, 'location_combo'):
+            self.location_combo['values'] = locations
     
     def refresh_terrain_list(self):
         """Refresh the terrain type combobox in Entry tab"""
-        db_type = self.db_type_var.get()
+        # Use DatabaseManager to get terrain types in correct order (by sort_order)
+        from ui_database import get_db_manager
+        db_mgr = get_db_manager(self.db_type_var.get())
+        terrain_types = db_mgr.load_terrain_types()
         
-        # For SQLite, check if database file exists before trying to connect
-        if db_type == "sqlite":
-            import config as config_module
-            db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-            if not os.path.exists(db_path):
-                # Database doesn't exist - clear combobox and return
-                if hasattr(self, 'terrain_combo'):
-                    self.terrain_combo['values'] = []
-                return
-        
-        try:
-            # Temporarily switch to selected database type
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            # Reload database module
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            # Query terrain_types table
-            with database.get_connection() as conn:
-                result = conn.execute(text("SELECT name FROM terrain_types ORDER BY name"))
-                terrain_types = [row[0] for row in result]
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            # Update combobox
-            if hasattr(self, 'terrain_combo'):
-                self.terrain_combo['values'] = terrain_types
-                
-        except Exception as e:
-            # Restore original DB_TYPE on error
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            # If table doesn't exist yet, silently skip
-            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
-                # Clear the combobox
-                if hasattr(self, 'terrain_combo'):
-                    self.terrain_combo['values'] = []
-            else:
-                print(f"Error refreshing terrain list: {e}")
+        # Update combobox
+        if hasattr(self, 'terrain_combo'):
+            self.terrain_combo['values'] = terrain_types
     
     def load_terrain_from_database(self):
         """Load terrain types from database into Setup tab treeview"""
-        db_type = self.db_type_var.get()
+        db_mgr = get_db_manager(self.db_type_var.get())
+        terrain_types = db_mgr.load_terrain_types()
         
-        # For SQLite, check if database file exists before trying to connect
-        if db_type == "sqlite":
-            import config as config_module
-            db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-            if not os.path.exists(db_path):
-                # Database doesn't exist - clear treeview and return
-                if hasattr(self, 'terrain_tree'):
-                    self.terrain_tree.delete(*self.terrain_tree.get_children())
-                return
-        
-        try:
-            # Temporarily switch to selected database type
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            # Reload database module
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            # Query terrain_types table
-            with database.get_connection() as conn:
-                result = conn.execute(text("SELECT name FROM terrain_types ORDER BY name"))
-                terrain_types = [row[0] for row in result]
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            # Clear and populate treeview
-            self.terrain_tree.delete(*self.terrain_tree.get_children())
-            for idx, terrain in enumerate(terrain_types, 1):
-                self.terrain_tree.insert('', tk.END, text=str(idx), values=(terrain,))
-                
-        except Exception as e:
-            # Restore original DB_TYPE on error
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            # If table doesn't exist yet, silently skip
-            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
-                # Clear the treeview
-                if hasattr(self, 'terrain_tree'):
-                    self.terrain_tree.delete(*self.terrain_tree.get_children())
-            else:
-                print(f"Error loading terrain types: {e}")
+        # Clear and populate treeview
+        self.terrain_tree.delete(*self.terrain_tree.get_children())
+        for idx, terrain in enumerate(terrain_types, 1):
+            self.terrain_tree.insert('', tk.END, text=str(idx), values=(terrain,))
     
     def load_distraction_from_database(self):
         """Load distraction types from database into Setup tab treeview"""
-        db_type = self.db_type_var.get()
+        db_mgr = get_db_manager(self.db_type_var.get())
+        distraction_types = db_mgr.load_distraction_types()
         
-        # For SQLite, check if database file exists before trying to connect
-        if db_type == "sqlite":
-            import config as config_module
-            db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-            if not os.path.exists(db_path):
-                # Database doesn't exist - clear treeview and return
-                if hasattr(self, 'distraction_type_tree'):
-                    self.distraction_type_tree.delete(*self.distraction_type_tree.get_children())
-                return
-        
-        try:
-            # Temporarily switch to selected database type
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            # Reload database module
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            # Query distraction_types table
-            with database.get_connection() as conn:
-                result = conn.execute(text("SELECT name FROM distraction_types ORDER BY name"))
-                distraction_types = [row[0] for row in result]
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            # Clear and populate treeview
-            self.distraction_type_tree.delete(*self.distraction_type_tree.get_children())
-            for idx, distraction in enumerate(distraction_types, 1):
-                self.distraction_type_tree.insert('', tk.END, text=str(idx), values=(distraction,))
-                
-        except Exception as e:
-            # Restore original DB_TYPE on error
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            # If table doesn't exist yet, silently skip
-            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
-                # Clear the treeview
-                if hasattr(self, 'distraction_type_tree'):
-                    self.distraction_type_tree.delete(*self.distraction_type_tree.get_children())
-            else:
-                print(f"Error loading distraction types: {e}")
+        # Clear and populate treeview
+        self.distraction_type_tree.delete(*self.distraction_type_tree.get_children())
+        for idx, distraction in enumerate(distraction_types, 1):
+            self.distraction_type_tree.insert('', tk.END, text=str(idx), values=(distraction,))
     
     def update_location_button_states(self, *args):
         """Enable/disable location buttons based on entry content"""
@@ -4391,283 +3540,72 @@ class AirScentingUI:
         self.remove_location_btn.config(state="normal" if selection else "disabled")
     
     def add_location(self):
-        """Add a new training location to database"""
+        """Add a new training location"""
         location = self.new_location_var.get().strip()
-        if location:
-            db_type = self.db_type_var.get()
-            
-            try:
-                # Temporarily switch to selected database type
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                # Reload database module
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                from sqlalchemy import text
-                
-                # Insert into training_locations table
-                with database.get_connection() as conn:
-                    conn.execute(
-                        text("INSERT INTO training_locations (name, user_name) VALUES (:name, :user_name)"),
-                        {"name": location, "user_name": self.get_username()}
-                    )
-                    conn.commit()
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-                
-                # Refresh UI
-                self.load_locations_from_database()
-                self.refresh_location_list()
-                
-                self.new_location_var.set("")
-                self.status_var.set(f"Added location: {location}")
-                
-            except Exception as e:
-                # Restore original DB_TYPE on error
-                try:
-                    import config
-                    import database
-                    from importlib import reload
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except:
-                    pass
-                
-                if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
-                    messagebox.showinfo("Duplicate", f"Location '{location}' already exists")
-                else:
-                    messagebox.showerror("Database Error", f"Failed to add location:\n{e}")
-                    print(f"Error adding location: {e}")
+        if not location:
+            return
+        
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.add_location(location)
+        
+        if success:
+            self.load_locations_from_database()
+            self.refresh_location_list()
+            self.new_location_var.set("")
+            self.status_var.set(message)
+        else:
+            if "already exists" in message:
+                messagebox.showinfo("Duplicate", message)
+            else:
+                messagebox.showerror("Database Error", message)
     
     def remove_location(self):
-        """Remove selected training location from database"""
+        """Remove selected training location"""
         selection = self.location_listbox.curselection()
-        if selection:
-            location = self.location_listbox.get(selection[0])
-            
-            result = messagebox.askyesno("Confirm Delete", 
-                                        f"Delete location '{location}'?")
-            if not result:
-                return
-            
-            db_type = self.db_type_var.get()
-            
-            try:
-                # Temporarily switch to selected database type
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                # Reload database module
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                from sqlalchemy import text
-                
-                # Delete from training_locations table
-                with database.get_connection() as conn:
-                    conn.execute(
-                        text("DELETE FROM training_locations WHERE name = :name"),
-                        {"name": location}
-                    )
-                    conn.commit()
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-                
-                # Refresh UI
-                self.load_locations_from_database()
-                self.refresh_location_list()
-                
-                self.status_var.set(f"Removed location: {location}")
-                self.remove_location_btn.config(state="disabled")
-                
-            except Exception as e:
-                # Restore original DB_TYPE on error
-                try:
-                    import config
-                    import database
-                    from importlib import reload
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except:
-                    pass
-                
-                messagebox.showerror("Database Error", f"Failed to remove location:\n{e}")
-                print(f"Error removing location: {e}")
+        if not selection:
+            return
+        
+        location = self.location_listbox.get(selection[0])
+        
+        result = messagebox.askyesno("Confirm Delete", 
+                                     f"Delete location '{location}'?")
+        if not result:
+            return
+        
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.remove_location(location)
+        
+        if success:
+            self.load_locations_from_database()
+            self.refresh_location_list()
+            self.status_var.set(message)
+            self.remove_location_btn.config(state="disabled")
+        else:
+            messagebox.showerror("Database Error", message)
     
-    # Dog Names methods
     def load_dogs_from_database(self):
         """Load dog names from database into listbox"""
-        db_type = self.db_type_var.get()
+        db_mgr = get_db_manager(self.db_type_var.get())
+        dogs = db_mgr.load_dogs()
         
-        # print(f"DEBUG load_dogs_from_database: db_type={db_type}")  # DEBUG
-        
-        # For SQLite, check if database file exists before trying to connect
-        if db_type == "sqlite":
-            import config as config_module
-            db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-            # print(f"DEBUG load_dogs_from_database: db_path={db_path}, exists={os.path.exists(db_path)}")  # DEBUG
-            if not os.path.exists(db_path):
-                # Database doesn't exist - clear listbox and return
-                if hasattr(self, 'dog_listbox'):
-                    self.dog_listbox.delete(0, tk.END)
-                # print(f"DEBUG load_dogs_from_database: Database doesn't exist, returning")  # DEBUG
-                return
-        
-        try:
-            # Temporarily switch to selected database type
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            # Reload database module
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            # Query dogs table
-            with database.get_connection() as conn:
-                result = conn.execute(text("SELECT name FROM dogs ORDER BY name"))
-                dogs = [row[0] for row in result]
-            
-            # print(f"DEBUG load_dogs_from_database: Found {len(dogs)} dogs: {dogs}")  # DEBUG
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            # Clear and populate listbox
-            self.dog_listbox.delete(0, tk.END)
-            for dog in dogs:
-                self.dog_listbox.insert(tk.END, dog)
-            
-            # print(f"DEBUG load_dogs_from_database: Populated listbox with {len(dogs)} dogs")  # DEBUG
-                
-        except Exception as e:
-            # Restore original DB_TYPE on error
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            # If table doesn't exist yet, silently skip (database will be created later)
-            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
-                # Clear the listbox
-                if hasattr(self, 'dog_listbox'):
-                    self.dog_listbox.delete(0, tk.END)
-                # Don't print - this is expected before database is created
-            else:
-                print(f"Error loading dogs: {e}")
+        # Update UI
+        self.dog_listbox.delete(0, tk.END)
+        for dog in dogs:
+            self.dog_listbox.insert(tk.END, dog)
     
     def refresh_dog_list(self):
         """Refresh the dog combobox in Entry tab"""
-        db_type = self.db_type_var.get()
+        db_mgr = get_db_manager(self.db_type_var.get())
+        dogs = db_mgr.load_dogs()
         
-        # print(f"DEBUG refresh_dog_list: db_type={db_type}")  # DEBUG
+        # Update combobox
+        if hasattr(self, 'dog_combo'):
+            self.dog_combo['values'] = dogs
         
-        # For SQLite, check if database file exists before trying to connect
-        if db_type == "sqlite":
-            import config as config_module
-            db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-            # print(f"DEBUG refresh_dog_list: db_path={db_path}, exists={os.path.exists(db_path)}")  # DEBUG
-            if not os.path.exists(db_path):
-                # Database doesn't exist - clear combobox/listbox and return
-                if hasattr(self, 'dog_combo'):
-                    self.dog_combo['values'] = []
-                if hasattr(self, 'dog_listbox'):
-                    self.dog_listbox.delete(0, tk.END)
-                # print(f"DEBUG refresh_dog_list: Database doesn't exist, returning")  # DEBUG
-                return
-        
-        try:
-            # Temporarily switch to selected database type
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            # Reload database module
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            # Query dogs table
-            with database.get_connection() as conn:
-                result = conn.execute(text("SELECT name FROM dogs ORDER BY name"))
-                dogs = [row[0] for row in result]
-            
-            # print(f"DEBUG refresh_dog_list: Found {len(dogs)} dogs: {dogs}")  # DEBUG
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            # Update combobox
-            if hasattr(self, 'dog_combo'):
-                self.dog_combo['values'] = dogs
-                # print(f"DEBUG refresh_dog_list: Updated dog_combo with {len(dogs)} dogs")  # DEBUG
-            
-            # Also update Setup tab listbox
-            self.dog_listbox.delete(0, tk.END)
-            for dog in dogs:
-                self.dog_listbox.insert(tk.END, dog)
-            
-            # print(f"DEBUG refresh_dog_list: Updated dog_listbox with {len(dogs)} dogs")  # DEBUG
-                
-        except Exception as e:
-            # Restore original DB_TYPE on error
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            # If database/tables don't exist yet, silently skip (they'll be created later)
-            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
-                # Clear the combobox and listbox
-                if hasattr(self, 'dog_combo'):
-                    self.dog_combo['values'] = []
-                if hasattr(self, 'dog_listbox'):
-                    self.dog_listbox.delete(0, tk.END)
-                # Don't print error - this is expected before database is created
-            else:
-                # Unexpected error - print it
-                print(f"Error refreshing dog list: {e}")
+        # Also update Setup tab listbox
+        self.dog_listbox.delete(0, tk.END)
+        for dog in dogs:
+            self.dog_listbox.insert(tk.END, dog)
     
     def update_dog_button_states(self, *args):
         """Enable/disable dog buttons based on entry content"""
@@ -4680,137 +3618,54 @@ class AirScentingUI:
         self.remove_dog_btn.config(state="normal" if selection else "disabled")
     
     def add_dog(self):
-        """Add a new dog name"""
+        """Add a new dog"""
         dog_name = self.new_dog_var.get().strip()
-        if dog_name:
-            # Check database type and selected type
-            db_type = self.db_type_var.get()
-            
-            try:
-                # Temporarily switch to selected database type
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                # Reload database module
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                from sqlalchemy import text
-                
-                # Insert into dogs table with user_name
-                with database.get_connection() as conn:
-                    conn.execute(
-                        text("INSERT INTO dogs (name, user_name) VALUES (:name, :user_name)"),
-                        {"name": dog_name, "user_name": self.get_username()}
-                    )
-                    conn.commit()
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-                
-                # Update listbox
-                self.dog_listbox.insert(tk.END, dog_name)
-                
-                # Update dog combobox in Entry tab if it exists
-                if hasattr(self, 'dog_combo'):
-                    self.refresh_dog_list()
-                
-                self.new_dog_var.set("")
-                self.status_var.set(f"Added dog: {dog_name}")
-                
-            except Exception as e:
-                # Restore original DB_TYPE on error
-                try:
-                    import config
-                    import database
-                    from importlib import reload
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except:
-                    pass
-                
-                if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
-                    messagebox.showinfo("Duplicate", f"Dog '{dog_name}' already exists")
-                else:
-                    messagebox.showerror("Database Error", f"Failed to add dog:\n{e}")
-                    print(f"Error adding dog: {e}")
+        if not dog_name:
+            return
+        
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.add_dog(dog_name)
+        
+        if success:
+            self.load_dogs_from_database()
+            if hasattr(self, 'dog_combo'):
+                self.refresh_dog_list()
+            self.new_dog_var.set("")
+            self.status_var.set(message)
+        else:
+            if "already exists" in message:
+                messagebox.showinfo("Duplicate", message)
+            else:
+                messagebox.showerror("Database Error", message)
     
     def remove_dog(self):
-        """Remove selected dog name"""
+        """Remove selected dog"""
         selection = self.dog_listbox.curselection()
-        if selection:
-            dog_name = self.dog_listbox.get(selection[0])
-            
-            # Confirm deletion
-            result = messagebox.askyesno(
-                "Confirm Delete",
-                f"Are you sure you want to delete dog '{dog_name}'?\n\n"
-                "This will not delete training sessions for this dog."
-            )
-            if not result:
-                return
-            
-            db_type = self.db_type_var.get()
-            
-            try:
-                # Temporarily switch to selected database type
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                # Reload database module
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                from sqlalchemy import text
-                
-                # Delete from dogs table
-                with database.get_connection() as conn:
-                    conn.execute(
-                        text("DELETE FROM dogs WHERE name = :name"),
-                        {"name": dog_name}
-                    )
-                    conn.commit()
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-                
-                # Update listbox
-                self.dog_listbox.delete(selection[0])
-                
-                # Update dog combobox in Entry tab if it exists
-                if hasattr(self, 'dog_combo'):
-                    self.refresh_dog_list()
-                
-                self.status_var.set(f"Removed dog: {dog_name}")
-                self.remove_dog_btn.config(state="disabled")
-                
-            except Exception as e:
-                # Restore original DB_TYPE on error
-                try:
-                    import config
-                    import database
-                    from importlib import reload
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except:
-                    pass
-                
-                messagebox.showerror("Database Error", f"Failed to remove dog:\n{e}")
-                print(f"Error removing dog: {e}")
+        if not selection:
+            return
+        
+        dog_name = self.dog_listbox.get(selection[0])
+        
+        # Confirm deletion
+        result = messagebox.askyesno(
+            "Confirm Delete",
+            f"Are you sure you want to delete dog '{dog_name}'?\n\n"
+            "This will not delete training sessions for this dog."
+        )
+        if not result:
+            return
+        
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.remove_dog(dog_name)
+        
+        if success:
+            self.dog_listbox.delete(selection[0])
+            if hasattr(self, 'dog_combo'):
+                self.refresh_dog_list()
+            self.status_var.set(message)
+            self.remove_dog_btn.config(state="disabled")
+        else:
+            messagebox.showerror("Database Error", message)
     
     # Terrain Types methods
     def update_terrain_button_states(self, *args):
@@ -4827,187 +3682,136 @@ class AirScentingUI:
         self.move_terrain_down_btn.config(state="normal" if has_selection else "disabled")
     
     def add_terrain_type(self):
-        """Add a new terrain type to database"""
+        """Add a new terrain type"""
         terrain = self.new_terrain_var.get().strip()
-        if terrain:
-            db_type = self.db_type_var.get()
-            
-            try:
-                # Temporarily switch to selected database type
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                # Reload database module
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                from sqlalchemy import text
-                
-                # Insert into terrain_types table
-                with database.get_connection() as conn:
-                    conn.execute(
-                        text("INSERT INTO terrain_types (name, user_name) VALUES (:name, :user_name)"),
-                        {"name": terrain, "user_name": self.get_username()}
-                    )
-                    conn.commit()
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-                
-                # Refresh UI
-                self.load_terrain_from_database()
-                
-                self.new_terrain_var.set("")
-                self.status_var.set(f"Added terrain type: {terrain}")
-                
-            except Exception as e:
-                # Restore original DB_TYPE on error
-                try:
-                    import config
-                    import database
-                    from importlib import reload
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except:
-                    pass
-                
-                if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
-                    messagebox.showinfo("Duplicate", f"Terrain type '{terrain}' already exists")
-                else:
-                    messagebox.showerror("Database Error", f"Failed to add terrain type:\n{e}")
-                    print(f"Error adding terrain type: {e}")
+        if not terrain:
+            return
+        
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.add_terrain_type(terrain)
+        
+        if success:
+            self.load_terrain_from_database()
+            # Also refresh Entry tab terrain combobox
+            if hasattr(self, 'terrain_combo'):
+                self.refresh_terrain_list()
+            self.new_terrain_var.set("")
+            self.status_var.set(message)
+        else:
+            if "already exists" in message:
+                messagebox.showinfo("Duplicate", message)
+            else:
+                messagebox.showerror("Database Error", message)
     
     def remove_terrain_type(self):
-        """Remove selected terrain type from database"""
+        """Remove selected terrain type"""
         selection = self.terrain_tree.selection()
-        if selection:
-            item = selection[0]
-            values = self.terrain_tree.item(item, 'values')
-            terrain = values[0]
-            
-            result = messagebox.askyesno("Confirm Delete", 
-                                        f"Delete terrain type '{terrain}'?")
-            if not result:
-                return
-            
-            db_type = self.db_type_var.get()
-            
-            try:
-                # Temporarily switch to selected database type
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                # Reload database module
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                from sqlalchemy import text
-                
-                # Delete from terrain_types table
-                with database.get_connection() as conn:
-                    conn.execute(
-                        text("DELETE FROM terrain_types WHERE name = :name"),
-                        {"name": terrain}
-                    )
-                    conn.commit()
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-                
-                # Refresh UI
-                self.load_terrain_from_database()
-                
-                self.status_var.set(f"Removed terrain type: {terrain}")
-                
-            except Exception as e:
-                # Restore original DB_TYPE on error
-                try:
-                    import config
-                    import database
-                    from importlib import reload
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except:
-                    pass
-                
-                messagebox.showerror("Database Error", f"Failed to remove terrain type:\n{e}")
-                print(f"Error removing terrain type: {e}")
+        if not selection:
+            return
+        
+        item = selection[0]
+        values = self.terrain_tree.item(item, 'values')
+        terrain = values[0]
+        
+        result = messagebox.askyesno("Confirm Delete", 
+                                    f"Delete terrain type '{terrain}'?")
+        if not result:
+            return
+        
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.remove_terrain_type(terrain)
+        
+        if success:
+            self.load_terrain_from_database()
+            # Also refresh Entry tab terrain combobox
+            if hasattr(self, 'terrain_combo'):
+                self.refresh_terrain_list()
+            self.status_var.set(message)
+        else:
+            messagebox.showerror("Database Error", message)
     
     def move_terrain_up(self):
         """Move selected terrain type up"""
         selection = self.terrain_tree.selection()
-        if selection:
-            item = selection[0]
-            values = self.terrain_tree.item(item, 'values')
-            terrain = values[0]
-            
-            existing = self.config.get("terrain_types", [])
-            idx = existing.index(terrain)
-            if idx > 0:
-                # Swap with previous
-                existing[idx], existing[idx-1] = existing[idx-1], existing[idx]
-                self.config["terrain_types"] = existing
-                
-                # Rebuild treeview
-                self.terrain_tree.delete(*self.terrain_tree.get_children())
-                for i, t in enumerate(existing, 1):
-                    new_item = self.terrain_tree.insert('', tk.END, text=str(i), values=(t,))
-                    if t == terrain:
-                        self.terrain_tree.selection_set(new_item)
-                        self.terrain_tree.see(new_item)
+        if not selection:
+            return
+        
+        item = selection[0]
+        values = self.terrain_tree.item(item, 'values')
+        terrain = values[0]
+        
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.move_terrain_up(terrain)
+        
+        if success:
+            # Reload and reselect
+            self.load_terrain_from_database()
+            # Also refresh Entry tab terrain combobox
+            if hasattr(self, 'terrain_combo'):
+                self.refresh_terrain_list()
+            # Find and select the moved item
+            for child in self.terrain_tree.get_children():
+                if self.terrain_tree.item(child, 'values')[0] == terrain:
+                    self.terrain_tree.selection_set(child)
+                    self.terrain_tree.see(child)
+                    break
+            self.status_var.set(message)
+        else:
+            if "Already at top" not in message:
+                messagebox.showinfo("Cannot Move", message)
     
     def move_terrain_down(self):
         """Move selected terrain type down"""
         selection = self.terrain_tree.selection()
-        if selection:
-            item = selection[0]
-            values = self.terrain_tree.item(item, 'values')
-            terrain = values[0]
-            
-            existing = self.config.get("terrain_types", [])
-            idx = existing.index(terrain)
-            if idx < len(existing) - 1:
-                # Swap with next
-                existing[idx], existing[idx+1] = existing[idx+1], existing[idx]
-                self.config["terrain_types"] = existing
-                
-                # Rebuild treeview
-                self.terrain_tree.delete(*self.terrain_tree.get_children())
-                for i, t in enumerate(existing, 1):
-                    new_item = self.terrain_tree.insert('', tk.END, text=str(i), values=(t,))
-                    if t == terrain:
-                        self.terrain_tree.selection_set(new_item)
-                        self.terrain_tree.see(new_item)
+        if not selection:
+            return
+        
+        item = selection[0]
+        values = self.terrain_tree.item(item, 'values')
+        terrain = values[0]
+        
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.move_terrain_down(terrain)
+        
+        if success:
+            # Reload and reselect
+            self.load_terrain_from_database()
+            # Also refresh Entry tab terrain combobox
+            if hasattr(self, 'terrain_combo'):
+                self.refresh_terrain_list()
+            # Find and select the moved item
+            for child in self.terrain_tree.get_children():
+                if self.terrain_tree.item(child, 'values')[0] == terrain:
+                    self.terrain_tree.selection_set(child)
+                    self.terrain_tree.see(child)
+                    break
+            self.status_var.set(message)
+        else:
+            if "Already at bottom" not in message:
+                messagebox.showinfo("Cannot Move", message)
     
     def restore_default_terrain_types(self):
         """Restore default terrain types"""
         result = messagebox.askyesno(
             "Restore Defaults",
-            "This will replace your terrain types with the default list. Continue?"
+            "This will DELETE all existing terrain types and restore the default list.\n\n"
+            "Are you sure you want to continue?"
         )
-        if result:
-            self.config["terrain_types"] = self.get_default_terrain_types()
-            
-            # Rebuild treeview
-            self.terrain_tree.delete(*self.terrain_tree.get_children())
-            for idx, terrain in enumerate(self.config["terrain_types"], 1):
-                self.terrain_tree.insert('', tk.END, text=str(idx), values=(terrain,))
-            
-            self.status_var.set("Restored default terrain types")
+        if not result:
+            return
+        
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.restore_default_terrain_types()
+        
+        if success:
+            self.load_terrain_from_database()
+            # Also refresh Entry tab terrain combobox
+            if hasattr(self, 'terrain_combo'):
+                self.refresh_terrain_list()
+            self.status_var.set(message)
+            messagebox.showinfo("Success", message)
+        else:
+            messagebox.showerror("Error", message)
     
     # Distraction Types methods
     def update_distraction_type_button_states(self, *args):
@@ -5024,190 +3828,121 @@ class AirScentingUI:
         self.move_distraction_type_down_btn.config(state="normal" if has_selection else "disabled")
     
     def add_distraction_type(self):
-        """Add a new distraction type to database"""
+        """Add a new distraction type"""
         distraction = self.new_distraction_var.get().strip()
-        if distraction:
-            db_type = self.db_type_var.get()
-            
-            try:
-                # Temporarily switch to selected database type
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                # Reload database module
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                from sqlalchemy import text
-                
-                # Insert into distraction_types table
-                with database.get_connection() as conn:
-                    conn.execute(
-                        text("INSERT INTO distraction_types (name, user_name) VALUES (:name, :user_name)"),
-                        {"name": distraction, "user_name": self.get_username()}
-                    )
-                    conn.commit()
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-                
-                # Refresh UI
-                self.load_distraction_from_database()
-                
-                self.new_distraction_var.set("")
-                self.status_var.set(f"Added distraction type: {distraction}")
-                
-            except Exception as e:
-                # Restore original DB_TYPE on error
-                try:
-                    import config
-                    import database
-                    from importlib import reload
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except:
-                    pass
-                
-                # Clear the entry field even on error
-                self.new_distraction_var.set("")
-                
-                if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
-                    messagebox.showinfo("Duplicate", f"Distraction type '{distraction}' already exists")
-                else:
-                    messagebox.showerror("Database Error", f"Failed to add distraction type:\n{e}")
-                    print(f"Error adding distraction type: {e}")
+        if not distraction:
+            return
+        
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.add_distraction_type(distraction)
+        
+        if success:
+            self.load_distraction_from_database()
+            self.new_distraction_var.set("")
+            self.status_var.set(message)
+        else:
+            if "already exists" in message:
+                messagebox.showinfo("Duplicate", message)
+            else:
+                messagebox.showerror("Database Error", message)
     
     def remove_distraction_type(self):
-        """Remove selected distraction type from database"""
+        """Remove selected distraction type"""
         selection = self.distraction_type_tree.selection()
-        if selection:
-            item = selection[0]
-            values = self.distraction_type_tree.item(item, 'values')
-            distraction = values[0]
-            
-            result = messagebox.askyesno("Confirm Delete", 
-                                        f"Delete distraction type '{distraction}'?")
-            if not result:
-                return
-            
-            db_type = self.db_type_var.get()
-            
-            try:
-                # Temporarily switch to selected database type
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                # Reload database module
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                from sqlalchemy import text
-                
-                # Delete from distraction_types table
-                with database.get_connection() as conn:
-                    conn.execute(
-                        text("DELETE FROM distraction_types WHERE name = :name"),
-                        {"name": distraction}
-                    )
-                    conn.commit()
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-                
-                # Refresh UI
-                self.load_distraction_from_database()
-                
-                self.status_var.set(f"Removed distraction type: {distraction}")
-                
-            except Exception as e:
-                # Restore original DB_TYPE on error
-                try:
-                    import config
-                    import database
-                    from importlib import reload
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except:
-                    pass
-                
-                messagebox.showerror("Database Error", f"Failed to remove distraction type:\n{e}")
-                print(f"Error removing distraction type: {e}")
+        if not selection:
+            return
+        
+        item = selection[0]
+        values = self.distraction_type_tree.item(item, 'values')
+        distraction = values[0]
+        
+        result = messagebox.askyesno("Confirm Delete", 
+                                    f"Delete distraction type '{distraction}'?")
+        if not result:
+            return
+        
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.remove_distraction_type(distraction)
+        
+        if success:
+            self.load_distraction_from_database()
+            self.status_var.set(message)
+        else:
+            messagebox.showerror("Database Error", message)
     
     def move_distraction_up(self):
         """Move selected distraction type up"""
         selection = self.distraction_type_tree.selection()
-        if selection:
-            item = selection[0]
-            values = self.distraction_type_tree.item(item, 'values')
-            distraction = values[0]
-            
-            existing = self.config.get("distraction_types", [])
-            idx = existing.index(distraction)
-            if idx > 0:
-                # Swap with previous
-                existing[idx], existing[idx-1] = existing[idx-1], existing[idx]
-                self.config["distraction_types"] = existing
-                
-                # Rebuild treeview
-                self.distraction_type_tree.delete(*self.distraction_type_tree.get_children())
-                for i, d in enumerate(existing, 1):
-                    new_item = self.distraction_type_tree.insert('', tk.END, text=str(i), values=(d,))
-                    if d == distraction:
-                        self.distraction_type_tree.selection_set(new_item)
-                        self.distraction_type_tree.see(new_item)
+        if not selection:
+            return
+        
+        item = selection[0]
+        values = self.distraction_type_tree.item(item, 'values')
+        distraction = values[0]
+        
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.move_distraction_up(distraction)
+        
+        if success:
+            # Reload and reselect
+            self.load_distraction_from_database()
+            # Find and select the moved item
+            for child in self.distraction_type_tree.get_children():
+                if self.distraction_type_tree.item(child, 'values')[0] == distraction:
+                    self.distraction_type_tree.selection_set(child)
+                    self.distraction_type_tree.see(child)
+                    break
+            self.status_var.set(message)
+        else:
+            if "Already at top" not in message:
+                messagebox.showinfo("Cannot Move", message)
     
     def move_distraction_down(self):
         """Move selected distraction type down"""
         selection = self.distraction_type_tree.selection()
-        if selection:
-            item = selection[0]
-            values = self.distraction_type_tree.item(item, 'values')
-            distraction = values[0]
-            
-            existing = self.config.get("distraction_types", [])
-            idx = existing.index(distraction)
-            if idx < len(existing) - 1:
-                # Swap with next
-                existing[idx], existing[idx+1] = existing[idx+1], existing[idx]
-                self.config["distraction_types"] = existing
-                
-                # Rebuild treeview
-                self.distraction_type_tree.delete(*self.distraction_type_tree.get_children())
-                for i, d in enumerate(existing, 1):
-                    new_item = self.distraction_type_tree.insert('', tk.END, text=str(i), values=(d,))
-                    if d == distraction:
-                        self.distraction_type_tree.selection_set(new_item)
-                        self.distraction_type_tree.see(new_item)
+        if not selection:
+            return
+        
+        item = selection[0]
+        values = self.distraction_type_tree.item(item, 'values')
+        distraction = values[0]
+        
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.move_distraction_down(distraction)
+        
+        if success:
+            # Reload and reselect
+            self.load_distraction_from_database()
+            # Find and select the moved item
+            for child in self.distraction_type_tree.get_children():
+                if self.distraction_type_tree.item(child, 'values')[0] == distraction:
+                    self.distraction_type_tree.selection_set(child)
+                    self.distraction_type_tree.see(child)
+                    break
+            self.status_var.set(message)
+        else:
+            if "Already at bottom" not in message:
+                messagebox.showinfo("Cannot Move", message)
     
     def restore_default_distraction_types(self):
         """Restore default distraction types"""
         result = messagebox.askyesno(
             "Restore Defaults",
-            "This will replace your distraction types with the default list. Continue?"
+            "This will DELETE all existing distraction types and restore the default list.\n\n"
+            "Are you sure you want to continue?"
         )
-        if result:
-            self.config["distraction_types"] = self.get_default_distraction_types()
-            
-            # Rebuild treeview
-            self.distraction_type_tree.delete(*self.distraction_type_tree.get_children())
-            for idx, distraction in enumerate(self.config["distraction_types"], 1):
-                self.distraction_type_tree.insert('', tk.END, text=str(idx), values=(distraction,))
-            
-            self.status_var.set("Restored default distraction types")
+        if not result:
+            return
+        
+        db_mgr = get_db_manager(self.db_type_var.get())
+        success, message = db_mgr.restore_default_distraction_types()
+        
+        if success:
+            self.load_distraction_from_database()
+            self.status_var.set(message)
+            messagebox.showinfo("Success", message)
+        else:
+            messagebox.showerror("Error", message)
     
     # Configuration management
     def save_configuration_settings(self):

@@ -8,7 +8,7 @@ from sqlalchemy import text
 from datetime import datetime
 import config
 from database import engine, get_connection
-from ui_utils import get_username
+from ui_utils import get_username, get_default_terrain_types, get_default_distraction_types
 
 
 class DatabaseManager:
@@ -631,7 +631,7 @@ class DatabaseManager:
     # ===== TERRAIN TYPES =====
     
     def load_terrain_types(self):
-        """Load all terrain types from database"""
+        """Load all terrain types from database ordered by sort_order"""
         if not self._db_exists():
             return []
         
@@ -639,7 +639,7 @@ class DatabaseManager:
             old_db_type = self._switch_db_context()
             
             with get_connection() as conn:
-                result = conn.execute(text("SELECT name FROM terrain_types ORDER BY name"))
+                result = conn.execute(text("SELECT name FROM terrain_types ORDER BY sort_order, name"))
                 terrain_types = [row[0] for row in result]
             
             self._restore_db_context(old_db_type)
@@ -654,7 +654,7 @@ class DatabaseManager:
                 return []
     
     def add_terrain_type(self, terrain):
-        """Add a new terrain type"""
+        """Add a new terrain type with next available sort_order"""
         terrain = terrain.strip()
         if not terrain:
             return False, "Terrain type cannot be empty"
@@ -663,9 +663,13 @@ class DatabaseManager:
             old_db_type = self._switch_db_context()
             
             with get_connection() as conn:
+                # Get next sort_order (max + 1)
+                result = conn.execute(text("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM terrain_types"))
+                next_order = result.scalar()
+                
                 conn.execute(
-                    text("INSERT INTO terrain_types (name, user_name) VALUES (:name, :user_name)"),
-                    {"name": terrain, "user_name": get_username()}
+                    text("INSERT INTO terrain_types (name, user_name, sort_order) VALUES (:name, :user_name, :sort_order)"),
+                    {"name": terrain, "user_name": get_username(), "sort_order": next_order}
                 )
                 conn.commit()
             
@@ -700,10 +704,137 @@ class DatabaseManager:
             print(f"Error removing terrain type: {e}")
             return False, f"Database error: {e}"
     
+    def move_terrain_up(self, terrain):
+        """Move terrain type up in sort order"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                # Get current item's sort_order
+                result = conn.execute(
+                    text("SELECT sort_order FROM terrain_types WHERE name = :name"),
+                    {"name": terrain}
+                )
+                row = result.fetchone()
+                if not row:
+                    self._restore_db_context(old_db_type)
+                    return False, f"Terrain type '{terrain}' not found"
+                
+                current_order = row[0]
+                
+                # Find item above (lower sort_order)
+                result = conn.execute(
+                    text("SELECT name, sort_order FROM terrain_types WHERE sort_order < :order ORDER BY sort_order DESC LIMIT 1"),
+                    {"order": current_order}
+                )
+                prev_row = result.fetchone()
+                
+                if not prev_row:
+                    self._restore_db_context(old_db_type)
+                    return False, "Already at top"
+                
+                prev_name, prev_order = prev_row
+                
+                # Swap sort_order values
+                conn.execute(
+                    text("UPDATE terrain_types SET sort_order = :new_order WHERE name = :name"),
+                    {"new_order": prev_order, "name": terrain}
+                )
+                conn.execute(
+                    text("UPDATE terrain_types SET sort_order = :new_order WHERE name = :name"),
+                    {"new_order": current_order, "name": prev_name}
+                )
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True, f"Moved '{terrain}' up"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error moving terrain type up: {e}")
+            return False, f"Database error: {e}"
+    
+    def move_terrain_down(self, terrain):
+        """Move terrain type down in sort order"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                # Get current item's sort_order
+                result = conn.execute(
+                    text("SELECT sort_order FROM terrain_types WHERE name = :name"),
+                    {"name": terrain}
+                )
+                row = result.fetchone()
+                if not row:
+                    self._restore_db_context(old_db_type)
+                    return False, f"Terrain type '{terrain}' not found"
+                
+                current_order = row[0]
+                
+                # Find item below (higher sort_order)
+                result = conn.execute(
+                    text("SELECT name, sort_order FROM terrain_types WHERE sort_order > :order ORDER BY sort_order ASC LIMIT 1"),
+                    {"order": current_order}
+                )
+                next_row = result.fetchone()
+                
+                if not next_row:
+                    self._restore_db_context(old_db_type)
+                    return False, "Already at bottom"
+                
+                next_name, next_order = next_row
+                
+                # Swap sort_order values
+                conn.execute(
+                    text("UPDATE terrain_types SET sort_order = :new_order WHERE name = :name"),
+                    {"new_order": next_order, "name": terrain}
+                )
+                conn.execute(
+                    text("UPDATE terrain_types SET sort_order = :new_order WHERE name = :name"),
+                    {"new_order": current_order, "name": next_name}
+                )
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True, f"Moved '{terrain}' down"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error moving terrain type down: {e}")
+            return False, f"Database error: {e}"
+    
+    def restore_default_terrain_types(self):
+        """Replace all terrain types with defaults"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                # Delete all existing
+                conn.execute(text("DELETE FROM terrain_types"))
+                
+                # Insert defaults with proper sort_order
+                defaults = get_default_terrain_types()
+                for idx, terrain in enumerate(defaults):
+                    conn.execute(
+                        text("INSERT INTO terrain_types (name, user_name, sort_order) VALUES (:name, :user_name, :sort_order)"),
+                        {"name": terrain, "user_name": get_username(), "sort_order": idx}
+                    )
+                
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True, f"Restored {len(defaults)} default terrain types"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error restoring default terrain types: {e}")
+            return False, f"Database error: {e}"
+    
     # ===== DISTRACTION TYPES =====
     
     def load_distraction_types(self):
-        """Load all distraction types from database"""
+        """Load all distraction types from database ordered by sort_order"""
         if not self._db_exists():
             return []
         
@@ -711,7 +842,7 @@ class DatabaseManager:
             old_db_type = self._switch_db_context()
             
             with get_connection() as conn:
-                result = conn.execute(text("SELECT name FROM distraction_types ORDER BY name"))
+                result = conn.execute(text("SELECT name FROM distraction_types ORDER BY sort_order, name"))
                 distraction_types = [row[0] for row in result]
             
             self._restore_db_context(old_db_type)
@@ -726,7 +857,7 @@ class DatabaseManager:
                 return []
     
     def add_distraction_type(self, distraction):
-        """Add a new distraction type"""
+        """Add a new distraction type with next available sort_order"""
         distraction = distraction.strip()
         if not distraction:
             return False, "Distraction type cannot be empty"
@@ -735,9 +866,13 @@ class DatabaseManager:
             old_db_type = self._switch_db_context()
             
             with get_connection() as conn:
+                # Get next sort_order (max + 1)
+                result = conn.execute(text("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM distraction_types"))
+                next_order = result.scalar()
+                
                 conn.execute(
-                    text("INSERT INTO distraction_types (name, user_name) VALUES (:name, :user_name)"),
-                    {"name": distraction, "user_name": get_username()}
+                    text("INSERT INTO distraction_types (name, user_name, sort_order) VALUES (:name, :user_name, :sort_order)"),
+                    {"name": distraction, "user_name": get_username(), "sort_order": next_order}
                 )
                 conn.commit()
             
@@ -771,6 +906,134 @@ class DatabaseManager:
             self._restore_db_context(old_db_type)
             print(f"Error removing distraction type: {e}")
             return False, f"Database error: {e}"
+    
+    def move_distraction_up(self, distraction):
+        """Move distraction type up in sort order"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                # Get current item's sort_order
+                result = conn.execute(
+                    text("SELECT sort_order FROM distraction_types WHERE name = :name"),
+                    {"name": distraction}
+                )
+                row = result.fetchone()
+                if not row:
+                    self._restore_db_context(old_db_type)
+                    return False, f"Distraction type '{distraction}' not found"
+                
+                current_order = row[0]
+                
+                # Find item above (lower sort_order)
+                result = conn.execute(
+                    text("SELECT name, sort_order FROM distraction_types WHERE sort_order < :order ORDER BY sort_order DESC LIMIT 1"),
+                    {"order": current_order}
+                )
+                prev_row = result.fetchone()
+                
+                if not prev_row:
+                    self._restore_db_context(old_db_type)
+                    return False, "Already at top"
+                
+                prev_name, prev_order = prev_row
+                
+                # Swap sort_order values
+                conn.execute(
+                    text("UPDATE distraction_types SET sort_order = :new_order WHERE name = :name"),
+                    {"new_order": prev_order, "name": distraction}
+                )
+                conn.execute(
+                    text("UPDATE distraction_types SET sort_order = :new_order WHERE name = :name"),
+                    {"new_order": current_order, "name": prev_name}
+                )
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True, f"Moved '{distraction}' up"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error moving distraction type up: {e}")
+            return False, f"Database error: {e}"
+    
+    def move_distraction_down(self, distraction):
+        """Move distraction type down in sort order"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                # Get current item's sort_order
+                result = conn.execute(
+                    text("SELECT sort_order FROM distraction_types WHERE name = :name"),
+                    {"name": distraction}
+                )
+                row = result.fetchone()
+                if not row:
+                    self._restore_db_context(old_db_type)
+                    return False, f"Distraction type '{distraction}' not found"
+                
+                current_order = row[0]
+                
+                # Find item below (higher sort_order)
+                result = conn.execute(
+                    text("SELECT name, sort_order FROM distraction_types WHERE sort_order > :order ORDER BY sort_order ASC LIMIT 1"),
+                    {"order": current_order}
+                )
+                next_row = result.fetchone()
+                
+                if not next_row:
+                    self._restore_db_context(old_db_type)
+                    return False, "Already at bottom"
+                
+                next_name, next_order = next_row
+                
+                # Swap sort_order values
+                conn.execute(
+                    text("UPDATE distraction_types SET sort_order = :new_order WHERE name = :name"),
+                    {"new_order": next_order, "name": distraction}
+                )
+                conn.execute(
+                    text("UPDATE distraction_types SET sort_order = :new_order WHERE name = :name"),
+                    {"new_order": current_order, "name": next_name}
+                )
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True, f"Moved '{distraction}' down"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error moving distraction type down: {e}")
+            return False, f"Database error: {e}"
+    
+    def restore_default_distraction_types(self):
+        """Replace all distraction types with defaults"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                # Delete all existing
+                conn.execute(text("DELETE FROM distraction_types"))
+                
+                # Insert defaults with proper sort_order
+                defaults = get_default_distraction_types()
+                for idx, distraction in enumerate(defaults):
+                    conn.execute(
+                        text("INSERT INTO distraction_types (name, user_name, sort_order) VALUES (:name, :user_name, :sort_order)"),
+                        {"name": distraction, "user_name": get_username(), "sort_order": idx}
+                    )
+                
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True, f"Restored {len(defaults)} default distraction types"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error restoring default distraction types: {e}")
+            return False, f"Database error: {e}"
+
 
 
 # Module-level convenience functions
