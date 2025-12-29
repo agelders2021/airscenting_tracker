@@ -1,0 +1,36 @@
+# Backup files
+*~
+*#
+*.~[0-9]~
+*.~[0-9][0-9]~
+
+# Backup directory
+Backups/
+
+# Database files
+*.db
+air_scenting.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build artifacts
+build/
+dist/
+*.spec
+build.bat
+
+# Images directory (if not needed in version control)
+Images/
+
+# Executables
+*.exe
+
+# License file (if you don't want to track it)
+GNU GENERAL PUBLIC LICENSE.txt
+
+# Config files (add if they contain sensitive info)
+# config.py

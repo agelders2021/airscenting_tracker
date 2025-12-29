@@ -1,0 +1,784 @@
+"""
+Database Operations for Air-Scenting Logger
+Handles all database interactions - separated from UI logic
+"""
+import json
+import os
+from sqlalchemy import text
+from datetime import datetime
+import config
+from database import engine, get_connection
+from ui_utils import get_username
+
+
+class DatabaseManager:
+    """Manages all database operations for the application"""
+    
+    def __init__(self, db_type="sqlite"):
+        """Initialize database manager"""
+        self.db_type = db_type
+    
+    def _db_exists(self):
+        """Check if database exists"""
+        if self.db_type == "sqlite":
+            db_path = config.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
+            return os.path.exists(db_path)
+        # For postgres/supabase, assume exists if we can connect
+        return True
+    
+    def _switch_db_context(self):
+        """Switch to the configured database type and return old type"""
+        old_db_type = config.DB_TYPE
+        config.DB_TYPE = self.db_type
+        
+        # Reload database module
+        engine.dispose()
+        from importlib import reload
+        import database
+        reload(database)
+        
+        return old_db_type
+    
+    def _restore_db_context(self, old_db_type):
+        """Restore the original database type"""
+        config.DB_TYPE = old_db_type
+        engine.dispose()
+        from importlib import reload
+        import database
+        reload(database)
+    
+    # ===== SETTINGS =====
+    
+    def save_setting(self, key, value):
+        """Save a setting to the database settings table"""
+        if not self._db_exists():
+            return
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                # Try to update first
+                result = conn.execute(
+                    text("UPDATE settings SET value = :value, updated_at = CURRENT_TIMESTAMP WHERE key = :key"),
+                    {"key": key, "value": value}
+                )
+                
+                # If no rows updated, insert new
+                if result.rowcount == 0:
+                    conn.execute(
+                        text("INSERT INTO settings (key, value) VALUES (:key, :value)"),
+                        {"key": key, "value": value}
+                    )
+                
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            if "no such table" not in str(e).lower() and "does not exist" not in str(e).lower():
+                print(f"Error saving database setting '{key}': {e}")
+    
+    def load_setting(self, key, default=None):
+        """Load a setting from the database settings table"""
+        if not self._db_exists():
+            return default
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                result = conn.execute(
+                    text("SELECT value FROM settings WHERE key = :key"),
+                    {"key": key}
+                )
+                row = result.fetchone()
+            
+            self._restore_db_context(old_db_type)
+            
+            return row[0] if row else default
+                
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
+                return default
+            else:
+                print(f"Error loading database setting '{key}': {e}")
+                return default
+    
+    # ===== SESSIONS =====
+    
+    def get_next_session_number(self, dog_name):
+        """Get the next session number for the specified dog (MAX + 1)"""
+        if not dog_name or not dog_name.strip():
+            return 1
+        
+        dog_name = dog_name.strip()
+        
+        if not self._db_exists():
+            return 1
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                max_result = conn.execute(
+                    text("SELECT MAX(session_number) FROM training_sessions WHERE dog_name = :dog_name"),
+                    {"dog_name": dog_name}
+                )
+                max_num = max_result.scalar()
+            
+            self._restore_db_context(old_db_type)
+            
+            return (max_num or 0) + 1
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            
+            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
+                return 1
+            else:
+                print(f"Error getting next session number: {e}")
+                return 1
+    
+    def save_session(self, session_data):
+        """
+        Save or update a training session
+        
+        Args:
+            session_data: dict with session fields
+            
+        Returns:
+            (success: bool, message: str, session_id: int or None)
+        """
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                # Check if session exists
+                result = conn.execute(
+                    text("SELECT id FROM training_sessions WHERE session_number = :session_number AND dog_name = :dog_name"),
+                    {"session_number": session_data["session_number"], "dog_name": session_data["dog_name"]}
+                )
+                existing = result.fetchone()
+                
+                if existing:
+                    # Update existing session
+                    conn.execute(
+                        text("""
+                            UPDATE training_sessions 
+                            SET date = :date,
+                                handler = :handler,
+                                session_purpose = :session_purpose,
+                                field_support = :field_support,
+                                dog_name = :dog_name,
+                                location = :location,
+                                search_area_size = :search_area_size,
+                                num_subjects = :num_subjects,
+                                handler_knowledge = :handler_knowledge,
+                                weather = :weather,
+                                temperature = :temperature,
+                                wind_direction = :wind_direction,
+                                wind_speed = :wind_speed,
+                                search_type = :search_type,
+                                drive_level = :drive_level,
+                                subjects_found = :subjects_found,
+                                comments = :comments,
+                                image_files = :image_files,
+                                user_name = :user_name,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE session_number = :session_number AND dog_name = :old_dog_name
+                        """),
+                        {
+                            **session_data,
+                            "old_dog_name": session_data["dog_name"],
+                            "user_name": get_username()
+                        }
+                    )
+                    conn.commit()
+                    session_id = existing[0]
+                    message = f"Session #{session_data['session_number']} updated successfully!"
+                else:
+                    # Insert new session
+                    conn.execute(
+                        text("""
+                            INSERT INTO training_sessions 
+                            (date, session_number, handler, session_purpose, field_support, dog_name, location,
+                             search_area_size, num_subjects, handler_knowledge, weather, temperature, 
+                             wind_direction, wind_speed, search_type, drive_level, subjects_found, comments, image_files, user_name)
+                            VALUES (:date, :session_number, :handler, :session_purpose, :field_support, :dog_name, :location,
+                                    :search_area_size, :num_subjects, :handler_knowledge, :weather, :temperature, 
+                                    :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, :comments, :image_files, :user_name)
+                        """),
+                        {**session_data, "user_name": get_username()}
+                    )
+                    conn.commit()
+                    
+                    # Get the new session_id
+                    result = conn.execute(
+                        text("SELECT id FROM training_sessions WHERE session_number = :session_number AND dog_name = :dog_name"),
+                        {"session_number": session_data["session_number"], "dog_name": session_data["dog_name"]}
+                    )
+                    session_id = result.scalar()
+                    message = f"Session #{session_data['session_number']} saved successfully!"
+            
+            self._restore_db_context(old_db_type)
+            
+            return True, message, session_id
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error saving session: {e}")
+            return False, f"Database error: {e}", None
+    
+    def load_session(self, session_number, dog_name):
+        """
+        Load session data from database
+        
+        Returns:
+            dict with session data or None if not found
+        """
+        if not dog_name or not dog_name.strip():
+            return None
+        
+        dog_name = dog_name.strip()
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                result = conn.execute(
+                    text("""
+                        SELECT id, date, handler, session_purpose, field_support, dog_name, location,
+                               search_area_size, num_subjects, handler_knowledge, weather, temperature,
+                               wind_direction, wind_speed, search_type, drive_level, subjects_found, comments, image_files
+                        FROM training_sessions 
+                        WHERE session_number = :session_number AND dog_name = :dog_name
+                    """),
+                    {"session_number": session_number, "dog_name": dog_name}
+                )
+                row = result.fetchone()
+            
+            self._restore_db_context(old_db_type)
+            
+            if row:
+                return {
+                    "id": row[0],
+                    "date": str(row[1]),
+                    "handler": row[2] or "",
+                    "session_purpose": row[3] or "",
+                    "field_support": row[4] or "",
+                    "dog_name": row[5] or "",
+                    "location": row[6] or "",
+                    "search_area_size": row[7] or "",
+                    "num_subjects": row[8] or "",
+                    "handler_knowledge": row[9] or "",
+                    "weather": row[10] or "",
+                    "temperature": row[11] or "",
+                    "wind_direction": row[12] or "",
+                    "wind_speed": row[13] or "",
+                    "search_type": row[14] or "",
+                    "drive_level": row[15] or "",
+                    "subjects_found": row[16] or "",
+                    "comments": row[17] or "",
+                    "image_files": row[18] or ""
+                }
+            
+            return None
+                
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error loading session: {e}")
+            return None
+    
+    def delete_sessions(self, session_numbers, dog_name):
+        """Delete multiple sessions for a specific dog"""
+        if not dog_name or not dog_name.strip():
+            return False, "No dog specified"
+        
+        dog_name = dog_name.strip()
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                for session_num in session_numbers:
+                    conn.execute(
+                        text("DELETE FROM training_sessions WHERE session_number = :session_number AND dog_name = :dog_name"),
+                        {"session_number": session_num, "dog_name": dog_name}
+                    )
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            
+            return True, f"Deleted {len(session_numbers)} session(s)"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error deleting sessions: {e}")
+            return False, f"Database error: {e}"
+    
+    def get_sessions_for_dog(self, dog_name):
+        """Get all sessions for a specific dog"""
+        if not dog_name or not dog_name.strip():
+            return []
+        
+        dog_name = dog_name.strip()
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                result = conn.execute(
+                    text("""
+                        SELECT session_number, date, handler, dog_name
+                        FROM training_sessions 
+                        WHERE dog_name = :dog_name
+                        ORDER BY session_number
+                    """),
+                    {"dog_name": dog_name}
+                )
+                sessions = result.fetchall()
+            
+            self._restore_db_context(old_db_type)
+            
+            return sessions
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
+                return []
+            else:
+                print(f"Error getting sessions: {e}")
+                return []
+    
+    # ===== SELECTED TERRAINS =====
+    
+    def save_selected_terrains(self, session_id, terrain_list):
+        """Save selected terrains for a session"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                # Delete existing
+                conn.execute(
+                    text("DELETE FROM selected_terrains WHERE session_id = :session_id"),
+                    {"session_id": session_id}
+                )
+                
+                # Insert new
+                for terrain_name in terrain_list:
+                    conn.execute(
+                        text("""
+                            INSERT INTO selected_terrains (session_id, terrain_name, user_name)
+                            VALUES (:session_id, :terrain_name, :user_name)
+                        """),
+                        {
+                            "session_id": session_id,
+                            "terrain_name": terrain_name,
+                            "user_name": get_username()
+                        }
+                    )
+                
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error saving selected terrains: {e}")
+            return False
+    
+    def load_selected_terrains(self, session_id):
+        """Load selected terrains for a session"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                result = conn.execute(
+                    text("SELECT terrain_name FROM selected_terrains WHERE session_id = :session_id ORDER BY terrain_name"),
+                    {"session_id": session_id}
+                )
+                terrains = [row[0] for row in result]
+            
+            self._restore_db_context(old_db_type)
+            return terrains
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error loading selected terrains: {e}")
+            return []
+    
+    # ===== SUBJECT RESPONSES =====
+    
+    def save_subject_responses(self, session_id, responses_list):
+        """Save subject responses for a session"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                # Delete existing
+                conn.execute(
+                    text("DELETE FROM subject_responses WHERE session_id = :session_id"),
+                    {"session_id": session_id}
+                )
+                
+                # Insert new
+                for response in responses_list:
+                    if response.get("tfr") or response.get("refind"):
+                        conn.execute(
+                            text("""
+                                INSERT INTO subject_responses (session_id, subject_number, tfr, refind, user_name)
+                                VALUES (:session_id, :subject_number, :tfr, :refind, :user_name)
+                            """),
+                            {
+                                "session_id": session_id,
+                                "subject_number": response["subject_number"],
+                                "tfr": response.get("tfr", ""),
+                                "refind": response.get("refind", ""),
+                                "user_name": get_username()
+                            }
+                        )
+                
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error saving subject responses: {e}")
+            return False
+    
+    def load_subject_responses(self, session_id):
+        """Load subject responses for a session"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                result = conn.execute(
+                    text("""
+                        SELECT subject_number, tfr, refind 
+                        FROM subject_responses 
+                        WHERE session_id = :session_id 
+                        ORDER BY subject_number
+                    """),
+                    {"session_id": session_id}
+                )
+                responses = [
+                    {
+                        "subject_number": row[0],
+                        "tfr": row[1] or "",
+                        "refind": row[2] or ""
+                    }
+                    for row in result
+                ]
+            
+            self._restore_db_context(old_db_type)
+            return responses
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error loading subject responses: {e}")
+            return []
+    
+    # ===== DOGS =====
+    
+    def load_dogs(self):
+        """Load all dog names from database"""
+        if not self._db_exists():
+            return []
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                result = conn.execute(text("SELECT name FROM dogs ORDER BY name"))
+                dogs = [row[0] for row in result]
+            
+            self._restore_db_context(old_db_type)
+            return dogs
+                
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
+                return []
+            else:
+                print(f"Error loading dogs: {e}")
+                return []
+    
+    def add_dog(self, dog_name):
+        """Add a new dog to the database"""
+        dog_name = dog_name.strip()
+        if not dog_name:
+            return False, "Dog name cannot be empty"
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                conn.execute(
+                    text("INSERT INTO dogs (name, user_name) VALUES (:name, :user_name)"),
+                    {"name": dog_name, "user_name": get_username()}
+                )
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True, f"Added dog: {dog_name}"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
+                return False, f"Dog '{dog_name}' already exists"
+            else:
+                print(f"Error adding dog: {e}")
+                return False, f"Database error: {e}"
+    
+    def remove_dog(self, dog_name):
+        """Remove a dog from the database"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                conn.execute(
+                    text("DELETE FROM dogs WHERE name = :name"),
+                    {"name": dog_name}
+                )
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True, f"Removed dog: {dog_name}"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error removing dog: {e}")
+            return False, f"Database error: {e}"
+    
+    # ===== LOCATIONS =====
+    
+    def load_locations(self):
+        """Load all training locations from database"""
+        if not self._db_exists():
+            return []
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                result = conn.execute(text("SELECT name FROM training_locations ORDER BY name"))
+                locations = [row[0] for row in result]
+            
+            self._restore_db_context(old_db_type)
+            return locations
+                
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
+                return []
+            else:
+                print(f"Error loading locations: {e}")
+                return []
+    
+    def add_location(self, location):
+        """Add a new training location"""
+        location = location.strip()
+        if not location:
+            return False, "Location cannot be empty"
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                conn.execute(
+                    text("INSERT INTO training_locations (name, user_name) VALUES (:name, :user_name)"),
+                    {"name": location, "user_name": get_username()}
+                )
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True, f"Added location: {location}"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
+                return False, f"Location '{location}' already exists"
+            else:
+                print(f"Error adding location: {e}")
+                return False, f"Database error: {e}"
+    
+    def remove_location(self, location):
+        """Remove a training location"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                conn.execute(
+                    text("DELETE FROM training_locations WHERE name = :name"),
+                    {"name": location}
+                )
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True, f"Removed location: {location}"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error removing location: {e}")
+            return False, f"Database error: {e}"
+    
+    # ===== TERRAIN TYPES =====
+    
+    def load_terrain_types(self):
+        """Load all terrain types from database"""
+        if not self._db_exists():
+            return []
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                result = conn.execute(text("SELECT name FROM terrain_types ORDER BY name"))
+                terrain_types = [row[0] for row in result]
+            
+            self._restore_db_context(old_db_type)
+            return terrain_types
+                
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
+                return []
+            else:
+                print(f"Error loading terrain types: {e}")
+                return []
+    
+    def add_terrain_type(self, terrain):
+        """Add a new terrain type"""
+        terrain = terrain.strip()
+        if not terrain:
+            return False, "Terrain type cannot be empty"
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                conn.execute(
+                    text("INSERT INTO terrain_types (name, user_name) VALUES (:name, :user_name)"),
+                    {"name": terrain, "user_name": get_username()}
+                )
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True, f"Added terrain type: {terrain}"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
+                return False, f"Terrain type '{terrain}' already exists"
+            else:
+                print(f"Error adding terrain type: {e}")
+                return False, f"Database error: {e}"
+    
+    def remove_terrain_type(self, terrain):
+        """Remove a terrain type"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                conn.execute(
+                    text("DELETE FROM terrain_types WHERE name = :name"),
+                    {"name": terrain}
+                )
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True, f"Removed terrain type: {terrain}"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error removing terrain type: {e}")
+            return False, f"Database error: {e}"
+    
+    # ===== DISTRACTION TYPES =====
+    
+    def load_distraction_types(self):
+        """Load all distraction types from database"""
+        if not self._db_exists():
+            return []
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                result = conn.execute(text("SELECT name FROM distraction_types ORDER BY name"))
+                distraction_types = [row[0] for row in result]
+            
+            self._restore_db_context(old_db_type)
+            return distraction_types
+                
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
+                return []
+            else:
+                print(f"Error loading distraction types: {e}")
+                return []
+    
+    def add_distraction_type(self, distraction):
+        """Add a new distraction type"""
+        distraction = distraction.strip()
+        if not distraction:
+            return False, "Distraction type cannot be empty"
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                conn.execute(
+                    text("INSERT INTO distraction_types (name, user_name) VALUES (:name, :user_name)"),
+                    {"name": distraction, "user_name": get_username()}
+                )
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True, f"Added distraction type: {distraction}"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
+                return False, f"Distraction type '{distraction}' already exists"
+            else:
+                print(f"Error adding distraction type: {e}")
+                return False, f"Database error: {e}"
+    
+    def remove_distraction_type(self, distraction):
+        """Remove a distraction type"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                conn.execute(
+                    text("DELETE FROM distraction_types WHERE name = :name"),
+                    {"name": distraction}
+                )
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True, f"Removed distraction type: {distraction}"
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error removing distraction type: {e}")
+            return False, f"Database error: {e}"
+
+
+# Module-level convenience functions
+_default_db_manager = None
+
+def get_db_manager(db_type="sqlite"):
+    """Get or create the default database manager"""
+    global _default_db_manager
+    if _default_db_manager is None or _default_db_manager.db_type != db_type:
+        _default_db_manager = DatabaseManager(db_type)
+    return _default_db_manager
