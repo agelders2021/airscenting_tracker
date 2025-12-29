@@ -152,8 +152,9 @@ class AirScentingUI:
                 # Update navigation button states
                 self.update_navigation_buttons()
         
-        # Delay until after password is loaded (300ms > 100ms for on_db_type_changed)
-        self.root.after(300, update_initial_session)
+        # Delay until after password AND database data are loaded
+        # Password: 100ms, Database data: 500ms, Session update: 600ms
+        self.root.after(600, update_initial_session)
         
         # Track form state for unsaved changes detection
         self.form_snapshot = ""
@@ -161,11 +162,45 @@ class AirScentingUI:
         # Show main window (splash will be on top due to topmost attribute)
         self.root.deiconify()
         
+        # Schedule initial database loading AFTER password is loaded
+        # Password loads at 100ms (on_db_type_changed), so we wait until 500ms
+        # This allows event loop to run and splash countdown to animate
+        self.root.after(500, self.load_initial_database_data)
+        
         # Take initial snapshot after UI is ready
         self.root.after(100, self.take_form_snapshot)
         
         # Set up window close handler
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+    
+    def load_initial_database_data(self):
+        """Load all initial database data after splash screen starts"""
+        # Ensure database is ready (password loaded for networked DBs)
+        self.ensure_db_ready()
+        
+        # Load all the database data that was skipped during tab setup
+        # This runs after the splash screen starts, so its countdown animates properly
+        self.load_locations_from_database()
+        self.load_dogs_from_database()
+        self.load_terrain_from_database()
+        self.load_distraction_from_database()
+        
+        # Load last selected dog from database
+        try:
+            last_dog = self.load_db_setting("last_dog_name", "")
+            if last_dog and hasattr(self, 'dog_var'):
+                self.dog_var.set(last_dog)
+        except Exception as e:
+            print(f"Could not load last dog: {e}")
+        
+        # Also refresh Entry tab comboboxes if they exist
+        if hasattr(self, 'dog_combo'):
+            self.refresh_dog_list()
+        if hasattr(self, 'location_combo'):
+            self.refresh_location_list()
+        if hasattr(self, 'terrain_combo'):
+            self.refresh_terrain_list()
+    
     
     
     def select_initial_tab(self):
@@ -1081,11 +1116,17 @@ class AirScentingUI:
             
     def save_db_setting(self, key, value):
         """Save a setting to the database"""
+        # Ensure database is ready (critical for networked databases)
+        self.ensure_db_ready()
+        
         db_mgr = get_db_manager(self.db_type_var.get())
         db_mgr.save_setting(key, value) 
     
     def load_db_setting(self, key, default=None):
         """Load a setting from the database"""
+        # Ensure database is ready (critical for networked databases)
+        self.ensure_db_ready()
+        
         db_mgr = get_db_manager(self.db_type_var.get())
         return db_mgr.load_setting(key, default)
     
@@ -1161,6 +1202,10 @@ class AirScentingUI:
         """Ensure database connection is ready (password set for networked DBs)"""
         db_type = self.db_type_var.get()
         if db_type in ["postgres", "supabase", "mysql"]:
+            # Check if password field exists yet (it's created in setup_setup_tab)
+            if not hasattr(self, 'db_password_var'):
+                return  # Too early in initialization
+            
             password = self.db_password_var.get().strip()
             
             # If password not loaded yet, try loading from encrypted storage
@@ -1175,6 +1220,7 @@ class AirScentingUI:
             # Set password in database config
             if password:
                 self.set_db_password()
+
 
     
     def get_next_session_number(self, dog_name=None):
@@ -1574,7 +1620,8 @@ class AirScentingUI:
         loc_scrollbar.config(command=self.location_listbox.yview)
         
         # Populate listbox with locations from database
-        self.load_locations_from_database()
+        # NOTE: Commented out - will be loaded after splash screen starts
+        # self.load_locations_from_database()
         
         # Buttons for managing locations
         loc_button_frame = tk.Frame(locations_frame)
@@ -1614,7 +1661,8 @@ class AirScentingUI:
         scrollbar.config(command=self.dog_listbox.yview)
         
         # Populate listbox with dogs from database
-        self.load_dogs_from_database()
+        # NOTE: Commented out - will be loaded after splash screen starts
+        # self.load_dogs_from_database()
         
         # Buttons for managing dogs
         button_frame = tk.Frame(dogs_frame)
@@ -1659,7 +1707,8 @@ class AirScentingUI:
         tree_scrollbar.config(command=self.terrain_tree.yview)
         
         # Populate treeview with terrain types from database
-        self.load_terrain_from_database()
+        # NOTE: Commented out - will be loaded after splash screen starts
+        # self.load_terrain_from_database()
         
         # Buttons for managing terrain types
         terrain_button_frame = tk.Frame(terrain_frame)
@@ -1715,7 +1764,8 @@ class AirScentingUI:
         dist_tree_scrollbar.config(command=self.distraction_type_tree.yview)
         
         # Populate treeview with distraction types from database
-        self.load_distraction_from_database()
+        # NOTE: Commented out - will be loaded after splash screen starts
+        # self.load_distraction_from_database()
         
         # Buttons for managing distraction types
         distraction_button_frame = tk.Frame(distraction_frame)
@@ -1860,12 +1910,14 @@ class AirScentingUI:
         tk.Entry(session_frame, textvariable=self.field_support_var, width=25).grid(row=1, column=5, sticky="w", padx=5, pady=2)
         
         tk.Label(session_frame, text="Dog:").grid(row=1, column=6, sticky="e", padx=5, pady=2)
-        # Load last dog from database (not config)
-        last_dog = self.load_db_setting("last_dog_name", "")
-        self.dog_var = tk.StringVar(value=last_dog)
+        # Load last dog from database (deferred until password is loaded)
+        # NOTE: Commented out - will be loaded in load_initial_database_data()
+        # last_dog = self.load_db_setting("last_dog_name", "")
+        self.dog_var = tk.StringVar(value="")  # Start empty, will be loaded later
         self.dog_combo = ttk.Combobox(session_frame, textvariable=self.dog_var, width=15, state="readonly")
-        # Load dogs from database
-        self.refresh_dog_list()
+        # Load dogs from database (deferred)
+        # NOTE: Commented out - will be loaded in load_initial_database_data()
+        # self.refresh_dog_list()
         self.dog_combo.grid(row=1, column=7, sticky="w", padx=5, pady=2)
         # Bind dog change to update session number
         self.dog_combo.bind('<<ComboboxSelected>>', self.on_dog_changed)
@@ -3381,6 +3433,14 @@ class AirScentingUI:
             if url_template:
                 config.DB_CONFIG[db_type]["url"] = url_template.format(password=password)
             
+            # CRITICAL: Dispose any existing database engines to force reconnection
+            # This ensures the new password is used
+            try:
+                from ui_database import dispose_all_engines
+                dispose_all_engines()
+            except:
+                pass  # If ui_database doesn't have this function, skip
+            
             # Save encrypted password if "Remember" is checked
             # Check if remember_password_var exists (may not during initialization)
             if hasattr(self, 'remember_password_var') and self.remember_password_var.get():
@@ -3744,6 +3804,9 @@ class AirScentingUI:
     
     def refresh_location_list(self):
         """Refresh the location combobox in Entry tab"""
+        # Ensure database is ready (critical for networked databases)
+        self.ensure_db_ready()
+        
         db_mgr = get_db_manager(self.db_type_var.get())
         locations = db_mgr.load_locations()
         
@@ -3753,6 +3816,9 @@ class AirScentingUI:
     
     def refresh_terrain_list(self):
         """Refresh the terrain type combobox in Entry tab"""
+        # Ensure database is ready (critical for networked databases)
+        self.ensure_db_ready()
+        
         # Use DatabaseManager to get terrain types in correct order (by sort_order)
         from ui_database import get_db_manager
         db_mgr = get_db_manager(self.db_type_var.get())
@@ -3871,6 +3937,9 @@ class AirScentingUI:
     
     def refresh_dog_list(self):
         """Refresh the dog combobox in Entry tab"""
+        # Ensure database is ready (critical for networked databases)
+        self.ensure_db_ready()
+        
         db_mgr = get_db_manager(self.db_type_var.get())
         dogs = db_mgr.load_dogs()
         
