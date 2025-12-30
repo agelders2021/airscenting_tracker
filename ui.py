@@ -13,12 +13,20 @@ from datetime import datetime
 from getpass import getuser
 from config import APP_TITLE, CONFIG_FILE, BOOTSTRAP_FILE
 from splash_screen import SplashScreen
+from ui_file_operations import FileOperations
+from ui_form_management import FormManagement
+from ui_navigation import Navigation
+from ui_database import DatabaseOperations
+from ui_file_operations import FileOperations
 from about_dialog import show_about
 from tips import ToolTip, ConditionalToolTip
 from ui_utils import get_username, get_default_terrain_types, get_default_distraction_types
 from ui_database import get_db_manager
+from ui_misc_data_ops import MiscDataOperations
 from working_dialog import WorkingDialog, run_with_working_dialog
 import sv  # Import sv module (not 'from sv import sv')
+from ui_database import get_db_manager
+from ui_misc_data_ops import MiscDataOperations
 
 
 class AirScentingUI:
@@ -44,6 +52,15 @@ class AirScentingUI:
         # Create main window and withdraw it while splash is showing
         # Use TkinterDnD.Tk() instead of tk.Tk() for drag-and-drop support
         self.root = TkinterDnD.Tk()
+        
+        # Initialize file operations module
+        self.file_ops = FileOperations(self)
+        self.form_mgmt = FormManagement(self)
+        self.navigation = Navigation(self)
+        self.misc_data_ops = MiscDataOperations(self)
+        
+        # Initialize file operations module
+        self.file_ops = FileOperations(self)
         
         # Initialize sv module with the root window
         # This must be done AFTER root is created but BEFORE any sv usage
@@ -140,7 +157,7 @@ class AirScentingUI:
         self.setup_entry_tab()
         
         # Select initial tab based on database existence
-        self.select_initial_tab()
+        self.misc_data_ops.select_initial_tab()
         
         # Status bar at bottom (create before using it below)
         status_bar = tk.Label(self.root, textvariable=sv.status, 
@@ -152,11 +169,11 @@ class AirScentingUI:
         def update_initial_session():
             loaded_dog = sv.dog.get()
             if loaded_dog:
-                next_session = self.get_next_session_number(loaded_dog)
+                next_session = DatabaseOperations(self).get_next_session_number(loaded_dog)
                 sv.session_number.set(str(next_session))
                 sv.status.set(f"Ready - {loaded_dog} - Next session: #{next_session}")
                 # Update navigation button states
-                self.update_navigation_buttons()
+                self.navigation.update_navigation_buttons()
         
         # Delay until after password AND database data are loaded
         # Password: 100ms, Database data: 500ms, Session update: 600ms
@@ -166,6 +183,10 @@ class AirScentingUI:
         self.form_snapshot = ""
         
         # Show main window (splash will be on top due to topmost attribute)
+
+        # Take initial snapshot of form state (after defaults loaded)
+        # This prevents false "unsaved changes" when default handler is used
+        self.root.after(200, self.form_mgmt.take_form_snapshot)
         self.root.deiconify()
         
         # CRITICAL: Force event loop to start processing
@@ -175,965 +196,13 @@ class AirScentingUI:
         # Schedule initial database loading AFTER password is loaded
         # Password loads at 100ms (on_db_type_changed), so we wait until 500ms
         # This allows event loop to run and splash countdown to animate
-        self.root.after(500, self.load_initial_database_data)
+        self.root.after(500, self.misc_data_ops.load_initial_database_data)
         
         # Take initial snapshot after UI is ready
-        self.root.after(100, self.take_form_snapshot)
+        self.root.after(100, self.form_mgmt.take_form_snapshot)
         
         # Set up window close handler
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-    
-    def load_initial_database_data(self):
-        """Load all initial database data after splash screen starts"""
-        # Use chained after() calls to let event loop run between operations
-        # This keeps splash countdown and progress bars animating
-        
-        def step1():
-            self.ensure_db_ready()
-            self.load_locations_from_database()
-            self.root.after(50, step2)  # Schedule next step
-        
-        def step2():
-            self.load_dogs_from_database()
-            self.root.after(50, step3)
-        
-        def step3():
-            self.load_terrain_from_database()
-            self.root.after(50, step4)
-        
-        def step4():
-            self.load_distraction_from_database()
-            self.root.after(50, step5)
-        
-        def step5():
-            # Load last selected dog from database
-            try:
-                last_dog = self.load_db_setting("last_dog_name", "")
-                if last_dog:
-                    sv.dog.set(last_dog)
-                    # Update session number for this dog (on_dog_changed not triggered by programmatic set)
-                    next_session = self.get_next_session_number(last_dog)
-                    sv.session_number.set(str(next_session))
-            except Exception as e:
-                print(f"Could not load last dog: {e}")
-            self.root.after(50, step6)
-        
-        def step6():
-            # Refresh Entry tab comboboxes if they exist
-            if hasattr(self, 'dog_combo'):
-                self.refresh_dog_list()
-            self.root.after(50, step7)
-        
-        def step7():
-            if hasattr(self, 'location_combo'):
-                self.refresh_location_list()
-            self.root.after(50, step8)
-        
-        def step8():
-            if hasattr(self, 'terrain_combo'):
-                self.refresh_terrain_list()
-            self.root.after(50, step9)
-        
-        def step9():
-            # Update navigation buttons now that dog and session are loaded
-            if hasattr(self, 'prev_session_btn'):
-                self.update_navigation_buttons()
-        
-        # Start the chain
-        step1()
-    
-    
-    
-    def select_initial_tab(self):
-        """Select initial tab based on database existence"""
-        db_type = sv.db_type.get()
-        database_exists = False
-        
-        # Check if database exists
-        if db_type == "sqlite":
-            # For SQLite, check if database file exists
-            import config as config_module
-            db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-            if os.path.exists(db_path):
-                # Check if it has tables (not just an empty file)
-                try:
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    
-                    from sqlalchemy import text
-                    
-                    # Try to query a table
-                    with database.get_connection() as conn:
-                        conn.execute(text("SELECT COUNT(*) FROM training_sessions"))
-                    
-                    database_exists = True
-                    
-                    # Restore original DB_TYPE
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except:
-                    # If query fails, database doesn't have proper tables
-                    try:
-                        import config
-                        import database
-                        from importlib import reload
-                        config.DB_TYPE = old_db_type
-                        database.engine.dispose()
-                        reload(database)
-                    except:
-                        pass
-                    database_exists = False
-        else:
-            # For PostgreSQL/Supabase, try to connect and query
-            try:
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                from sqlalchemy import text
-                
-                # Try to query a table
-                with database.get_connection() as conn:
-                    conn.execute(text("SELECT COUNT(*) FROM training_sessions"))
-                
-                database_exists = True
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                # If connection or query fails, database doesn't exist
-                try:
-                    import config
-                    import database
-                    from importlib import reload
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except:
-                    pass
-                database_exists = False
-        
-        # Select appropriate tab
-        if database_exists:
-            # Database exists - show Training Session Entry tab
-            self.notebook.select(self.entry_tab)
-            self.previous_tab_index = 1  # Update to reflect we're on Entry tab
-        else:
-            # No database - show Setup tab (already default)
-            self.notebook.select(self.setup_tab)
-            self.previous_tab_index = 0
-    
-    def save_session_to_json(self, session_data):
-        """Save session data to JSON backup file"""
-        backup_folder = sv.backup_folder.get().strip()
-        if not backup_folder:
-            # No backup folder configured, skip
-            return
-        
-        from pathlib import Path
-        backup_path = Path(backup_folder)
-        if not backup_path.exists():
-            print(f"Warning: Backup folder does not exist: {backup_folder}")
-            return
-        
-        # Create filename: <dogname>_session_<number>_<date>.json
-        session_num = session_data.get('session_number')
-        date_str = session_data.get('date', '').replace('-', '')
-        dog_name = session_data.get('dog_name', 'unknown')
-        
-        # Sanitize dog name for filename (remove special characters)
-        import re
-        safe_dog_name = re.sub(r'[^\w\-]', '_', dog_name)
-        
-        filename = f"{safe_dog_name}_session_{session_num}_{date_str}.json"
-        filepath = backup_path / filename
-        
-        try:
-            # Add timestamp
-            session_data['backup_timestamp'] = datetime.now().isoformat()
-            
-            # Write JSON file
-            with open(filepath, 'w') as f:
-                json.dump(session_data, f, indent=2, default=str)
-            
-            print(f"Session backup saved: {filepath}")
-        except Exception as e:
-            print(f"Warning: Failed to save session backup: {e}")
-    
-    def save_settings_backup(self):
-        """Save settings to JSON backup file"""
-        backup_folder = sv.backup_folder.get().strip()
-        if not backup_folder:
-            # No backup folder configured, skip
-            return
-        
-        from pathlib import Path
-        backup_path = Path(backup_folder)
-        if not backup_path.exists():
-            print(f"Warning: Backup folder does not exist: {backup_folder}")
-            return
-        
-        try:
-            db_type = sv.db_type.get()
-            
-            # Collect dogs from database
-            dogs = []
-            try:
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                from sqlalchemy import text
-                
-                # Check if database file exists
-                if db_type == "sqlite":
-                    import config as config_module
-                    db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-                    if os.path.exists(db_path):
-                        with database.get_connection() as conn:
-                            result = conn.execute(text("SELECT name FROM dogs ORDER BY name"))
-                            dogs = [row[0] for row in result]
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass  # If database doesn't exist yet, dogs list stays empty
-            
-            # Collect locations from database
-            locations = []
-            try:
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                from sqlalchemy import text
-                
-                # Check if database file exists
-                if db_type == "sqlite":
-                    import config as config_module
-                    db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-                    if os.path.exists(db_path):
-                        with database.get_connection() as conn:
-                            result = conn.execute(text("SELECT name FROM training_locations ORDER BY name"))
-                            locations = [row[0] for row in result]
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass  # If database doesn't exist yet, locations list stays empty
-            
-            # Collect terrain types from database
-            terrain_types = []
-            try:
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                from sqlalchemy import text
-                
-                # Check if database file exists
-                if db_type == "sqlite":
-                    import config as config_module
-                    db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-                    if os.path.exists(db_path):
-                        with database.get_connection() as conn:
-                            result = conn.execute(text("SELECT name FROM terrain_types ORDER BY name"))
-                            terrain_types = [row[0] for row in result]
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass  # If database doesn't exist yet, terrain_types list stays empty
-            
-            # Collect distraction types from database
-            distraction_types = []
-            try:
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                from sqlalchemy import text
-                
-                # Check if database file exists
-                if db_type == "sqlite":
-                    import config as config_module
-                    db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-                    if os.path.exists(db_path):
-                        with database.get_connection() as conn:
-                            result = conn.execute(text("SELECT name FROM distraction_types ORDER BY name"))
-                            distraction_types = [row[0] for row in result]
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass  # If database doesn't exist yet, distraction_types list stays empty
-            
-            # Get handler name from config
-            handler_name = self.config.get("handler_name", "")
-            
-            # Create settings dictionary
-            settings = {
-                "dogs": sorted(dogs),
-                "training_locations": sorted(locations),
-                "terrain_types": sorted(terrain_types),
-                "distraction_types": sorted(distraction_types),
-                "handler_name": handler_name,
-                "backup_date": datetime.now().isoformat()
-            }
-            
-            # Save to file
-            settings_path = backup_path / "airscenting_settings.json"
-            with open(settings_path, 'w') as f:
-                json.dump(settings, f, indent=2)
-            
-            print(f"Settings backup saved: {settings_path}")
-            
-        except Exception as e:
-            print(f"Warning: Failed to save settings backup: {e}")
-    
-    def restore_settings_from_json(self):
-        """Restore settings from JSON backup file"""
-        backup_folder = sv.backup_folder.get().strip()
-        if not backup_folder:
-            messagebox.showwarning("No Backup Folder", "Please select a backup folder first")
-            return
-        
-        from pathlib import Path
-        backup_path = Path(backup_folder)
-        if not backup_path.exists():
-            messagebox.showwarning("Invalid Folder", f"Backup folder does not exist:\n{backup_folder}")
-            return
-        
-        settings_path = backup_path / "airscenting_settings.json"
-        if not settings_path.exists():
-            messagebox.showinfo("No Settings Backup", 
-                               f"No settings backup file found in:\n{backup_folder}\n\n"
-                               f"Looking for: airscenting_settings.json")
-            return
-        
-        try:
-            # Load settings
-            with open(settings_path, 'r') as f:
-                settings = json.load(f)
-            
-            db_type = sv.db_type.get()
-            
-            # Insert dogs to database
-            dogs = settings.get("dogs", [])
-            dogs_added = 0
-            
-            if dogs:
-                try:
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    
-                    from sqlalchemy import text
-                    
-                    for dog_name in dogs:
-                        try:
-                            with database.get_connection() as conn:
-                                conn.execute(
-                                    text("INSERT INTO dogs (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": dog_name, "user_name": get_username()}
-                                )
-                                conn.commit()
-                            dogs_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add dog '{dog_name}': {e}")
-                    
-                    # Restore original DB_TYPE
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except Exception as e:
-                    print(f"Error restoring dogs: {e}")
-            
-            # Insert locations to database
-            locations = settings.get("training_locations", [])
-            locations_added = 0
-            
-            if locations:
-                try:
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    
-                    from sqlalchemy import text
-                    
-                    for location in locations:
-                        try:
-                            with database.get_connection() as conn:
-                                conn.execute(
-                                    text("INSERT INTO training_locations (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": location, "user_name": get_username()}
-                                )
-                                conn.commit()
-                            locations_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add location '{location}': {e}")
-                    
-                    # Restore original DB_TYPE
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except Exception as e:
-                    print(f"Error restoring locations: {e}")
-            
-            # Insert terrain types to database
-            terrain_types = settings.get("terrain_types", [])
-            terrain_added = 0
-            
-            if terrain_types:
-                try:
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    
-                    from sqlalchemy import text
-                    
-                    for terrain in terrain_types:
-                        try:
-                            with database.get_connection() as conn:
-                                conn.execute(
-                                    text("INSERT INTO terrain_types (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": terrain, "user_name": get_username()}
-                                )
-                                conn.commit()
-                            terrain_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add terrain type '{terrain}': {e}")
-                    
-                    # Restore original DB_TYPE
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except Exception as e:
-                    print(f"Error restoring terrain types: {e}")
-            
-            # Insert distraction types to database
-            distraction_types = settings.get("distraction_types", [])
-            distraction_added = 0
-            
-            if distraction_types:
-                try:
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    
-                    from sqlalchemy import text
-                    
-                    for distraction in distraction_types:
-                        try:
-                            with database.get_connection() as conn:
-                                conn.execute(
-                                    text("INSERT INTO distraction_types (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": distraction, "user_name": get_username()}
-                                )
-                                conn.commit()
-                            distraction_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add distraction type '{distraction}': {e}")
-                    
-                    # Restore original DB_TYPE
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except Exception as e:
-                    print(f"Error restoring distraction types: {e}")
-            
-            # Save handler name to config
-            if "handler_name" in settings:
-                self.config["handler_name"] = settings["handler_name"]
-                sv.default_handler.set(settings["handler_name"])
-            
-            self.save_config()
-            
-            # Refresh UI
-            self.load_dogs_from_database()
-            if hasattr(self, 'dog_combo'):
-                self.refresh_dog_list()
-            
-            self.load_locations_from_database()
-            if hasattr(self, 'location_combo'):
-                self.refresh_location_list()
-            
-            # Reload terrain and distraction lists from database
-            self.load_terrain_from_database()
-            self.load_distraction_from_database()
-            # Also refresh Entry tab terrain combobox
-            if hasattr(self, 'terrain_combo'):
-                self.refresh_terrain_list()
-            
-            # Show summary
-            msg = "Settings restored successfully!\n\n"
-            if dogs_added > 0:
-                msg += f"Added {dogs_added} dog(s)\n"
-            if locations_added > 0:
-                msg += f"Added {locations_added} location(s)\n"
-            if terrain_added > 0:
-                msg += f"Added {terrain_added} terrain type(s)\n"
-            if distraction_added > 0:
-                msg += f"Added {distraction_added} distraction type(s)\n"
-            if "handler_name" in settings:
-                msg += f"Restored handler name: {settings['handler_name']}\n"
-            
-            messagebox.showinfo("Restore Complete", msg)
-            
-        except Exception as e:
-            messagebox.showerror("Restore Error", f"Failed to restore settings:\n{e}")
-            print(f"Error restoring settings: {e}")
-    
-    def restore_from_json_backups(self, db_type):
-        """Restore database from JSON backup files"""
-        backup_folder = sv.backup_folder.get().strip()
-        if not backup_folder:
-            messagebox.showwarning("No Backup Folder", "No backup folder configured")
-            return False
-        
-        from pathlib import Path
-        backup_path = Path(backup_folder)
-        if not backup_path.exists():
-            messagebox.showwarning("Invalid Folder", f"Backup folder does not exist:\n{backup_folder}")
-            return False
-        
-        # Find all session JSON files (both old and new format)
-        # Old format: session_<number>_<date>.json
-        # New format: <dogname>_session_<number>_<date>.json
-        json_files = list(backup_path.glob("*session_*.json"))
-        if not json_files:
-            messagebox.showinfo("No Backups Found", 
-                               f"No session backup files found in:\n{backup_folder}")
-            return False
-        
-        # Ask user to confirm restore
-        result = messagebox.askyesno(
-            "Restore from Backups",
-            f"Found {len(json_files)} session backup files.\n\n"
-            f"Do you want to restore these sessions to the new database?",
-            icon='question'
-        )
-        
-        if not result:
-            return False
-        
-        # Restore sessions
-        # Show working dialog for networked databases
-        if db_type in ["postgres", "supabase", "mysql"]:
-            working_dialog = WorkingDialog(self.root, "Restoring", 
-                                         f"Restoring {len(json_files)} sessions to {db_type} database...")
-            self.root.update()
-        else:
-            working_dialog = None
-        
-        try:
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            restored_count = 0
-            failed_count = 0
-            dog_names = set()  # Collect unique dog names
-            location_names = set()  # Collect unique location names
-            
-            for json_file in sorted(json_files):
-                try:
-                    with open(json_file, 'r') as f:
-                        session_data = json.load(f)
-                    
-                    # Collect dog name for later insertion
-                    dog_name = session_data.get('dog_name')
-                    if dog_name:
-                        dog_names.add(dog_name)
-                    
-                    # Collect location name for later insertion
-                    location = session_data.get('location')
-                    if location:
-                        location_names.add(location)
-                    
-                    # Insert into database
-                    with database.get_connection() as conn:
-                        # Convert image_files list to JSON string if present
-                        image_files = session_data.get('image_files', [])
-                        image_files_json = json.dumps(image_files) if isinstance(image_files, list) else (image_files or "")
-                        
-                        conn.execute(
-                            text("""
-                                INSERT INTO training_sessions 
-                                (date, session_number, handler, session_purpose, field_support, dog_name, location,
-                                 search_area_size, num_subjects, handler_knowledge, weather, temperature, 
-                                 wind_direction, wind_speed, search_type, drive_level, subjects_found, comments, image_files, user_name)
-                                VALUES (:date, :session_number, :handler, :session_purpose, :field_support, :dog_name, :location,
-                                        :search_area_size, :num_subjects, :handler_knowledge, :weather, :temperature, 
-                                        :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, :comments, :image_files, :user_name)
-                            """),
-                            {
-                                "date": session_data.get('date'),
-                                "session_number": session_data.get('session_number'),
-                                "handler": session_data.get('handler'),
-                                "session_purpose": session_data.get('session_purpose'),
-                                "field_support": session_data.get('field_support'),
-                                "dog_name": session_data.get('dog_name'),
-                                "location": session_data.get('location'),
-                                "search_area_size": session_data.get('search_area_size'),
-                                "num_subjects": session_data.get('num_subjects'),
-                                "handler_knowledge": session_data.get('handler_knowledge'),
-                                "weather": session_data.get('weather'),
-                                "temperature": session_data.get('temperature'),
-                                "wind_direction": session_data.get('wind_direction'),
-                                "wind_speed": session_data.get('wind_speed'),
-                                "search_type": session_data.get('search_type'),
-                                "drive_level": session_data.get('drive_level'),
-                                "subjects_found": session_data.get('subjects_found'),
-                                "comments": session_data.get('comments', ''),
-                                "image_files": image_files_json,
-                                "user_name": session_data.get('user_name', get_username())
-                            }
-                        )
-                        conn.commit()
-                        
-                        # Get the session_id we just inserted (for terrains and subject responses)
-                        result = conn.execute(
-                            text("SELECT id FROM training_sessions WHERE session_number = :session_number AND dog_name = :dog_name"),
-                            {"session_number": session_data.get('session_number'), "dog_name": session_data.get('dog_name')}
-                        )
-                        session_row = result.fetchone()
-                        
-                        if session_row:
-                            session_id = session_row[0]
-                            
-                            # Insert selected terrains if present in JSON
-                            selected_terrains = session_data.get('selected_terrains', [])
-                            for terrain_name in selected_terrains:
-                                conn.execute(
-                                    text("""
-                                        INSERT INTO selected_terrains (session_id, terrain_name, user_name)
-                                        VALUES (:session_id, :terrain_name, :user_name)
-                                    """),
-                                    {
-                                        "session_id": session_id,
-                                        "terrain_name": terrain_name,
-                                        "user_name": session_data.get('user_name', get_username())
-                                    }
-                                )
-                            
-                            # Insert subject responses if present in JSON
-                            subject_responses = session_data.get('subject_responses', [])
-                            for response in subject_responses:
-                                if isinstance(response, dict):
-                                    conn.execute(
-                                        text("""
-                                            INSERT INTO subject_responses (session_id, subject_number, tfr, refind, user_name)
-                                            VALUES (:session_id, :subject_number, :tfr, :refind, :user_name)
-                                        """),
-                                        {
-                                            "session_id": session_id,
-                                            "subject_number": response.get('subject_number'),
-                                            "tfr": response.get('tfr', ''),
-                                            "refind": response.get('refind', ''),
-                                            "user_name": session_data.get('user_name', get_username())
-                                        }
-                                    )
-                            
-                            conn.commit()
-                    
-                    restored_count += 1
-                    
-                except Exception as e:
-                    print(f"Failed to restore {json_file.name}: {e}")
-                    failed_count += 1
-            
-            # Now insert all unique dog names into dogs table
-            # print(f"DEBUG: Found {len(dog_names)} unique dogs in backups: {sorted(dog_names)}")  # DEBUG
-            dogs_added = 0
-            for dog_name in sorted(dog_names):
-                try:
-                    with database.get_connection() as conn:
-                        conn.execute(
-                            text("INSERT INTO dogs (name, user_name) VALUES (:name, :user_name)"),
-                            {"name": dog_name, "user_name": get_username()}
-                        )
-                        conn.commit()
-                    dogs_added += 1
-                    # print(f"DEBUG: Added dog '{dog_name}' to dogs table")  # DEBUG
-                except Exception as e:
-                    # Dog might already exist (UNIQUE constraint), that's OK
-                    if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
-                        # print(f"DEBUG: Dog '{dog_name}' already exists in dogs table")  # DEBUG
-                        pass  # Duplicate is OK, continue with next dog
-                    else:
-                        # print(f"DEBUG: Failed to add dog '{dog_name}': {e}")  # DEBUG
-                        pass  # Other errors are logged but don't stop the process
-            
-            # print(f"DEBUG: Added {dogs_added} new dogs to dogs table")  # DEBUG
-            
-            # Now insert all unique location names into training_locations table
-            # print(f"DEBUG: Found {len(location_names)} unique locations in backups: {sorted(location_names)}")  # DEBUG
-            locations_added = 0
-            for location in sorted(location_names):
-                try:
-                    with database.get_connection() as conn:
-                        conn.execute(
-                            text("INSERT INTO training_locations (name, user_name) VALUES (:name, :user_name)"),
-                            {"name": location, "user_name": get_username()}
-                        )
-                        conn.commit()
-                    locations_added += 1
-                    # print(f"DEBUG: Added location '{location}' to training_locations table")  # DEBUG
-                except Exception as e:
-                    # Location might already exist (UNIQUE constraint), that's OK
-                    if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
-                        # print(f"DEBUG: Location '{location}' already exists in training_locations table")  # DEBUG
-                        pass  # Duplicate is OK, continue with next location
-                    else:
-                        # print(f"DEBUG: Failed to add location '{location}': {e}")  # DEBUG
-                        pass  # Other errors are logged but don't stop the process
-            
-            # print(f"DEBUG: Added {locations_added} new locations to training_locations table")  # DEBUG
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            # Refresh dog list in UI
-            self.load_dogs_from_database()
-            if hasattr(self, 'dog_combo'):
-                self.refresh_dog_list()
-            
-            # Refresh location list in UI
-            self.load_locations_from_database()
-            if hasattr(self, 'location_combo'):
-                self.refresh_location_list()
-            
-            # Also try to restore from settings backup if it exists
-            settings_restored = False
-            terrain_added = 0
-            distraction_added = 0
-            
-            settings_path = backup_path / "airscenting_settings.json"
-            if settings_path.exists():
-                try:
-                    with open(settings_path, 'r') as f:
-                        settings = json.load(f)
-                    
-                    # Insert terrain types
-                    terrain_types = settings.get("terrain_types", [])
-                    for terrain in terrain_types:
-                        try:
-                            with database.get_connection() as conn:
-                                conn.execute(
-                                    text("INSERT INTO terrain_types (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": terrain, "user_name": get_username()}
-                                )
-                                conn.commit()
-                            terrain_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add terrain type '{terrain}': {e}")
-                    
-                    # Insert distraction types
-                    distraction_types = settings.get("distraction_types", [])
-                    for distraction in distraction_types:
-                        try:
-                            with database.get_connection() as conn:
-                                conn.execute(
-                                    text("INSERT INTO distraction_types (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": distraction, "user_name": get_username()}
-                                )
-                                conn.commit()
-                            distraction_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add distraction type '{distraction}': {e}")
-                    
-                    # Refresh UI
-                    self.load_terrain_from_database()
-                    self.load_distraction_from_database()
-                    # Also refresh Entry tab terrain combobox
-                    if hasattr(self, 'terrain_combo'):
-                        self.refresh_terrain_list()
-                    
-                    settings_restored = True
-                    
-                except Exception as e:
-                    print(f"Could not restore settings backup: {e}")
-            
-            # Show results
-            if restored_count > 0:
-                msg = f"Successfully restored {restored_count} session(s)"
-                if dogs_added > 0:
-                    msg += f"\nAdded {dogs_added} dog(s) to database"
-                if locations_added > 0:
-                    msg += f"\nAdded {locations_added} location(s) to database"
-                if settings_restored:
-                    if terrain_added > 0:
-                        msg += f"\nAdded {terrain_added} terrain type(s) from settings"
-                    if distraction_added > 0:
-                        msg += f"\nAdded {distraction_added} distraction type(s) from settings"
-                if failed_count > 0:
-                    msg += f"\n{failed_count} session(s) failed to restore"
-                messagebox.showinfo("Restore Complete", msg)
-                return True
-            else:
-                messagebox.showerror("Restore Failed", "No sessions were restored")
-                return False
-            
-        except Exception as e:
-            # Restore original DB_TYPE on error
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            messagebox.showerror("Restore Error", f"Failed to restore sessions:\n{e}")
-            import traceback
-            traceback.print_exc()
-            return False
-        finally:
-            if working_dialog:
-                working_dialog.close(delay_ms=200)
-    
-    def offer_load_default_types(self, db_type):
-        """Offer to load default terrain and distraction types into new database"""
-        result = messagebox.askyesno(
-            "Load Default Types?",
-            "Would you like to load the default terrain and distraction types?\n\n"
-            "Terrain types (17):\n"
-            "Urban, Rural, Forest, Scrub, Desert, Sandy, Rocky, City park, Meadow, etc.\n\n"
-            "Distraction types (7):\n"
-            "Critter, Horse, Loud noise, Motorcycle, Hikers, Cow, Vehicle"
-        )
-        
-        if not result:
-            return
-        
-        # Use DatabaseManager to properly load defaults with sort_order
-        db_mgr = get_db_manager(db_type)
-        
-        # Show working dialog for networked databases
-        if db_type in ["postgres", "supabase", "mysql"]:
-            working_dialog = WorkingDialog(self.root, "Loading Defaults", 
-                                         f"Loading default types to {db_type} database...")
-            self.root.update()
-        else:
-            working_dialog = None
-        
-        try:
-            terrain_success, terrain_msg = db_mgr.restore_default_terrain_types()
-            distraction_success, distraction_msg = db_mgr.restore_default_distraction_types()
-        finally:
-            if working_dialog:
-                working_dialog.close(delay_ms=200)
-        
-        # Refresh UI - both Setup tab AND Entry tab
-        self.load_terrain_from_database()  # Setup tab treeview
-        self.load_distraction_from_database()  # Setup tab treeview
-        
-        # CRITICAL: Also refresh Entry tab comboboxes!
-        if hasattr(self, 'terrain_combo'):
-            self.refresh_terrain_list()  # Entry tab terrain combobox
-        
-        # Show summary
-        if terrain_success and distraction_success:
-            messagebox.showinfo("Success", 
-                f"{terrain_msg}\n{distraction_msg}")
-        else:
-            errors = []
-            if not terrain_success:
-                errors.append(f"Terrain: {terrain_msg}")
-            if not distraction_success:
-                errors.append(f"Distraction: {distraction_msg}")
-            messagebox.showerror("Error", "\n".join(errors))
     
     def on_date_changed(self, event=None):
         """Called when date picker value changes"""
@@ -1155,22 +224,6 @@ class AirScentingUI:
             self.date_picker.set_date(today)
             sv.date.set(today.strftime("%Y-%m-%d"))
             
-    def save_db_setting(self, key, value):
-        """Save a setting to the database"""
-        # Ensure database is ready (critical for networked databases)
-        self.ensure_db_ready()
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        db_mgr.save_setting(key, value) 
-    
-    def load_db_setting(self, key, default=None):
-        """Load a setting from the database"""
-        # Ensure database is ready (critical for networked databases)
-        self.ensure_db_ready()
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        return db_mgr.load_setting(key, default)
-    
     def on_dog_changed(self, event=None):
         """Called when dog selection changes - update session number and clear form for new dog"""
         dog_name = sv.dog.get()
@@ -1188,10 +241,10 @@ class AirScentingUI:
             
             try:
                 # Save dog to database for persistence across sessions
-                self.save_db_setting("last_dog_name", dog_name)
+                DatabaseOperations(self).save_db_setting("last_dog_name", dog_name)
                 
                 # Update session number to next available for this dog
-                next_session = self.get_next_session_number(dog_name)
+                next_session = DatabaseOperations(self).get_next_session_number(dog_name)
                 # print(f"DEBUG on_dog_changed: next_session = {next_session}")  # DEBUG
                 sv.session_number.set(str(next_session))
                 
@@ -1224,62 +277,20 @@ class AirScentingUI:
                 self.view_map_button.config(state=tk.DISABLED)
                 self.delete_map_button.config(state=tk.DISABLED)
                 # Update subjects_found combo state
-                self.update_subjects_found()
+                self.form_mgmt.update_subjects_found()
                 
                 # Clear selected sessions - switching dogs exits navigation mode
                 self.selected_sessions = []
                 self.selected_sessions_index = -1
                 
                 # Update navigation buttons
-                self.update_navigation_buttons()
+                self.navigation.update_navigation_buttons()
                 
                 sv.status.set(f"Switched to {dog_name} - Next session: #{next_session}")
                 
             finally:
                 if working_dialog:
                     working_dialog.close(delay_ms=200)  # 200ms delay for UI to update
-    
-    def ensure_db_ready(self):
-        """Ensure database connection is ready (password set for networked DBs)"""
-        db_type = sv.db_type.get()
-        if db_type in ["postgres", "supabase", "mysql"]:
-            # Check if password field exists yet (it's created in setup_setup_tab)
-            if not hasattr(self, 'db_password_var'):
-                return  # Too early in initialization
-            
-            password = sv.db_password.get().strip()
-            
-            # If password not loaded yet, try loading from encrypted storage
-            if not password and hasattr(self, 'config'):
-                from password_manager import get_decrypted_password, check_crypto_available
-                if check_crypto_available():
-                    saved_password = get_decrypted_password(self.config, db_type)
-                    if saved_password:
-                        sv.db_password.set(saved_password)
-                        password = saved_password
-            
-            # Set password in database config
-            if password:
-                self.set_db_password()
-
-
-    
-    def get_next_session_number(self, dog_name=None):
-        """Get the next session number for the specified dog"""
-        # Ensure database is ready (critical for networked databases)
-        self.ensure_db_ready()
-        
-        # Handle the optional parameter
-        if dog_name is None:
-            dog_name = sv.dog.get()
-
-        if not dog_name:
-            return 1
-
-        # Use DatabaseManager
-        from ui_database import get_db_manager
-        db_mgr = get_db_manager(sv.db_type.get())
-        return db_mgr.get_next_session_number(dog_name)
     
     def save_session(self):
         """Save the current training session"""
@@ -1404,13 +415,13 @@ class AirScentingUI:
             "selected_terrains": self.accumulated_terrains,
             "user_name": get_username()
         }
-        self.save_session_to_json(session_backup_data)
+        self.misc_data_ops.save_session_to_json(session_backup_data)
 
         sv.status.set(message)
         messagebox.showinfo("Success", message)
 
         # Auto-prepare for next entry
-        sv.session_number.set(str(self.get_next_session_number()))
+        sv.session_number.set(str(DatabaseOperations(self).get_next_session_number()))
         self.selected_sessions = []
         self.selected_sessions_index = -1
 
@@ -1438,10 +449,19 @@ class AirScentingUI:
         self.map_listbox.delete(0, tk.END)
         self.view_map_button.config(state=tk.DISABLED)
         self.delete_map_button.config(state=tk.DISABLED)
-        self.update_subjects_found()
+        self.form_mgmt.update_subjects_found()
+        # Clear subject responses tree
+        for i in range(1, 11):
+            item_id = f'subject_{i}'
+            if self.subject_responses_tree.exists(item_id):
+                self.subject_responses_tree.item(item_id, tags='disabled')
+                self.subject_responses_tree.item(item_id, values=(
+                    f'Subject {i}', '', ''
+                ))
+        
         # Reset tree selection to subject 1 after clearing form
         self.reset_subject_responses_tree_selection()
-        self.update_navigation_buttons()
+        self.navigation.update_navigation_buttons()
 
     def load_bootstrap(self):
         """Load machine-specific paths from bootstrap file"""
@@ -1596,7 +616,7 @@ class AirScentingUI:
         db_frame.pack(fill="x", pady=5)
         
         tk.Entry(db_frame, textvariable=sv.db_path, width=70).pack(side="left", padx=5)
-        tk.Button(db_frame, text="Browse", command=self.select_db_folder).pack(side="left", padx=5)
+        tk.Button(db_frame, text="Browse", command=self.file_ops.select_db_folder).pack(side="left", padx=5)
         self.create_db_btn = tk.Button(db_frame, text="Create Database", 
                                        command=self.create_database, state="disabled")
         self.create_db_btn.pack(side="left", padx=5)
@@ -1609,16 +629,16 @@ class AirScentingUI:
         folder_frame.pack(fill="x", pady=5)
         
         tk.Entry(folder_frame, textvariable=sv.trail_maps_folder, width=70).pack(side="left", padx=5)
-        tk.Button(folder_frame, text="Browse", command=self.select_folder).pack(side="left", padx=5)
+        tk.Button(folder_frame, text="Browse", command=self.file_ops.select_folder).pack(side="left", padx=5)
         
         # Backup folder
         backup_frame = tk.LabelFrame(frame, text="Backup Folder", padx=10, pady=5)
         backup_frame.pack(fill="x", pady=5)
         
         tk.Entry(backup_frame, textvariable=sv.backup_folder, width=70).pack(side="left", padx=5)
-        tk.Button(backup_frame, text="Browse", command=self.select_backup_folder).pack(side="left", padx=5)
+        tk.Button(backup_frame, text="Browse", command=self.file_ops.select_backup_folder).pack(side="left", padx=5)
         tk.Button(backup_frame, text="Restore Settings from Backup", 
-                 command=self.restore_settings_from_json).pack(side="left", padx=5)
+                 command=self.misc_data_ops.restore_settings_from_json).pack(side="left", padx=5)
         
         # Default values
         defaults_frame = tk.LabelFrame(frame, text="Default Values (Optional)", padx=10, pady=5)
@@ -1896,19 +916,19 @@ class AirScentingUI:
         # Initialize with "1" for now, will update after password is loaded
         self.session_entry = tk.Entry(session_frame, textvariable=sv.session_number, width=10)
         self.session_entry.grid(row=0, column=3, sticky="w", padx=5, pady=2)
-        self.session_entry.bind("<FocusOut>", self.on_session_number_changed)
-        self.session_entry.bind("<Return>", self.on_session_number_changed)
-        tk.Button(session_frame, text="New", command=self.new_session).grid(row=0, column=4, padx=5)
+        self.session_entry.bind("<FocusOut>", self.navigation.on_session_number_changed)
+        self.session_entry.bind("<Return>", self.navigation.on_session_number_changed)
+        tk.Button(session_frame, text="New", command=self.form_mgmt.new_session).grid(row=0, column=4, padx=5)
         
-        tk.Button(session_frame, text="Edit/Delete Prior Session", command=self.load_prior_session, 
+        tk.Button(session_frame, text="Edit/Delete Prior Session", command=self.navigation.load_prior_session, 
                  bg="#4169E1", fg="white").grid(row=0, column=5, padx=5, pady=2)
         
         # Previous and Next session navigation buttons
         self.prev_session_btn = tk.Button(session_frame, text="◀ Previous", bg="#FF8C00", fg="white",
-                                         width=10, command=self.navigate_previous_session, state=tk.DISABLED)
+                                         width=10, command=self.navigation.navigate_previous_session, state=tk.DISABLED)
         self.prev_session_btn.grid(row=0, column=6, padx=2, pady=2)
         self.next_session_btn = tk.Button(session_frame, text="Next ▶", bg="#FF8C00", fg="white",
-                                         width=10, command=self.navigate_next_session, state=tk.DISABLED)
+                                         width=10, command=self.navigation.navigate_next_session, state=tk.DISABLED)
         self.next_session_btn.grid(row=0, column=7, padx=2, pady=2)
         
         # Export PDF button
@@ -1923,6 +943,7 @@ class AirScentingUI:
         tk.Label(session_frame, text="Handler:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         # If handler_name is set, use it; otherwise use last_handler_name
         default_handler = self.config.get("handler_name", "") or self.config.get("last_handler_name", "")
+        sv.handler.set(default_handler)
         tk.Entry(session_frame, textvariable=sv.handler, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(session_frame, text="Session Purpose:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
@@ -1938,7 +959,7 @@ class AirScentingUI:
         tk.Label(session_frame, text="Dog:").grid(row=1, column=6, sticky="e", padx=5, pady=2)
         # Load last dog from database (deferred until password is loaded)
         # NOTE: Commented out - will be loaded in load_initial_database_data()
-        # last_dog = self.load_db_setting("last_dog_name", "")
+        # last_dog = DatabaseOperations(self).load_db_setting("last_dog_name", "")
         self.dog_combo = ttk.Combobox(session_frame, textvariable=sv.dog, width=15, state="readonly")
         # Load dogs from database (deferred)
         # NOTE: Commented out - will be loaded in load_initial_database_data()
@@ -1964,7 +985,7 @@ class AirScentingUI:
         self.num_subjects_combo = ttk.Combobox(search_frame, textvariable=sv.num_subjects, width=15, state="readonly",
                                      values=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
         self.num_subjects_combo.grid(row=0, column=5, sticky="w", padx=5, pady=2)
-        self.num_subjects_combo.bind('<<ComboboxSelected>>', self.update_subjects_found)
+        self.num_subjects_combo.bind('<<ComboboxSelected>>', self.form_mgmt.update_subjects_found)
         
         tk.Label(search_frame, text="Handler Knowledge:").grid(row=0, column=6, sticky="w", padx=5, pady=2)
         handler_knowledge_combo = ttk.Combobox(search_frame, textvariable=sv.handler_knowledge, width=25, state="readonly",
@@ -1998,7 +1019,6 @@ class AirScentingUI:
         
         tk.Label(search_frame, text="Add Terrain Type:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
         # Load terrain types from database using DatabaseManager (respects sort_order)
-        from ui_database import get_db_manager
         db_mgr = get_db_manager(sv.db_type.get())
         terrain_types = db_mgr.load_terrain_types()
         
@@ -2136,9 +1156,9 @@ class AirScentingUI:
         
         # Enable drag and drop
         self.drop_label.drop_target_register(DND_FILES)
-        self.drop_label.dnd_bind('<<Drop>>', self.handle_drop)
-        self.drop_label.dnd_bind('<<DragEnter>>', self.drag_enter)
-        self.drop_label.dnd_bind('<<DragLeave>>', self.drag_leave)
+        self.drop_label.dnd_bind('<<Drop>>', self.file_ops.handle_drop)
+        self.drop_label.dnd_bind('<<DragEnter>>', self.file_ops.drag_enter)
+        self.drop_label.dnd_bind('<<DragLeave>>', self.file_ops.drag_leave)
         
         # Right side - Listbox with scrollbar and view button
         list_frame = tk.Frame(map_container)
@@ -2160,7 +1180,7 @@ class AirScentingUI:
         map_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         
         # Bind double-click to open file
-        self.map_listbox.bind('<Double-Button-1>', lambda e: self.view_selected_map())
+        self.map_listbox.bind('<Double-Button-1>', lambda e: self.file_ops.view_selected_map())
         
         # Button frame to the right of listbox
         map_button_frame = tk.Frame(list_button_container)
@@ -2168,12 +1188,12 @@ class AirScentingUI:
         
         # View button
         self.view_map_button = tk.Button(map_button_frame, text="View Selected", 
-                                         command=self.view_selected_map, state=tk.DISABLED, width=12)
+                                         command=self.file_ops.view_selected_map, state=tk.DISABLED, width=12)
         self.view_map_button.pack(pady=(0, 2))
         
         # Delete button
         self.delete_map_button = tk.Button(map_button_frame, text="Delete Selected", 
-                                         command=self.delete_selected_map, state=tk.DISABLED, width=12)
+                                         command=self.file_ops.delete_selected_map, state=tk.DISABLED, width=12)
         self.delete_map_button.pack(pady=(2, 0))
         
         self.map_files_list = []  # Store list of files
@@ -2186,421 +1206,19 @@ class AirScentingUI:
                  bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold"),
                  width=25, height=2).pack(side="left", padx=10)
         
-        tk.Button(button_frame, text="Clear Form", command=self.clear_form,
+        tk.Button(button_frame, text="Clear Form", command=self.form_mgmt.clear_form,
                  width=15).pack(side="left", padx=10)
         
         tk.Button(button_frame, text="Quit", command=self.root.quit,
                  width=10).pack(side="left", padx=10)
         
         # Initialize navigation button states
-        self.root.after(500, self.update_navigation_buttons)
+        self.root.after(500, self.navigation.update_navigation_buttons)
         
         # Initialize subjects_found as disabled (no subjects selected yet)
         self.subjects_found_combo['state'] = 'disabled'
     
     # Placeholder methods for Entry tab buttons
-    def clear_form(self):
-        """Clear the form"""
-        result = messagebox.askyesno("Clear Form", "Are you sure you want to clear all fields?")
-        if result:
-            self.set_date(datetime.now().strftime("%Y-%m-%d"))
-            sv.session_number.set(str(self.get_next_session_number()))
-            # handler_var is NOT cleared - keep current handler name
-            sv.session_purpose.set("")
-            sv.field_support.set("")
-            # dog_var is NOT cleared - keep current dog (persists)
-            sv.location.set("")
-            sv.search_area_size.set("")
-            sv.num_subjects.set("")
-            sv.handler_knowledge.set("")
-            sv.weather.set("")
-            sv.temperature.set("")
-            sv.wind_direction.set("")
-            sv.wind_speed.set("")
-            sv.search_type.set("")
-            sv.drive_level.set("")
-            sv.subjects_found.set("")
-            self.comments_text.delete("1.0", tk.END)
-            # Clear terrain accumulator
-            self.accumulated_terrains = []
-            self.accumulated_terrain_combo['values'] = []
-            sv.accumulated_terrain.set("")
-            self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
-            # Update subjects_found combo state (will disable since num_subjects is blank)
-            self.update_subjects_found()
-            sv.status.set("Form cleared")
-            self.update_navigation_buttons()
-    
-    def new_session(self):
-        """Advance to first available new session (MAX + 1)"""
-        # Check for unsaved changes first
-        if not self.check_entry_tab_changes():
-            return
-        
-        next_session = self.get_next_session_number()
-        sv.session_number.set(str(next_session))
-        # Clear selected sessions - we're starting fresh
-        self.selected_sessions = []
-        self.selected_sessions_index = -1
-        # Clear form fields for new entry (KEEP handler name and dog name)
-        self.set_date(datetime.now().strftime("%Y-%m-%d"))
-        # handler_var is NOT cleared - keep current handler name
-        sv.session_purpose.set("")
-        sv.field_support.set("")
-        # dog_var is NOT cleared - keep current dog (persists across sessions)
-        sv.location.set("")
-        sv.search_area_size.set("")
-        sv.num_subjects.set("")
-        sv.handler_knowledge.set("")
-        sv.weather.set("")
-        sv.temperature.set("")
-        sv.wind_direction.set("")
-        sv.wind_speed.set("")
-        sv.search_type.set("")
-        sv.drive_level.set("")
-        sv.subjects_found.set("")
-        self.comments_text.delete("1.0", tk.END)
-        # Clear terrain accumulator
-        self.accumulated_terrains = []
-        self.accumulated_terrain_combo['values'] = []
-        sv.accumulated_terrain.set("")
-        self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
-        # Clear map files list
-        self.map_files_list = []
-        self.map_listbox.delete(0, tk.END)
-        self.view_map_button.config(state=tk.DISABLED)
-        self.delete_map_button.config(state=tk.DISABLED)
-        # Update subjects_found combo state (will disable since num_subjects is blank)
-        self.update_subjects_found()
-        # Reset tree selection to subject 1
-        self.reset_subject_responses_tree_selection()
-        sv.status.set(f"New session #{next_session}")
-        self.update_navigation_buttons()
-    
-    def check_entry_tab_changes(self):
-        """Check for unsaved changes in Entry tab. Returns True if OK to proceed."""
-        # Get current form state
-        current_date = sv.date.get()
-        current_session = sv.session_number.get()
-        current_handler = sv.handler.get()
-        current_purpose = sv.session_purpose.get()
-        current_field_support = sv.field_support.get()
-        current_dog = sv.dog.get()
-        current_search_area = sv.search_area_size.get()
-        current_num_subjects = sv.num_subjects.get()
-        current_handler_knowledge = sv.handler_knowledge.get()
-        current_weather = sv.weather.get()
-        current_temperature = sv.temperature.get()
-        current_wind_direction = sv.wind_direction.get()
-        current_wind_speed = sv.wind_speed.get()
-        current_search_type = sv.search_type.get()
-        current_drive_level = sv.drive_level.get()
-        current_subjects_found = sv.subjects_found.get()
-        
-        # Check if this session exists in database and compare
-        try:
-            session_num = int(current_session)
-        except ValueError:
-            return True  # Invalid session number, OK to proceed
-        
-        db_type = sv.db_type.get()
-        
-        try:
-            # Get data from database
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            with database.get_connection() as conn:
-                result = conn.execute(
-                    text("""
-                        SELECT date, handler, session_purpose, field_support, dog_name,
-                               search_area_size, num_subjects, handler_knowledge, weather, temperature,
-                               wind_direction, wind_speed, search_type, drive_level, subjects_found
-                        FROM training_sessions 
-                        WHERE session_number = :session_number
-                    """),
-                    {"session_number": session_num}
-                )
-                row = result.fetchone()
-            
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            if row:
-                # Compare with current values
-                db_date = str(row[0]) if row[0] else ""
-                db_handler = row[1] or ""
-                db_purpose = row[2] or ""
-                db_field_support = row[3] or ""
-                db_dog = row[4] or ""
-                db_search_area = row[5] or ""
-                db_num_subjects = row[6] or ""
-                db_handler_knowledge = row[7] or ""
-                db_weather = row[8] or ""
-                db_temperature = row[9] or ""
-                db_wind_direction = row[10] or ""
-                db_wind_speed = row[11] or ""
-                db_search_type = row[12] or ""
-                db_drive_level = row[13] or ""
-                db_subjects_found = row[14] or ""
-                
-                if (current_date != db_date or
-                    current_handler != db_handler or
-                    current_purpose != db_purpose or
-                    current_field_support != db_field_support or
-                    current_dog != db_dog or
-                    current_search_area != db_search_area or
-                    current_num_subjects != db_num_subjects or
-                    current_handler_knowledge != db_handler_knowledge or
-                    current_weather != db_weather or
-                    current_temperature != db_temperature or
-                    current_wind_direction != db_wind_direction or
-                    current_wind_speed != db_wind_speed or
-                    current_search_type != db_search_type or
-                    current_drive_level != db_drive_level or
-                    current_subjects_found != db_subjects_found):
-                    
-                    # Changes detected
-                    result = messagebox.askyesnocancel(
-                        "Unsaved Changes",
-                        f"You have unsaved changes to Session #{session_num}.\n\n"
-                        "Do you want to save before proceeding?",
-                        icon='warning'
-                    )
-                    
-                    if result is None:  # Cancel
-                        return False
-                    elif result:  # Yes - save first
-                        save_session()
-                        return True
-                    else:  # No - discard changes
-                        return True
-            
-            # No changes or new session
-            return True
-            
-        except Exception as e:
-            # If error checking, just proceed
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            return True
-    
-    def on_session_number_changed(self, event=None):
-        """Called when session number field loses focus or user presses Enter"""
-        # Clear selected sessions when manually changing session number
-        self.selected_sessions = []
-        self.selected_sessions_index = -1
-        
-        try:
-            session_num = int(sv.session_number.get())
-            if session_num < 1:
-                messagebox.showwarning("Invalid Session", "Session number must be at least 1")
-                sv.session_number.set("1")
-                return
-            
-            max_session = self.get_next_session_number() - 1  # Current max
-            if session_num > max_session + 1:
-                messagebox.showwarning(
-                    "Session Too High", 
-                    f"Session #{session_num} doesn't exist.\n\n"
-                    f"Maximum session is #{max_session}.\n"
-                    f"Next available is #{max_session + 1}."
-                )
-                sv.session_number.set(str(max_session + 1))
-                return
-            
-            # Load session data if it exists
-            self.load_session_by_number(session_num)
-            self.update_navigation_buttons()
-            
-        except ValueError:
-            messagebox.showwarning("Invalid Number", "Session number must be a valid number")
-            sv.session_number.set(str(self.get_next_session_number()))
-    
-    def load_session_by_number(self, session_number):
-        """Load session data from database by session number and current dog"""
-        dog_name = sv.dog.get().strip() if sv.dog.get() else ""
-
-        if not dog_name:
-            messagebox.showwarning("No Dog Selected", "Please select a dog first")
-            return
-
-        # Load session from database
-        db_mgr = get_db_manager(sv.db_type.get())
-        
-        # Show working dialog for networked databases
-        db_type = sv.db_type.get()
-        if db_type in ["postgres", "supabase", "mysql"]:
-            working_dialog = WorkingDialog(self.root, "Loading", 
-                                         f"Loading session from {db_type} database...")
-            self.root.update()
-        else:
-            working_dialog = None
-        
-        try:
-            session_data = db_mgr.load_session(session_number, dog_name)
-        finally:
-            if working_dialog:
-                working_dialog.close(delay_ms=200)
-
-        if session_data:
-            # Populate form with session data
-            self.set_date(session_data["date"])
-            sv.handler.set(session_data["handler"])
-            sv.session_purpose.set(session_data["session_purpose"])
-            sv.field_support.set(session_data["field_support"])
-            sv.dog.set(session_data["dog_name"])
-            sv.location.set(session_data["location"])
-            sv.search_area_size.set(session_data["search_area_size"])
-            sv.num_subjects.set(session_data["num_subjects"])
-            sv.handler_knowledge.set(session_data["handler_knowledge"])
-            sv.weather.set(session_data["weather"])
-            sv.temperature.set(session_data["temperature"])
-            sv.wind_direction.set(session_data["wind_direction"])
-            sv.wind_speed.set(session_data["wind_speed"])
-            sv.search_type.set(session_data["search_type"])
-            sv.drive_level.set(session_data["drive_level"])
-            sv.subjects_found.set(session_data["subjects_found"])
-
-            # Load comments
-            self.comments_text.delete("1.0", tk.END)
-            self.comments_text.insert("1.0", session_data["comments"])
-
-            # Load image files
-            if session_data["image_files"]:
-                try:
-                    self.map_files_list = json.loads(session_data["image_files"])
-                except:
-                    self.map_files_list = []
-            else:
-                self.map_files_list = []
-
-            # Update map listbox
-            self.map_listbox.delete(0, tk.END)
-            for filename in self.map_files_list:
-                self.map_listbox.insert(tk.END, filename)
-
-            if self.map_files_list:
-                self.view_map_button.config(state=tk.NORMAL)
-                self.delete_map_button.config(state=tk.NORMAL)
-            else:
-                self.view_map_button.config(state=tk.DISABLED)
-                self.delete_map_button.config(state=tk.DISABLED)
-
-            self.update_subjects_found()
-            sv.subjects_found.set(session_data["subjects_found"])
-            self.update_subject_responses_grid()
-
-            # Load selected terrains
-            session_id = session_data["id"]
-            self.accumulated_terrains = db_mgr.load_selected_terrains(session_id)
-            self.accumulated_terrain_combo['values'] = self.accumulated_terrains
-            # Set the StringVar to show the last terrain (most recently added)
-            if self.accumulated_terrains:
-                sv.accumulated_terrain.set(self.accumulated_terrains[-1])
-                self.accumulated_terrain_combo['state'] = 'readonly'
-            else:
-                sv.accumulated_terrain.set("")
-                self.accumulated_terrain_combo['state'] = 'disabled'
-
-            # Load subject responses
-            subject_responses = db_mgr.load_subject_responses(session_id)
-            for response in subject_responses:
-                item_id = f'subject_{response["subject_number"]}'
-                if self.subject_responses_tree.exists(item_id):
-                    self.subject_responses_tree.item(
-                        item_id,
-                        values=(
-                            f'Subject {response["subject_number"]}',
-                            response["tfr"],
-                            response["refind"]
-                        )
-                    )
-
-            sv.status.set(f"Loaded session #{session_number}")
-        else:
-            # Session doesn't exist - clear for new entry
-            self.set_date(datetime.now().strftime("%Y-%m-%d"))
-            sv.session_purpose.set("")
-            sv.field_support.set("")
-            sv.location.set("")
-            sv.search_area_size.set("")
-            sv.num_subjects.set("")
-            sv.handler_knowledge.set("")
-            sv.weather.set("")
-            sv.temperature.set("")
-            sv.wind_direction.set("")
-            sv.wind_speed.set("")
-            sv.search_type.set("")
-            sv.drive_level.set("")
-            sv.subjects_found.set("")
-            self.comments_text.delete("1.0", tk.END)
-            self.accumulated_terrains = []
-            self.accumulated_terrain_combo['values'] = []
-            sv.accumulated_terrain.set("")
-            self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
-            self.map_files_list = []
-            self.map_listbox.delete(0, tk.END)
-            self.view_map_button.config(state=tk.DISABLED)
-            self.delete_map_button.config(state=tk.DISABLED)
-            self.update_subjects_found()
-            sv.status.set(f"New session #{session_number}")
-
-    def update_navigation_buttons(self):
-        """Enable/disable Previous and Next buttons based on current session number"""
-        # If we have selected sessions, use that for navigation
-        if self.selected_sessions:
-            # Enable Previous if not at first selected session
-            if self.selected_sessions_index > 0:
-                self.prev_session_btn.config(state=tk.NORMAL)
-            else:
-                self.prev_session_btn.config(state=tk.DISABLED)
-            
-            # Enable Next if not at last selected session
-            if self.selected_sessions_index < len(self.selected_sessions) - 1:
-                self.next_session_btn.config(state=tk.NORMAL)
-            else:
-                self.next_session_btn.config(state=tk.DISABLED)
-        else:
-            # Normal mode - use session number
-            try:
-                current_session = int(sv.session_number.get())
-                max_session = self.get_next_session_number() - 1
-                
-                # Enable Previous if session > 1
-                if current_session > 1:
-                    self.prev_session_btn.config(state=tk.NORMAL)
-                else:
-                    self.prev_session_btn.config(state=tk.DISABLED)
-                
-                # Enable Next if session < max + 1
-                if current_session < max_session + 1:
-                    self.next_session_btn.config(state=tk.NORMAL)
-                else:
-                    self.next_session_btn.config(state=tk.DISABLED)
-                    
-            except ValueError:
-                self.prev_session_btn.config(state=tk.DISABLED)
-                self.next_session_btn.config(state=tk.DISABLED)
-    
     def add_to_terrain_accumulator(self, event=None):
         """Add selected terrain type to the accumulated terrains list"""
         terrain_type = sv.terrain.get()
@@ -2656,27 +1274,6 @@ class AirScentingUI:
             else:
                 # The last item was removed - show the new last item
                 sv.accumulated_terrain.set(self.accumulated_terrains[-1])
-    
-    def update_subjects_found(self, event=None):
-        """Update Subjects Found combobox values based on Number of Subjects"""
-        num_subjects = sv.num_subjects.get()
-        
-        if num_subjects and num_subjects.isdigit():
-            n = int(num_subjects)
-            # Generate values: "0 out of n", "1 out of n", ..., "n out of n"
-            values = [f"{i} out of {n}" for i in range(n + 1)]
-            self.subjects_found_combo['values'] = values
-            self.subjects_found_combo['state'] = 'readonly'
-            # Clear current selection when choices change
-            sv.subjects_found.set("")
-        else:
-            # No number selected, disable and clear the subjects_found combobox
-            self.subjects_found_combo['values'] = []
-            self.subjects_found_combo['state'] = 'disabled'
-            sv.subjects_found.set("")
-        
-        # Update TFR and Re-find state whenever subjects_found changes
-        self.update_subject_responses_grid()
     
     def update_subject_responses_grid(self, event=None):
         """Update subject responses grid - enable/disable rows based on Subjects Found value"""
@@ -2804,467 +1401,6 @@ class AirScentingUI:
                 self.subject_responses_tree.selection_set(first_item)
                 self.subject_responses_tree.see(first_item)  # Scroll to make it visible
     
-    def drag_enter(self, event):
-        """Visual feedback when dragging over drop zone"""
-        self.drop_label.configure(bg="#90EE90")
-    
-    def drag_leave(self, event):
-        """Reset visual feedback"""
-        self.drop_label.configure(bg="#e0e0e0")
-    
-    def handle_drop(self, event):
-        """Handle dropped files (supports multiple) - copies to trail maps folder"""
-        self.drop_label.configure(bg="#e0e0e0")
-        
-        # Check if trail maps folder is configured
-        trail_maps_folder = sv.trail_maps_folder.get().strip()
-        if not trail_maps_folder or not os.path.exists(trail_maps_folder):
-            messagebox.showerror(
-                "Trail Maps Folder Not Set",
-                "Please configure the Trail Maps Storage Folder in the Setup tab first."
-            )
-            return
-        
-        # Check if dog is selected (needed for unique filename)
-        if not sv.dog.get():
-            messagebox.showwarning(
-                "No Dog Selected",
-                "Please select a dog before adding maps/images.\n\n"
-                "The dog name is used to organize files."
-            )
-            return
-        
-        dog_name = sv.dog.get()
-        session_number = sv.session_number.get()
-        
-        # Parse dropped data - can be multiple files
-        data = event.data.strip()
-        
-        # Split by whitespace but respect curly braces grouping
-        filepaths = []
-        if data.startswith("{"):
-            # Multiple files with curly braces
-            parts = data.split("} {")
-            for part in parts:
-                part = part.strip("{}")
-                if part:
-                    filepaths.append(part)
-        else:
-            # Single file or space-separated files
-            filepaths = [data]
-        
-        # Process each file
-        copied_files = []
-        import shutil
-        import re
-        from datetime import datetime
-        
-        for filepath in filepaths:
-            filepath = filepath.strip()
-            if os.path.exists(filepath):
-                ext = os.path.splitext(filepath)[1].lower()
-                if ext in ['.pdf', '.jpg', '.jpeg', '.png']:
-                    # Create unique filename: {dog}_{session}_{timestamp}_{original}
-                    original_name = os.path.basename(filepath)
-                    # Sanitize dog name for filename
-                    safe_dog_name = re.sub(r'[^\w\-]', '_', dog_name)
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    unique_name = f"{safe_dog_name}_session{session_number}_{timestamp}_{original_name}"
-                    
-                    # Copy file to trail maps folder
-                    dest_path = os.path.join(trail_maps_folder, unique_name)
-                    try:
-                        shutil.copy2(filepath, dest_path)
-                        copied_files.append(unique_name)  # Store just the filename, not full path
-                    except Exception as e:
-                        messagebox.showerror("Copy Error", f"Failed to copy {original_name}:\n{e}")
-        
-        if copied_files:
-            # Add to list (don't replace, accumulate)
-            self.map_files_list.extend(copied_files)
-            # Remove duplicates while preserving order
-            seen = set()
-            self.map_files_list = [x for x in self.map_files_list if not (x in seen or seen.add(x))]
-            
-            # Update listbox
-            self.map_listbox.delete(0, tk.END)
-            for filename in self.map_files_list:
-                self.map_listbox.insert(tk.END, filename)
-            
-            # Enable view and delete buttons
-            self.view_map_button.config(state=tk.NORMAL)
-            self.delete_map_button.config(state=tk.NORMAL)
-            
-            sv.status.set(f"{len(copied_files)} file(s) copied to trail maps folder")
-        else:
-            messagebox.showerror("Error", "Only PDF, JPG, and PNG files supported!")
-    
-    
-    def view_selected_map(self):
-        """Open the selected map/image file from trail maps folder"""
-        selection = self.map_listbox.curselection()
-        if not selection:
-            messagebox.showinfo("No Selection", "Please select a file from the list to view")
-            return
-        
-        # Get the filename from map_files_list using the index
-        selected_index = selection[0]
-        if selected_index < len(self.map_files_list):
-            filename = self.map_files_list[selected_index]
-            
-            # Build full path from trail maps folder
-            trail_maps_folder = sv.trail_maps_folder.get().strip()
-            if trail_maps_folder:
-                filepath = os.path.join(trail_maps_folder, filename)
-            else:
-                filepath = filename
-            
-            self.open_external_file(filepath)
-    
-    def delete_selected_map(self):
-        """Delete the selected map/image file from trail maps folder"""
-        selection = self.map_listbox.curselection()
-        if not selection:
-            messagebox.showinfo("No Selection", "Please select a file from the list to delete")
-            return
-        
-        selected_index = selection[0]
-        if selected_index >= len(self.map_files_list):
-            return
-        
-        filename = self.map_files_list[selected_index]
-        
-        # Warning dialog
-        result = messagebox.askokcancel(
-            "Delete Map/Image",
-            f"Are you sure you want to delete '{filename}'?\n\nThis operation cannot be reversed.",
-            icon='warning'
-        )
-        
-        if not result:
-            return
-        
-        # Delete the actual file from trail maps folder
-        try:
-            trail_maps_folder = sv.trail_maps_folder.get().strip()
-            if trail_maps_folder:
-                full_path = os.path.join(trail_maps_folder, filename)
-            else:
-                full_path = filename
-            
-            if os.path.exists(full_path):
-                os.remove(full_path)
-                sv.status.set(f"Deleted file: {filename}")
-            else:
-                sv.status.set(f"Removed from list (file not found): {filename}")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to delete file:\n{str(e)}")
-            return
-        
-        # Remove from list and listbox
-        self.map_files_list.pop(selected_index)
-        self.map_listbox.delete(selected_index)
-        
-        # Update button states
-        if not self.map_files_list:
-            self.view_map_button.config(state=tk.DISABLED)
-            self.delete_map_button.config(state=tk.DISABLED)
-    
-    def open_external_file(self, file_path):
-        """Open a file (PDF, image, etc.) with the system's default application"""
-        if not file_path or file_path == '':
-            messagebox.showwarning("No File", "No file path specified")
-            return
-        
-        # Convert to Path object
-        path = Path(file_path)
-        
-        # If path is relative, try to find it in the trail maps folder
-        if not path.is_absolute():
-            possible_paths = []
-            
-            # Try trail maps folder from config first
-            trail_maps_folder = sv.trail_maps_folder.get()
-            if trail_maps_folder and os.path.exists(trail_maps_folder):
-                possible_paths.append(Path(trail_maps_folder) / file_path)
-            
-            # Try as-is
-            possible_paths.append(path)
-            
-            # Find first existing path
-            found_path = None
-            for p in possible_paths:
-                if p.exists():
-                    found_path = p
-                    break
-            
-            if found_path:
-                path = found_path
-            else:
-                error_msg = f"Could not find file: {file_path}\n\nSearched in:\n"
-                for p in possible_paths:
-                    error_msg += f"  • {p}\n"
-                error_msg += "\nTip: Check your trail maps folder setting in Setup tab."
-                messagebox.showerror("File Not Found", error_msg)
-                return
-        
-        if not path.exists():
-            messagebox.showerror("File Not Found", f"Could not find file:\n{path}")
-            return
-        
-        try:
-            if os.name == 'nt':  # Windows
-                os.startfile(path)
-            elif os.name == 'posix':  # macOS or Linux
-                import subprocess
-                import platform
-                if platform.system() == 'Darwin':  # macOS
-                    subprocess.run(['open', path])
-                else:  # Linux
-                    subprocess.run(['xdg-open', path])
-        except Exception as e:
-            messagebox.showerror("Error Opening File", 
-                               f"Could not open file:\n{path}\n\nError: {str(e)}")
-    
-    def load_prior_session(self):
-        """Open dialog to select sessions to view/edit/delete for current dog"""
-        db_type = sv.db_type.get()
-        
-        dog_name = sv.dog.get()
-        
-        # Check if dog is selected
-        if not dog_name:
-            messagebox.showwarning("No Dog Selected", "Please select a dog first to view their sessions")
-            return
-        
-        try:
-            # Get all sessions from database for this dog
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            # Show working dialog for networked databases
-            if db_type in ["postgres", "supabase", "mysql"]:
-                working_dialog = WorkingDialog(self.root, "Loading", 
-                                             f"Loading session list from {db_type} database...")
-                self.root.update()
-            else:
-                working_dialog = None
-            
-            try:
-                with database.get_connection() as conn:
-                    result = conn.execute(
-                        text("""
-                            SELECT session_number, date, handler, dog_name
-                            FROM training_sessions 
-                            WHERE dog_name = :dog_name
-                            ORDER BY session_number
-                        """),
-                        {"dog_name": dog_name}
-                    )
-                    sessions = result.fetchall()
-            finally:
-                if working_dialog:
-                    working_dialog.close(delay_ms=200)
-            
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            if not sessions:
-                messagebox.showinfo("No Sessions", f"No training sessions found for {dog_name}.")
-                return
-            
-            # Create selection dialog
-            self.show_session_selection_dialog(sessions)
-            
-        except Exception as e:
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
-                messagebox.showinfo("No Database", "No training sessions table found. Create database first.")
-            else:
-                messagebox.showerror("Database Error", f"Failed to load sessions:\n{e}")
-                print(f"Error loading sessions: {e}")
-    
-    def show_session_selection_dialog(self, sessions):
-        """Show dialog for selecting sessions to view/edit"""
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Select Sessions to View/Edit/Delete")
-        dialog.geometry("600x400")
-        dialog.transient(self.root)
-        
-        # Instructions
-        instructions = tk.Label(
-            dialog, 
-            text="Select sessions to navigate:\n"
-                 "• Click to select one session\n"
-                 "• Ctrl+Click to select multiple sessions\n"
-                 "• Shift+Click to select a range\n"
-                 "Use Previous/Next buttons to navigate through selected sessions",
-            justify=tk.LEFT,
-            padx=10,
-            pady=10
-        )
-        instructions.pack()
-        
-        # Listbox with scrollbar
-        frame = tk.Frame(dialog)
-        frame.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        scrollbar = tk.Scrollbar(frame)
-        scrollbar.pack(side="right", fill="y")
-        
-        listbox = tk.Listbox(
-            frame, 
-            selectmode=tk.EXTENDED,  # Allow Ctrl+Click and Shift+Click
-            yscrollcommand=scrollbar.set,
-            font=("Courier", 10)
-        )
-        listbox.pack(side="left", fill="both", expand=True)
-        scrollbar.config(command=listbox.yview)
-        
-        # Populate listbox
-        for session in sessions:
-            session_num, date, handler, dog = session
-            handler = handler or ""
-            dog = dog or ""
-            text = f"Session #{session_num:3d}  |  {date}  |  {handler:20s}  |  {dog}"
-            listbox.insert(tk.END, text)
-        
-        # Store session numbers for reference
-        session_numbers = [s[0] for s in sessions]
-        
-        # Buttons
-        button_frame = tk.Frame(dialog)
-        button_frame.pack(pady=10)
-        
-        def on_view_selected():
-            selected_indices = listbox.curselection()
-            if not selected_indices:
-                messagebox.showwarning("No Selection", "Please select at least one session")
-                return
-            
-            # Get selected session numbers
-            self.selected_sessions = [session_numbers[i] for i in selected_indices]
-            self.selected_sessions_index = 0
-            
-            # Load the first selected session
-            sv.session_number.set(str(self.selected_sessions[0]))
-            self.load_session_by_number(self.selected_sessions[0])
-            self.update_navigation_buttons()
-            
-            dialog.destroy()
-            sv.status.set(f"Viewing {len(self.selected_sessions)} selected sessions")
-        
-        def on_delete_selected():
-            selected_indices = listbox.curselection()
-            if not selected_indices:
-                messagebox.showwarning("No Selection", "Please select at least one session to delete")
-                return
-            
-            selected_nums = [session_numbers[i] for i in selected_indices]
-            result = messagebox.askyesno(
-                "Confirm Delete",
-                f"Are you sure you want to delete {len(selected_nums)} session(s)?\n\n"
-                f"Sessions: {', '.join(map(str, selected_nums))}\n\n"
-                "This action cannot be undone!",
-                icon='warning'
-            )
-            
-            if result:
-                self.delete_sessions(selected_nums)
-                dialog.destroy()
-        
-        tk.Button(button_frame, text="View Selected", command=on_view_selected,
-                 bg="#4169E1", fg="white", width=15).pack(side="left", padx=5)
-        tk.Button(button_frame, text="Delete Selected", command=on_delete_selected,
-                 bg="#DC143C", fg="white", width=15).pack(side="left", padx=5)
-        tk.Button(button_frame, text="Cancel", command=dialog.destroy,
-                 width=10).pack(side="left", padx=5)
-    
-    def delete_sessions(self, session_numbers):
-        """Delete multiple sessions for current dog"""
-        dog_name = sv.dog.get()
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        success, message = db_mgr.delete_sessions(session_numbers, dog_name)
-        
-        if success:
-            messagebox.showinfo("Success", message)
-            self.selected_sessions = []
-            self.selected_sessions_index = -1
-            self.new_session()
-        else:
-            messagebox.showerror("Database Error", message)
-    
-    def navigate_previous_session(self):
-        """Navigate to previous session"""
-        # If we have selected sessions, navigate through those
-        if self.selected_sessions and self.selected_sessions_index > 0:
-            self.selected_sessions_index -= 1
-            session_num = self.selected_sessions[self.selected_sessions_index]
-            sv.session_number.set(str(session_num))
-            self.load_session_by_number(session_num)
-            self.reset_subject_responses_tree_selection()  # Reset to subject 1
-            self.update_navigation_buttons()
-            sv.status.set(
-                f"Session {self.selected_sessions_index + 1} of {len(self.selected_sessions)} selected"
-            )
-        else:
-            # Normal navigation - just decrement
-            try:
-                current = int(sv.session_number.get())
-                if current > 1:
-                    sv.session_number.set(str(current - 1))
-                    self.load_session_by_number(current - 1)
-                    self.reset_subject_responses_tree_selection()  # Reset to subject 1
-                    self.update_navigation_buttons()
-            except ValueError:
-                pass
-    
-    def navigate_next_session(self):
-        """Navigate to next session"""
-        # If we have selected sessions, navigate through those
-        if self.selected_sessions and self.selected_sessions_index < len(self.selected_sessions) - 1:
-            self.selected_sessions_index += 1
-            session_num = self.selected_sessions[self.selected_sessions_index]
-            sv.session_number.set(str(session_num))
-            self.load_session_by_number(session_num)
-            self.reset_subject_responses_tree_selection()  # Reset to subject 1
-            self.update_navigation_buttons()
-            sv.status.set(
-                f"Session {self.selected_sessions_index + 1} of {len(self.selected_sessions)} selected"
-            )
-        else:
-            # Normal navigation - just increment
-            try:
-                current = int(sv.session_number.get())
-                max_session = self.get_next_session_number() - 1
-                if current < max_session + 1:
-                    sv.session_number.set(str(current + 1))
-                    self.load_session_by_number(current + 1)
-                    self.reset_subject_responses_tree_selection()  # Reset to subject 1
-                    self.update_navigation_buttons()
-            except ValueError:
-                pass
-    
     def open_export_dialog(self):
         """Open export PDF dialog"""
         # Check if dog is selected
@@ -3300,27 +1436,6 @@ class AirScentingUI:
         )
     
     # File/Folder selection methods
-    def select_db_folder(self):
-        """Select database folder"""
-        folder = filedialog.askdirectory(title="Select Database Folder")
-        if folder:
-            sv.db_path.set(folder)
-            self.machine_db_path = folder
-    
-    def select_folder(self):
-        """Select trail maps folder"""
-        folder = filedialog.askdirectory(title="Select Trail Maps Storage Folder")
-        if folder:
-            sv.trail_maps_folder.set(folder)
-            self.machine_trail_maps_folder = folder
-    
-    def select_backup_folder(self):
-        """Select backup folder"""
-        folder = filedialog.askdirectory(title="Select Backup Folder")
-        if folder:
-            sv.backup_folder.set(folder)
-            self.machine_backup_folder = folder
-    
     def update_create_db_button_state(self, *args):
         """Enable/disable Create Database button based on folder selection and database type"""
         db_type = sv.db_type.get()
@@ -3606,16 +1721,16 @@ class AirScentingUI:
                 )
                 
                 # Offer to restore from JSON backups
-                self.restore_from_json_backups("sqlite")
+                self.misc_data_ops.restore_from_json_backups("sqlite")
                 
                 # Offer to load default terrain and distraction types
-                self.offer_load_default_types("sqlite")
+                self.misc_data_ops.offer_load_default_types("sqlite")
                 
                 # Update session number and UI after database recreation
-                sv.session_number.set(str(self.get_next_session_number()))
+                sv.session_number.set(str(DatabaseOperations(self).get_next_session_number()))
                 self.selected_sessions = []
                 self.selected_sessions_index = -1
-                self.update_navigation_buttons()
+                self.navigation.update_navigation_buttons()
                 # Clear form to new entry state
                 self.set_date(datetime.now().strftime("%Y-%m-%d"))
                 sv.session_purpose.set("")
@@ -3632,7 +1747,7 @@ class AirScentingUI:
                 sv.drive_level.set("")
                 sv.subjects_found.set("")
                 # Update subjects_found combo state (will disable since num_subjects is blank)
-                self.update_subjects_found()
+                self.form_mgmt.update_subjects_found()
                 
                 # Refresh dog list on Setup tab (new database has no dogs)
                 self.refresh_dog_list()
@@ -3741,16 +1856,16 @@ class AirScentingUI:
                 )
                 
                 # Offer to restore from JSON backups
-                self.restore_from_json_backups(db_type)
+                self.misc_data_ops.restore_from_json_backups(db_type)
                 
                 # Offer to load default terrain and distraction types
-                self.offer_load_default_types(db_type)
+                self.misc_data_ops.offer_load_default_types(db_type)
                 
                 # Update session number and UI after database recreation
-                sv.session_number.set(str(self.get_next_session_number()))
+                sv.session_number.set(str(DatabaseOperations(self).get_next_session_number()))
                 self.selected_sessions = []
                 self.selected_sessions_index = -1
-                self.update_navigation_buttons()
+                self.navigation.update_navigation_buttons()
                 # Clear form to new entry state
                 self.set_date(datetime.now().strftime("%Y-%m-%d"))
                 sv.session_purpose.set("")
@@ -3767,7 +1882,7 @@ class AirScentingUI:
                 sv.drive_level.set("")
                 sv.subjects_found.set("")
                 # Update subjects_found combo state (will disable since num_subjects is blank)
-                self.update_subjects_found()
+                self.form_mgmt.update_subjects_found()
                 
                 # Refresh dog list on Setup tab (new database has no dogs)
                 self.refresh_dog_list()
@@ -3800,7 +1915,7 @@ class AirScentingUI:
     def load_locations_from_database(self):
         """Load training locations from database into Setup tab listbox"""
         # Ensure database is ready (critical for networked databases)
-        self.ensure_db_ready()
+        self.misc_data_ops.ensure_db_ready()
         
         db_mgr = get_db_manager(sv.db_type.get())
         locations = db_mgr.load_locations()
@@ -3813,7 +1928,7 @@ class AirScentingUI:
     def refresh_location_list(self):
         """Refresh the location combobox in Entry tab"""
         # Ensure database is ready (critical for networked databases)
-        self.ensure_db_ready()
+        self.misc_data_ops.ensure_db_ready()
         
         db_mgr = get_db_manager(sv.db_type.get())
         locations = db_mgr.load_locations()
@@ -3825,7 +1940,7 @@ class AirScentingUI:
     def refresh_terrain_list(self):
         """Refresh the terrain type combobox in Entry tab"""
         # Ensure database is ready (critical for networked databases)
-        self.ensure_db_ready()
+        self.misc_data_ops.ensure_db_ready()
         
         # Use DatabaseManager to get terrain types in correct order (by sort_order)
         from ui_database import get_db_manager
@@ -3839,7 +1954,7 @@ class AirScentingUI:
     def load_terrain_from_database(self):
         """Load terrain types from database into Setup tab treeview"""
         # Ensure database is ready (critical for networked databases)
-        self.ensure_db_ready()
+        self.misc_data_ops.ensure_db_ready()
         
         db_mgr = get_db_manager(sv.db_type.get())
         terrain_types = db_mgr.load_terrain_types()
@@ -3852,7 +1967,7 @@ class AirScentingUI:
     def load_distraction_from_database(self):
         """Load distraction types from database into Setup tab treeview"""
         # Ensure database is ready (critical for networked databases)
-        self.ensure_db_ready()
+        self.misc_data_ops.ensure_db_ready()
         
         db_mgr = get_db_manager(sv.db_type.get())
         distraction_types = db_mgr.load_distraction_types()
@@ -3933,7 +2048,7 @@ class AirScentingUI:
     def load_dogs_from_database(self):
         """Load dog names from database into listbox"""
         # Ensure database is ready (critical for networked databases)
-        self.ensure_db_ready()
+        self.misc_data_ops.ensure_db_ready()
         
         db_mgr = get_db_manager(sv.db_type.get())
         dogs = db_mgr.load_dogs()
@@ -3946,7 +2061,7 @@ class AirScentingUI:
     def refresh_dog_list(self):
         """Refresh the dog combobox in Entry tab"""
         # Ensure database is ready (critical for networked databases)
-        self.ensure_db_ready()
+        self.misc_data_ops.ensure_db_ready()
         
         db_mgr = get_db_manager(sv.db_type.get())
         dogs = db_mgr.load_dogs()
@@ -4374,64 +2489,17 @@ class AirScentingUI:
         self.save_bootstrap()
         
         # Save settings backup JSON file
-        self.save_settings_backup()
+        self.misc_data_ops.save_settings_backup()
         
         # Take new snapshot after saving
-        self.take_form_snapshot()
+        self.form_mgmt.take_form_snapshot()
         
         sv.status.set("Configuration saved successfully!")
         messagebox.showinfo("Success", "Configuration saved successfully!")
     
-    def get_form_state_string(self):
-        """Get a string representation of all form fields for comparison"""
-        parts = [
-            sv.db_type.get(),
-            sv.db_path.get(),
-            sv.trail_maps_folder.get(),
-            sv.backup_folder.get(),
-            sv.default_handler.get(),
-            # Include entry widget values (in case user typed but didn't click Add)
-            sv.new_location.get(),
-            sv.new_dog.get(),
-            sv.new_terrain.get(),
-            sv.new_distraction.get()
-            # Note: Dogs, locations, terrain, and distraction types are stored in the database
-            # and are saved immediately when added, so they don't need to be in this check
-        ]
-        return "|".join(parts)
-    
-    def take_form_snapshot(self):
-        """Take a snapshot of the current form state"""
-        self.form_snapshot = self.get_form_state_string()
-    
-    def has_unsaved_changes(self):
-        """Check if the form has unsaved changes"""
-        current_state = self.get_form_state_string()
-        return current_state != self.form_snapshot
-    
-    def check_unsaved_changes(self, action_name="proceed"):
-        """Check for unsaved changes and prompt user. Returns True if OK to proceed."""
-        if not self.has_unsaved_changes():
-            return True
-        
-        # Prompt user
-        result = messagebox.askyesnocancel(
-            "Unsaved Changes",
-            f"You have unsaved changes.\n\nDo you want to save before you {action_name}?",
-            icon='warning'
-        )
-        
-        if result is None:  # Cancel
-            return False
-        elif result:  # Yes - save first
-            self.save_configuration_settings()
-            return True
-        else:  # No - discard changes
-            return True
-    
     def on_closing(self):
         """Handle window close event"""
-        if self.check_unsaved_changes("exit"):
+        if self.form_mgmt.check_unsaved_changes("exit"):
             self.root.destroy()
     
     def on_tab_changed(self, event):
@@ -4448,7 +2516,7 @@ class AirScentingUI:
                 return
             
             # Then check for unsaved changes
-            if not self.check_unsaved_changes("switch tabs"):
+            if not self.form_mgmt.check_unsaved_changes("switch tabs"):
                 # User cancelled - switch back to Setup tab
                 self.notebook.select(self.setup_tab)
                 self.previous_tab_index = 0

@@ -1045,3 +1045,114 @@ def get_db_manager(db_type="sqlite"):
     if _default_db_manager is None or _default_db_manager.db_type != db_type:
         _default_db_manager = DatabaseManager(db_type)
     return _default_db_manager
+
+
+# ===== DATABASE OPERATIONS WRAPPER =====
+# Provides UI-compatible interface to DatabaseManager
+
+class DatabaseOperations:
+    """
+    Wrapper class to provide UI-compatible interface to DatabaseManager.
+    This allows UI code to use: DatabaseOperations(ui).method()
+    while internally delegating to DatabaseManager.
+    """
+    
+    def __init__(self, ui):
+        """Initialize with UI reference to access sv variables"""
+        self.ui = ui
+        import sv as sv_module
+        db_type = sv_module.sv.db_type.get()
+        self.db_manager = get_db_manager(db_type)
+    
+    def get_next_session_number(self, dog_name=None):
+        """Get next session number for dog"""
+        if dog_name is None:
+            import sv as sv_module
+            dog_name = sv_module.sv.dog.get()
+        return self.db_manager.get_next_session_number(dog_name)
+    
+    def save_db_setting(self, key, value):
+        """Save a setting to database"""
+        return self.db_manager.save_setting(key, value)
+    
+    def load_db_setting(self, key, default=None):
+        """Load a setting from database"""
+        return self.db_manager.load_setting(key, default)
+    
+    def get_session_data(self, session_number, dog_name):
+        """
+        Get session data as tuple (for backward compatibility with UI code).
+        
+        Returns tuple in this order:
+        (date, handler, session_purpose, field_support, dog_name, location,
+         search_area_size, num_subjects, handler_knowledge, weather, temperature,
+         wind_direction, wind_speed, search_type, drive_level, subjects_found,
+         image_files, comments)
+         
+        NOTE: comments is at index 17 (row[17])
+        
+        Or None if session not found.
+        """
+        session_dict = self.db_manager.load_session(session_number, dog_name)
+        
+        if session_dict is None:
+            return None
+        
+        # Convert dict to tuple in the order expected by UI code
+        return (
+            session_dict["date"],           # row[0]
+            session_dict["handler"],        # row[1]
+            session_dict["session_purpose"], # row[2]
+            session_dict["field_support"],  # row[3]
+            session_dict["dog_name"],       # row[4]
+            session_dict["location"],       # row[5]
+            session_dict["search_area_size"], # row[6]
+            session_dict["num_subjects"],   # row[7]
+            session_dict["handler_knowledge"], # row[8]
+            session_dict["weather"],        # row[9]
+            session_dict["temperature"],    # row[10]
+            session_dict["wind_direction"], # row[11]
+            session_dict["wind_speed"],     # row[12]
+            session_dict["search_type"],    # row[13]
+            session_dict["drive_level"],    # row[14]
+            session_dict["subjects_found"], # row[15]
+            session_dict["image_files"],    # row[16]
+            session_dict["comments"]        # row[17] ← ADDED!
+        )
+    
+    def get_session_with_related_data(self, session_number, dog_name):
+        """
+        Get complete session data including related data (terrains, responses).
+        Returns a dict with all session info.
+        """
+        session_dict = self.db_manager.load_session(session_number, dog_name)
+        
+        if session_dict is None:
+            return None
+        
+        # Get session ID for loading related data
+        session_id = session_dict.get("id")
+        
+        if session_id:
+            # Load selected terrains
+            selected_terrains = self.db_manager.load_selected_terrains(session_id)
+            session_dict["selected_terrains"] = selected_terrains
+            
+            # Load subject responses
+            subject_responses = self.db_manager.load_subject_responses(session_id)
+            session_dict["subject_responses"] = subject_responses
+        else:
+            session_dict["selected_terrains"] = []
+            session_dict["subject_responses"] = []
+        
+        return session_dict
+    
+    def get_all_sessions_for_dog(self, dog_name):
+        """Get all sessions for a dog (returns list of tuples)"""
+        return self.db_manager.get_sessions_for_dog(dog_name)
+    
+    def delete_sessions(self, session_numbers, dog_name):
+        """Delete multiple sessions"""
+        return self.db_manager.delete_sessions(session_numbers, dog_name)
+
+
