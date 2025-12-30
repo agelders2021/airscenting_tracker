@@ -18,6 +18,8 @@ from tips import ToolTip, ConditionalToolTip
 from ui_utils import get_username, get_default_terrain_types, get_default_distraction_types
 from ui_database import get_db_manager
 from working_dialog import WorkingDialog, run_with_working_dialog
+import sv  # Import sv module (not 'from sv import sv')
+
 
 class AirScentingUI:
     """Main UI class for Air-Scenting Logger"""
@@ -42,6 +44,16 @@ class AirScentingUI:
         # Create main window and withdraw it while splash is showing
         # Use TkinterDnD.Tk() instead of tk.Tk() for drag-and-drop support
         self.root = TkinterDnD.Tk()
+        
+        # Initialize sv module with the root window
+        # This must be done AFTER root is created but BEFORE any sv usage
+        sv.initialize(self.root)
+        
+        # Load bootstrap values into sv
+        sv.db_path.set(self.machine_db_path)
+        sv.trail_maps_folder.set(self.machine_trail_maps_folder)
+        sv.backup_folder.set(self.machine_backup_folder)
+        
         self.root.withdraw()
         
         # Show splash screen IMMEDIATELY (before building UI)
@@ -108,11 +120,6 @@ class AirScentingUI:
         self.create_menu_bar()
         
         # Initialize path variables
-        self.db_path_var = tk.StringVar(value=self.machine_db_path)
-        self.folder_path_var = tk.StringVar(value=self.machine_trail_maps_folder)
-        self.backup_path_var = tk.StringVar(value=self.machine_backup_folder)
-        self.config_path_var = tk.StringVar(value=str(self.config_file))
-        
         # Create notebook (tabbed interface)
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
@@ -136,19 +143,18 @@ class AirScentingUI:
         self.select_initial_tab()
         
         # Status bar at bottom (create before using it below)
-        self.status_var = tk.StringVar(value="Ready")
-        status_bar = tk.Label(self.root, textvariable=self.status_var, 
+        status_bar = tk.Label(self.root, textvariable=sv.status, 
                             bd=1, relief=tk.SUNKEN, anchor=tk.W)
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
         
         # Schedule session number update AFTER password is loaded (happens at 100ms)
         # This prevents database calls before authentication is ready
         def update_initial_session():
-            loaded_dog = self.dog_var.get()
+            loaded_dog = sv.dog.get()
             if loaded_dog:
                 next_session = self.get_next_session_number(loaded_dog)
-                self.session_var.set(str(next_session))
-                self.status_var.set(f"Ready - {loaded_dog} - Next session: #{next_session}")
+                sv.session_number.set(str(next_session))
+                sv.status.set(f"Ready - {loaded_dog} - Next session: #{next_session}")
                 # Update navigation button states
                 self.update_navigation_buttons()
         
@@ -203,8 +209,11 @@ class AirScentingUI:
             # Load last selected dog from database
             try:
                 last_dog = self.load_db_setting("last_dog_name", "")
-                if last_dog and hasattr(self, 'dog_var'):
-                    self.dog_var.set(last_dog)
+                if last_dog:
+                    sv.dog.set(last_dog)
+                    # Update session number for this dog (on_dog_changed not triggered by programmatic set)
+                    next_session = self.get_next_session_number(last_dog)
+                    sv.session_number.set(str(next_session))
             except Exception as e:
                 print(f"Could not load last dog: {e}")
             self.root.after(50, step6)
@@ -223,6 +232,12 @@ class AirScentingUI:
         def step8():
             if hasattr(self, 'terrain_combo'):
                 self.refresh_terrain_list()
+            self.root.after(50, step9)
+        
+        def step9():
+            # Update navigation buttons now that dog and session are loaded
+            if hasattr(self, 'prev_session_btn'):
+                self.update_navigation_buttons()
         
         # Start the chain
         step1()
@@ -231,7 +246,7 @@ class AirScentingUI:
     
     def select_initial_tab(self):
         """Select initial tab based on database existence"""
-        db_type = self.db_type_var.get()
+        db_type = sv.db_type.get()
         database_exists = False
         
         # Check if database exists
@@ -326,7 +341,7 @@ class AirScentingUI:
     
     def save_session_to_json(self, session_data):
         """Save session data to JSON backup file"""
-        backup_folder = self.backup_path_var.get().strip()
+        backup_folder = sv.backup_folder.get().strip()
         if not backup_folder:
             # No backup folder configured, skip
             return
@@ -363,7 +378,7 @@ class AirScentingUI:
     
     def save_settings_backup(self):
         """Save settings to JSON backup file"""
-        backup_folder = self.backup_path_var.get().strip()
+        backup_folder = sv.backup_folder.get().strip()
         if not backup_folder:
             # No backup folder configured, skip
             return
@@ -375,7 +390,7 @@ class AirScentingUI:
             return
         
         try:
-            db_type = self.db_type_var.get()
+            db_type = sv.db_type.get()
             
             # Collect dogs from database
             dogs = []
@@ -526,7 +541,7 @@ class AirScentingUI:
     
     def restore_settings_from_json(self):
         """Restore settings from JSON backup file"""
-        backup_folder = self.backup_path_var.get().strip()
+        backup_folder = sv.backup_folder.get().strip()
         if not backup_folder:
             messagebox.showwarning("No Backup Folder", "Please select a backup folder first")
             return
@@ -549,7 +564,7 @@ class AirScentingUI:
             with open(settings_path, 'r') as f:
                 settings = json.load(f)
             
-            db_type = self.db_type_var.get()
+            db_type = sv.db_type.get()
             
             # Insert dogs to database
             dogs = settings.get("dogs", [])
@@ -706,7 +721,7 @@ class AirScentingUI:
             # Save handler name to config
             if "handler_name" in settings:
                 self.config["handler_name"] = settings["handler_name"]
-                self.default_handler_var.set(settings["handler_name"])
+                sv.default_handler.set(settings["handler_name"])
             
             self.save_config()
             
@@ -747,7 +762,7 @@ class AirScentingUI:
     
     def restore_from_json_backups(self, db_type):
         """Restore database from JSON backup files"""
-        backup_folder = self.backup_path_var.get().strip()
+        backup_folder = sv.backup_folder.get().strip()
         if not backup_folder:
             messagebox.showwarning("No Backup Folder", "No backup folder configured")
             return False
@@ -1123,7 +1138,7 @@ class AirScentingUI:
     def on_date_changed(self, event=None):
         """Called when date picker value changes"""
         selected_date = self.date_picker.get_date()
-        self.date_var.set(selected_date.strftime("%Y-%m-%d"))
+        sv.date.set(selected_date.strftime("%Y-%m-%d"))
     
     def set_date(self, date_string):
         """Set the date in both date_var and date_picker widget"""
@@ -1133,19 +1148,19 @@ class AirScentingUI:
             # Update the DateEntry widget
             self.date_picker.set_date(date_obj)
             # Update the StringVar
-            self.date_var.set(date_string)
+            sv.date.set(date_string)
         except ValueError:
             # If invalid date, use today
             today = datetime.now()
             self.date_picker.set_date(today)
-            self.date_var.set(today.strftime("%Y-%m-%d"))
+            sv.date.set(today.strftime("%Y-%m-%d"))
             
     def save_db_setting(self, key, value):
         """Save a setting to the database"""
         # Ensure database is ready (critical for networked databases)
         self.ensure_db_ready()
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         db_mgr.save_setting(key, value) 
     
     def load_db_setting(self, key, default=None):
@@ -1153,15 +1168,15 @@ class AirScentingUI:
         # Ensure database is ready (critical for networked databases)
         self.ensure_db_ready()
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         return db_mgr.load_setting(key, default)
     
     def on_dog_changed(self, event=None):
         """Called when dog selection changes - update session number and clear form for new dog"""
-        dog_name = self.dog_var.get()
+        dog_name = sv.dog.get()
         # print(f"DEBUG on_dog_changed: dog_name = '{dog_name}'")  # DEBUG
         if dog_name:
-            db_type = self.db_type_var.get()
+            db_type = sv.db_type.get()
             
             # Show working dialog for networked databases
             if db_type in ["postgres", "supabase", "mysql"]:
@@ -1178,30 +1193,30 @@ class AirScentingUI:
                 # Update session number to next available for this dog
                 next_session = self.get_next_session_number(dog_name)
                 # print(f"DEBUG on_dog_changed: next_session = {next_session}")  # DEBUG
-                self.session_var.set(str(next_session))
+                sv.session_number.set(str(next_session))
                 
                 # Clear form fields for new dog (like "New" button but keep handler and dog)
                 self.set_date(datetime.now().strftime("%Y-%m-%d"))
                 # handler_var is NOT cleared - keep current handler name
-                self.purpose_var.set("")
-                self.field_support_var.set("")
+                sv.session_purpose.set("")
+                sv.field_support.set("")
                 # dog_var is already set - don't clear it
-                self.location_var.set("")
-                self.search_area_var.set("")
-                self.num_subjects_var.set("")
-                self.handler_knowledge_var.set("")
-                self.weather_var.set("")
-                self.temperature_var.set("")
-                self.wind_direction_var.set("")
-                self.wind_speed_var.set("")
-                self.search_type_var.set("")
-                self.drive_level_var.set("")
-                self.subjects_found_var.set("")
+                sv.location.set("")
+                sv.search_area_size.set("")
+                sv.num_subjects.set("")
+                sv.handler_knowledge.set("")
+                sv.weather.set("")
+                sv.temperature.set("")
+                sv.wind_direction.set("")
+                sv.wind_speed.set("")
+                sv.search_type.set("")
+                sv.drive_level.set("")
+                sv.subjects_found.set("")
                 self.comments_text.delete("1.0", tk.END)
                 # Clear terrain accumulator
                 self.accumulated_terrains = []
                 self.accumulated_terrain_combo['values'] = []
-                self.accumulated_terrain_var.set("")
+                sv.accumulated_terrain.set("")
                 self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
                 # Clear map files list
                 self.map_files_list = []
@@ -1218,7 +1233,7 @@ class AirScentingUI:
                 # Update navigation buttons
                 self.update_navigation_buttons()
                 
-                self.status_var.set(f"Switched to {dog_name} - Next session: #{next_session}")
+                sv.status.set(f"Switched to {dog_name} - Next session: #{next_session}")
                 
             finally:
                 if working_dialog:
@@ -1226,13 +1241,13 @@ class AirScentingUI:
     
     def ensure_db_ready(self):
         """Ensure database connection is ready (password set for networked DBs)"""
-        db_type = self.db_type_var.get()
+        db_type = sv.db_type.get()
         if db_type in ["postgres", "supabase", "mysql"]:
             # Check if password field exists yet (it's created in setup_setup_tab)
             if not hasattr(self, 'db_password_var'):
                 return  # Too early in initialization
             
-            password = self.db_password_var.get().strip()
+            password = sv.db_password.get().strip()
             
             # If password not loaded yet, try loading from encrypted storage
             if not password and hasattr(self, 'config'):
@@ -1240,7 +1255,7 @@ class AirScentingUI:
                 if check_crypto_available():
                     saved_password = get_decrypted_password(self.config, db_type)
                     if saved_password:
-                        self.db_password_var.set(saved_password)
+                        sv.db_password.set(saved_password)
                         password = saved_password
             
             # Set password in database config
@@ -1255,41 +1270,41 @@ class AirScentingUI:
         self.ensure_db_ready()
         
         # Handle the optional parameter
-        if dog_name is None and hasattr(self, 'dog_var'):
-            dog_name = self.dog_var.get()
+        if dog_name is None:
+            dog_name = sv.dog.get()
 
         if not dog_name:
             return 1
 
         # Use DatabaseManager
         from ui_database import get_db_manager
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         return db_mgr.get_next_session_number(dog_name)
     
     def save_session(self):
         """Save the current training session"""
         # Get all form values
         date = self.date_picker.get_date().strftime("%Y-%m-%d")
-        session_number = self.session_var.get()
-        handler = self.handler_var.get()
-        session_purpose = self.purpose_var.get()
-        field_support = self.field_support_var.get()
-        dog_name = self.dog_var.get().strip() if self.dog_var.get() else ""
+        session_number = sv.session_number.get()
+        handler = sv.handler.get()
+        session_purpose = sv.session_purpose.get()
+        field_support = sv.field_support.get()
+        dog_name = sv.dog.get().strip() if sv.dog.get() else ""
 
         # Search parameters
-        location = self.location_var.get()
-        search_area_size = self.search_area_var.get()
-        num_subjects = self.num_subjects_var.get()
-        handler_knowledge = self.handler_knowledge_var.get()
-        weather = self.weather_var.get()
-        temperature = self.temperature_var.get()
-        wind_direction = self.wind_direction_var.get()
-        wind_speed = self.wind_speed_var.get()
-        search_type = self.search_type_var.get()
+        location = sv.location.get()
+        search_area_size = sv.search_area_size.get()
+        num_subjects = sv.num_subjects.get()
+        handler_knowledge = sv.handler_knowledge.get()
+        weather = sv.weather.get()
+        temperature = sv.temperature.get()
+        wind_direction = sv.wind_direction.get()
+        wind_speed = sv.wind_speed.get()
+        search_type = sv.search_type.get()
 
         # Search results
-        drive_level = self.drive_level_var.get()
-        subjects_found = self.subjects_found_var.get()
+        drive_level = sv.drive_level.get()
+        subjects_found = sv.subjects_found.get()
         comments = self.comments_text.get("1.0", tk.END).strip()
 
         # Map/image files - store as JSON string
@@ -1336,10 +1351,10 @@ class AirScentingUI:
         }
 
         # Save to database using DatabaseManager
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         
         # Show working dialog for networked databases
-        db_type = self.db_type_var.get()
+        db_type = sv.db_type.get()
         if db_type in ["postgres", "supabase", "mysql"]:
             working_dialog = WorkingDialog(self.root, "Saving", 
                                          f"Saving session to {db_type} database...")
@@ -1391,33 +1406,33 @@ class AirScentingUI:
         }
         self.save_session_to_json(session_backup_data)
 
-        self.status_var.set(message)
+        sv.status.set(message)
         messagebox.showinfo("Success", message)
 
         # Auto-prepare for next entry
-        self.session_var.set(str(self.get_next_session_number()))
+        sv.session_number.set(str(self.get_next_session_number()))
         self.selected_sessions = []
         self.selected_sessions_index = -1
 
         # Clear form fields (keep handler and dog)
         self.set_date(datetime.now().strftime("%Y-%m-%d"))
-        self.purpose_var.set("")
-        self.field_support_var.set("")
-        self.location_var.set("")
-        self.search_area_var.set("")
-        self.num_subjects_var.set("")
-        self.handler_knowledge_var.set("")
-        self.weather_var.set("")
-        self.temperature_var.set("")
-        self.wind_direction_var.set("")
-        self.wind_speed_var.set("")
-        self.search_type_var.set("")
-        self.drive_level_var.set("")
-        self.subjects_found_var.set("")
+        sv.session_purpose.set("")
+        sv.field_support.set("")
+        sv.location.set("")
+        sv.search_area_size.set("")
+        sv.num_subjects.set("")
+        sv.handler_knowledge.set("")
+        sv.weather.set("")
+        sv.temperature.set("")
+        sv.wind_direction.set("")
+        sv.wind_speed.set("")
+        sv.search_type.set("")
+        sv.drive_level.set("")
+        sv.subjects_found.set("")
         self.comments_text.delete("1.0", tk.END)
         self.accumulated_terrains = []
         self.accumulated_terrain_combo['values'] = []
-        self.accumulated_terrain_var.set("")
+        sv.accumulated_terrain.set("")
         self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
         self.map_files_list = []
         self.map_listbox.delete(0, tk.END)
@@ -1534,18 +1549,16 @@ class AirScentingUI:
         db_type_frame = tk.LabelFrame(frame, text="Database Type", padx=10, pady=5)
         db_type_frame.pack(fill="x", pady=5)
         
-        self.db_type_var = tk.StringVar(value=self.config.get("db_type", "sqlite"))
-        
         radio_container = tk.Frame(db_type_frame)
         radio_container.pack(pady=5)
         
-        tk.Radiobutton(radio_container, text="SQLite", variable=self.db_type_var, 
+        tk.Radiobutton(radio_container, text="SQLite", variable=sv.db_type, 
                       value="sqlite", command=self.on_db_type_changed).pack(side="left", padx=20)
-        tk.Radiobutton(radio_container, text="PostgreSQL", variable=self.db_type_var, 
+        tk.Radiobutton(radio_container, text="PostgreSQL", variable=sv.db_type, 
                       value="postgres", command=self.on_db_type_changed).pack(side="left", padx=20)
-        tk.Radiobutton(radio_container, text="Supabase", variable=self.db_type_var, 
+        tk.Radiobutton(radio_container, text="Supabase", variable=sv.db_type, 
                       value="supabase", command=self.on_db_type_changed).pack(side="left", padx=20)
-        tk.Radiobutton(radio_container, text="MySQL", variable=self.db_type_var, 
+        tk.Radiobutton(radio_container, text="MySQL", variable=sv.db_type, 
                       value="mysql", command=self.on_db_type_changed).pack(side="left", padx=20)
         
         # Database Password (for postgres, supabase, mysql)
@@ -1553,8 +1566,7 @@ class AirScentingUI:
         self.db_password_frame.pack(pady=5)
         
         tk.Label(self.db_password_frame, text="Database Password:").pack(side="left", padx=5)
-        self.db_password_var = tk.StringVar()
-        self.db_password_entry = tk.Entry(self.db_password_frame, textvariable=self.db_password_var, 
+        self.db_password_entry = tk.Entry(self.db_password_frame, textvariable=sv.db_password, 
                                           width=30, show="*")
         self.db_password_entry.pack(side="left", padx=5)
         
@@ -1562,20 +1574,18 @@ class AirScentingUI:
         self.add_entry_context_menu(self.db_password_entry)
         
         # Show/Hide password checkbox
-        self.show_password_var = tk.BooleanVar(value=False)
-        tk.Checkbutton(self.db_password_frame, text="Show", variable=self.show_password_var,
+        tk.Checkbutton(self.db_password_frame, text="Show", variable=sv.show_password,
                       command=self.toggle_password_visibility).pack(side="left", padx=5)
         
         # Remember Password checkbox
-        self.remember_password_var = tk.BooleanVar(value=True)
-        tk.Checkbutton(self.db_password_frame, text="Remember", variable=self.remember_password_var).pack(side="left", padx=5)
+        tk.Checkbutton(self.db_password_frame, text="Remember", variable=sv.remember_password).pack(side="left", padx=5)
         
         # Forget Password button
         tk.Button(self.db_password_frame, text="Forget Saved Password", 
                  command=self.forget_password, width=18).pack(side="left", padx=5)
         
         # Add trace to update Create Database button when database type changes
-        self.db_type_var.trace_add('write', self.update_create_db_button_state)
+        sv.db_type.trace_add('write', self.update_create_db_button_state)
         
         # Initialize button state and password field visibility
         self.root.after(100, self.update_create_db_button_state)
@@ -1585,27 +1595,27 @@ class AirScentingUI:
         db_frame = tk.LabelFrame(frame, text="Database Folder", padx=10, pady=5)
         db_frame.pack(fill="x", pady=5)
         
-        tk.Entry(db_frame, textvariable=self.db_path_var, width=70).pack(side="left", padx=5)
+        tk.Entry(db_frame, textvariable=sv.db_path, width=70).pack(side="left", padx=5)
         tk.Button(db_frame, text="Browse", command=self.select_db_folder).pack(side="left", padx=5)
         self.create_db_btn = tk.Button(db_frame, text="Create Database", 
                                        command=self.create_database, state="disabled")
         self.create_db_btn.pack(side="left", padx=5)
         
         # Add trace to db_path_var to enable/disable Create Database button
-        self.db_path_var.trace_add('write', self.update_create_db_button_state)
+        sv.db_path.trace_add('write', self.update_create_db_button_state)
         
         # Trail maps folder
         folder_frame = tk.LabelFrame(frame, text="Trail Maps Storage Folder", padx=10, pady=5)
         folder_frame.pack(fill="x", pady=5)
         
-        tk.Entry(folder_frame, textvariable=self.folder_path_var, width=70).pack(side="left", padx=5)
+        tk.Entry(folder_frame, textvariable=sv.trail_maps_folder, width=70).pack(side="left", padx=5)
         tk.Button(folder_frame, text="Browse", command=self.select_folder).pack(side="left", padx=5)
         
         # Backup folder
         backup_frame = tk.LabelFrame(frame, text="Backup Folder", padx=10, pady=5)
         backup_frame.pack(fill="x", pady=5)
         
-        tk.Entry(backup_frame, textvariable=self.backup_path_var, width=70).pack(side="left", padx=5)
+        tk.Entry(backup_frame, textvariable=sv.backup_folder, width=70).pack(side="left", padx=5)
         tk.Button(backup_frame, text="Browse", command=self.select_backup_folder).pack(side="left", padx=5)
         tk.Button(backup_frame, text="Restore Settings from Backup", 
                  command=self.restore_settings_from_json).pack(side="left", padx=5)
@@ -1615,8 +1625,7 @@ class AirScentingUI:
         defaults_frame.pack(fill="x", pady=5)
         
         tk.Label(defaults_frame, text="Handler Name:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        self.default_handler_var = tk.StringVar(value=self.config.get("handler_name", ""))
-        tk.Entry(defaults_frame, textvariable=self.default_handler_var, width=30).grid(row=0, column=1, padx=5, pady=2)
+        tk.Entry(defaults_frame, textvariable=sv.default_handler, width=30).grid(row=0, column=1, padx=5, pady=2)
         
         # Note about saving
         tk.Label(defaults_frame, text="(Click 'Save Configuration' button at bottom to save all settings)",
@@ -1654,8 +1663,7 @@ class AirScentingUI:
         loc_button_frame.pack(side="right", padx=(10, 0))
         
         tk.Label(loc_button_frame, text="Location:").pack(anchor="w")
-        self.new_location_var = tk.StringVar()
-        location_entry = tk.Entry(loc_button_frame, textvariable=self.new_location_var, width=20)
+        location_entry = tk.Entry(loc_button_frame, textvariable=sv.new_location, width=20)
         location_entry.pack(pady=2)
         location_entry.bind('<Return>', lambda e: self.add_location())
         
@@ -1668,7 +1676,7 @@ class AirScentingUI:
         self.remove_location_btn.pack(pady=2)
         
         # Add trace and selection binding for locations
-        self.new_location_var.trace_add('write', self.update_location_button_states)
+        sv.new_location.trace_add('write', self.update_location_button_states)
         self.location_listbox.bind('<<ListboxSelect>>', self.on_location_select)
         
         # Dog Names Management
@@ -1695,8 +1703,7 @@ class AirScentingUI:
         button_frame.pack(side="right", padx=(10, 0))
         
         tk.Label(button_frame, text="Dog Name:").pack(anchor="w")
-        self.new_dog_var = tk.StringVar()
-        dog_entry = tk.Entry(button_frame, textvariable=self.new_dog_var, width=20)
+        dog_entry = tk.Entry(button_frame, textvariable=sv.new_dog, width=20)
         dog_entry.pack(pady=2)
         dog_entry.bind('<Return>', lambda e: self.add_dog())
         
@@ -1709,7 +1716,7 @@ class AirScentingUI:
         self.remove_dog_btn.pack(pady=2)
         
         # Add trace to entry field and bind listbox selection
-        self.new_dog_var.trace_add('write', self.update_dog_button_states)
+        sv.new_dog.trace_add('write', self.update_dog_button_states)
         self.dog_listbox.bind('<<ListboxSelect>>', self.on_dog_select)
         
         # Terrain Types Management
@@ -1741,8 +1748,7 @@ class AirScentingUI:
         terrain_button_frame.pack(side="right", padx=(10, 0))
         
         tk.Label(terrain_button_frame, text="Terrain Type:").pack(anchor="w")
-        self.new_terrain_var = tk.StringVar()
-        terrain_entry = tk.Entry(terrain_button_frame, textvariable=self.new_terrain_var, width=20)
+        terrain_entry = tk.Entry(terrain_button_frame, textvariable=sv.new_terrain, width=20)
         terrain_entry.pack(pady=2)
         terrain_entry.bind('<Return>', lambda e: self.add_terrain_type())
         
@@ -1766,7 +1772,7 @@ class AirScentingUI:
                  command=self.restore_default_terrain_types, width=15).pack(pady=2)
         
         # Add trace and selection binding
-        self.new_terrain_var.trace_add('write', self.update_terrain_button_states)
+        sv.new_terrain.trace_add('write', self.update_terrain_button_states)
         self.terrain_tree.bind('<<TreeviewSelect>>', self.on_terrain_select)
         
         # Distraction Types Management
@@ -1798,8 +1804,7 @@ class AirScentingUI:
         distraction_button_frame.pack(side="right", padx=(10, 0))
         
         tk.Label(distraction_button_frame, text="Distraction Type:").pack(anchor="w")
-        self.new_distraction_var = tk.StringVar()
-        distraction_entry = tk.Entry(distraction_button_frame, textvariable=self.new_distraction_var, width=20)
+        distraction_entry = tk.Entry(distraction_button_frame, textvariable=sv.new_distraction, width=20)
         distraction_entry.pack(pady=2)
         distraction_entry.bind('<Return>', lambda e: self.add_distraction_type())
         
@@ -1823,7 +1828,7 @@ class AirScentingUI:
                  command=self.restore_default_distraction_types, width=17).pack(pady=2)
         
         # Add trace and selection binding
-        self.new_distraction_var.trace_add('write', self.update_distraction_type_button_states)
+        sv.new_distraction.trace_add('write', self.update_distraction_type_button_states)
         self.distraction_type_tree.bind('<<TreeviewSelect>>', self.on_distraction_type_select)
         
         # Configure grid weights so they expand properly
@@ -1884,14 +1889,12 @@ class AirScentingUI:
         )
         self.date_picker.grid(row=0, column=1, sticky="w", padx=5, pady=2)
         # Create StringVar to track the date for compatibility with existing code
-        self.date_var = tk.StringVar(value=datetime.now().strftime("%Y-%m-%d"))
         # Bind date picker changes to update the StringVar
         self.date_picker.bind("<<DateEntrySelected>>", self.on_date_changed)
         
         tk.Label(session_frame, text="Session #:").grid(row=0, column=2, sticky="e", padx=5, pady=2)
         # Initialize with "1" for now, will update after password is loaded
-        self.session_var = tk.StringVar(value="1")
-        self.session_entry = tk.Entry(session_frame, textvariable=self.session_var, width=10)
+        self.session_entry = tk.Entry(session_frame, textvariable=sv.session_number, width=10)
         self.session_entry.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         self.session_entry.bind("<FocusOut>", self.on_session_number_changed)
         self.session_entry.bind("<Return>", self.on_session_number_changed)
@@ -1920,27 +1923,23 @@ class AirScentingUI:
         tk.Label(session_frame, text="Handler:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         # If handler_name is set, use it; otherwise use last_handler_name
         default_handler = self.config.get("handler_name", "") or self.config.get("last_handler_name", "")
-        self.handler_var = tk.StringVar(value=default_handler)
-        tk.Entry(session_frame, textvariable=self.handler_var, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        tk.Entry(session_frame, textvariable=sv.handler, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(session_frame, text="Session Purpose:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
-        self.purpose_var = tk.StringVar()
-        purpose_combo = ttk.Combobox(session_frame, textvariable=self.purpose_var, width=22,
+        purpose_combo = ttk.Combobox(session_frame, textvariable=sv.session_purpose, width=22,
                                      values=['Area Search Training', 'Refind Training', 
                                             'Motivational Training', 
                                             'Obedience', 'Mock Certification Test', 'Mission'])
         purpose_combo.grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(session_frame, text="Field Support:").grid(row=1, column=4, sticky="w", padx=5, pady=2)
-        self.field_support_var = tk.StringVar()
-        tk.Entry(session_frame, textvariable=self.field_support_var, width=25).grid(row=1, column=5, sticky="w", padx=5, pady=2)
+        tk.Entry(session_frame, textvariable=sv.field_support, width=25).grid(row=1, column=5, sticky="w", padx=5, pady=2)
         
         tk.Label(session_frame, text="Dog:").grid(row=1, column=6, sticky="e", padx=5, pady=2)
         # Load last dog from database (deferred until password is loaded)
         # NOTE: Commented out - will be loaded in load_initial_database_data()
         # last_dog = self.load_db_setting("last_dog_name", "")
-        self.dog_var = tk.StringVar(value="")  # Start empty, will be loaded later
-        self.dog_combo = ttk.Combobox(session_frame, textvariable=self.dog_var, width=15, state="readonly")
+        self.dog_combo = ttk.Combobox(session_frame, textvariable=sv.dog, width=15, state="readonly")
         # Load dogs from database (deferred)
         # NOTE: Commented out - will be loaded in load_initial_database_data()
         # self.refresh_dog_list()
@@ -1953,75 +1952,64 @@ class AirScentingUI:
         search_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=5)
         
         tk.Label(search_frame, text="Location:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        self.location_var = tk.StringVar()
-        self.location_combo = ttk.Combobox(search_frame, textvariable=self.location_var, width=18, state="readonly")
+        self.location_combo = ttk.Combobox(search_frame, textvariable=sv.location, width=18, state="readonly")
         self.location_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
         # Load locations from database
         self.refresh_location_list()
         
         tk.Label(search_frame, text="Search Area (Acres):").grid(row=0, column=2, sticky="w", padx=5, pady=2)
-        self.search_area_var = tk.StringVar()
-        tk.Entry(search_frame, textvariable=self.search_area_var, width=18).grid(row=0, column=3, sticky="w", padx=5, pady=2)
+        tk.Entry(search_frame, textvariable=sv.search_area_size, width=18).grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(search_frame, text="Number of Subjects:").grid(row=0, column=4, sticky="w", padx=5, pady=2)
-        self.num_subjects_var = tk.StringVar()
-        self.num_subjects_combo = ttk.Combobox(search_frame, textvariable=self.num_subjects_var, width=15, state="readonly",
+        self.num_subjects_combo = ttk.Combobox(search_frame, textvariable=sv.num_subjects, width=15, state="readonly",
                                      values=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
         self.num_subjects_combo.grid(row=0, column=5, sticky="w", padx=5, pady=2)
         self.num_subjects_combo.bind('<<ComboboxSelected>>', self.update_subjects_found)
         
         tk.Label(search_frame, text="Handler Knowledge:").grid(row=0, column=6, sticky="w", padx=5, pady=2)
-        self.handler_knowledge_var = tk.StringVar()
-        handler_knowledge_combo = ttk.Combobox(search_frame, textvariable=self.handler_knowledge_var, width=25, state="readonly",
+        handler_knowledge_combo = ttk.Combobox(search_frame, textvariable=sv.handler_knowledge, width=25, state="readonly",
                                               values=['Unknown number of subjects', 'Number of subjects known'])
         handler_knowledge_combo.grid(row=0, column=7, columnspan=2, sticky="w", padx=5, pady=2)
         
         # Row 1: Weather, Wind Direction, Wind Speed
         tk.Label(search_frame, text="Weather:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        self.weather_var = tk.StringVar()
-        weather_combo = ttk.Combobox(search_frame, textvariable=self.weather_var, width=18, state="readonly",
+        weather_combo = ttk.Combobox(search_frame, textvariable=sv.weather, width=18, state="readonly",
                                      values=['Clear', 'Cloudy', 'Light Rain', 'Heavy Rain', 
                                             'Snow Cover', 'Snowing', 'Fog'])
         weather_combo.grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(search_frame, text="Wind Direction:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
-        self.wind_direction_var = tk.StringVar()
-        wind_dir_combo = ttk.Combobox(search_frame, textvariable=self.wind_direction_var, width=15, state="readonly",
+        wind_dir_combo = ttk.Combobox(search_frame, textvariable=sv.wind_direction, width=15, state="readonly",
                                       values=['North', 'South', 'East', 'West', 
                                              'NE', 'NW', 'SE', 'SW', 'Variable'])
         wind_dir_combo.grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(search_frame, text="Wind Speed:").grid(row=1, column=4, sticky="w", padx=5, pady=2)
-        self.wind_speed_var = tk.StringVar()
-        tk.Entry(search_frame, textvariable=self.wind_speed_var, width=18).grid(row=1, column=5, sticky="w", padx=5, pady=2)
+        tk.Entry(search_frame, textvariable=sv.wind_speed, width=18).grid(row=1, column=5, sticky="w", padx=5, pady=2)
         
         tk.Label(search_frame, text="Search Type:").grid(row=1, column=6, sticky="w", padx=5, pady=2)
-        self.search_type_var = tk.StringVar()
-        search_type_combo = ttk.Combobox(search_frame, textvariable=self.search_type_var, width=25, state="readonly",
+        search_type_combo = ttk.Combobox(search_frame, textvariable=sv.search_type, width=25, state="readonly",
                                         values=['Single blind', 'Double blind', 'Subject coordinates known'])
         search_type_combo.grid(row=1, column=7, sticky="w", padx=5, pady=2)
         
         # Row 2: Temperature, Terrain Type
         tk.Label(search_frame, text="Temperature:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
-        self.temperature_var = tk.StringVar()
-        tk.Entry(search_frame, textvariable=self.temperature_var, width=21).grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        tk.Entry(search_frame, textvariable=sv.temperature, width=21).grid(row=2, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(search_frame, text="Add Terrain Type:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
-        self.terrain_var = tk.StringVar()
         # Load terrain types from database using DatabaseManager (respects sort_order)
         from ui_database import get_db_manager
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         terrain_types = db_mgr.load_terrain_types()
         
-        self.terrain_combo = ttk.Combobox(search_frame, textvariable=self.terrain_var, width=15, state="readonly",
+        self.terrain_combo = ttk.Combobox(search_frame, textvariable=sv.terrain, width=15, state="readonly",
                                          values=terrain_types)
         self.terrain_combo.grid(row=2, column=3, sticky="w", padx=5, pady=2)
         self.terrain_combo.bind('<<ComboboxSelected>>', self.add_to_terrain_accumulator)
         
         # Combobox for accumulated terrain types
         tk.Label(search_frame, text="Selected Terrains:").grid(row=2, column=4, sticky="w", padx=5, pady=2)
-        self.accumulated_terrain_var = tk.StringVar()
-        self.accumulated_terrain_combo = ttk.Combobox(search_frame, textvariable=self.accumulated_terrain_var, 
+        self.accumulated_terrain_combo = ttk.Combobox(search_frame, textvariable=sv.accumulated_terrain, 
                                                       width=15, state="disabled", values=[])  # Start disabled
         self.accumulated_terrain_combo.grid(row=2, column=5, sticky="w", padx=5, pady=2)
         self.accumulated_terrain_combo.bind('<<ComboboxSelected>>', self.remove_terrain_from_list)
@@ -2038,8 +2026,7 @@ class AirScentingUI:
         results_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=5)
         
         tk.Label(results_frame, text="Drive Level:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        self.drive_level_var = tk.StringVar()
-        drive_level_combo = ttk.Combobox(results_frame, textvariable=self.drive_level_var, width=39, state="readonly",
+        drive_level_combo = ttk.Combobox(results_frame, textvariable=sv.drive_level, width=39, state="readonly",
                                         values=['High - Needed no encouragement',
                                                'Medium - Needed occasional encouragement',
                                                'Low - Needed frequent encouragement',
@@ -2047,8 +2034,7 @@ class AirScentingUI:
         drive_level_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(results_frame, text="Subjects Found:").grid(row=0, column=2, sticky="w", padx=5, pady=2)
-        self.subjects_found_var = tk.StringVar()
-        self.subjects_found_combo = ttk.Combobox(results_frame, textvariable=self.subjects_found_var, width=15, state="readonly")
+        self.subjects_found_combo = ttk.Combobox(results_frame, textvariable=sv.subjects_found, width=15, state="readonly")
         self.subjects_found_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
         # Add tooltip that only shows when subjects_found is disabled
@@ -2218,31 +2204,31 @@ class AirScentingUI:
         result = messagebox.askyesno("Clear Form", "Are you sure you want to clear all fields?")
         if result:
             self.set_date(datetime.now().strftime("%Y-%m-%d"))
-            self.session_var.set(str(self.get_next_session_number()))
+            sv.session_number.set(str(self.get_next_session_number()))
             # handler_var is NOT cleared - keep current handler name
-            self.purpose_var.set("")
-            self.field_support_var.set("")
+            sv.session_purpose.set("")
+            sv.field_support.set("")
             # dog_var is NOT cleared - keep current dog (persists)
-            self.location_var.set("")
-            self.search_area_var.set("")
-            self.num_subjects_var.set("")
-            self.handler_knowledge_var.set("")
-            self.weather_var.set("")
-            self.temperature_var.set("")
-            self.wind_direction_var.set("")
-            self.wind_speed_var.set("")
-            self.search_type_var.set("")
-            self.drive_level_var.set("")
-            self.subjects_found_var.set("")
+            sv.location.set("")
+            sv.search_area_size.set("")
+            sv.num_subjects.set("")
+            sv.handler_knowledge.set("")
+            sv.weather.set("")
+            sv.temperature.set("")
+            sv.wind_direction.set("")
+            sv.wind_speed.set("")
+            sv.search_type.set("")
+            sv.drive_level.set("")
+            sv.subjects_found.set("")
             self.comments_text.delete("1.0", tk.END)
             # Clear terrain accumulator
             self.accumulated_terrains = []
             self.accumulated_terrain_combo['values'] = []
-            self.accumulated_terrain_var.set("")
+            sv.accumulated_terrain.set("")
             self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
             # Update subjects_found combo state (will disable since num_subjects is blank)
             self.update_subjects_found()
-            self.status_var.set("Form cleared")
+            sv.status.set("Form cleared")
             self.update_navigation_buttons()
     
     def new_session(self):
@@ -2252,32 +2238,32 @@ class AirScentingUI:
             return
         
         next_session = self.get_next_session_number()
-        self.session_var.set(str(next_session))
+        sv.session_number.set(str(next_session))
         # Clear selected sessions - we're starting fresh
         self.selected_sessions = []
         self.selected_sessions_index = -1
         # Clear form fields for new entry (KEEP handler name and dog name)
         self.set_date(datetime.now().strftime("%Y-%m-%d"))
         # handler_var is NOT cleared - keep current handler name
-        self.purpose_var.set("")
-        self.field_support_var.set("")
+        sv.session_purpose.set("")
+        sv.field_support.set("")
         # dog_var is NOT cleared - keep current dog (persists across sessions)
-        self.location_var.set("")
-        self.search_area_var.set("")
-        self.num_subjects_var.set("")
-        self.handler_knowledge_var.set("")
-        self.weather_var.set("")
-        self.temperature_var.set("")
-        self.wind_direction_var.set("")
-        self.wind_speed_var.set("")
-        self.search_type_var.set("")
-        self.drive_level_var.set("")
-        self.subjects_found_var.set("")
+        sv.location.set("")
+        sv.search_area_size.set("")
+        sv.num_subjects.set("")
+        sv.handler_knowledge.set("")
+        sv.weather.set("")
+        sv.temperature.set("")
+        sv.wind_direction.set("")
+        sv.wind_speed.set("")
+        sv.search_type.set("")
+        sv.drive_level.set("")
+        sv.subjects_found.set("")
         self.comments_text.delete("1.0", tk.END)
         # Clear terrain accumulator
         self.accumulated_terrains = []
         self.accumulated_terrain_combo['values'] = []
-        self.accumulated_terrain_var.set("")
+        sv.accumulated_terrain.set("")
         self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
         # Clear map files list
         self.map_files_list = []
@@ -2288,28 +2274,28 @@ class AirScentingUI:
         self.update_subjects_found()
         # Reset tree selection to subject 1
         self.reset_subject_responses_tree_selection()
-        self.status_var.set(f"New session #{next_session}")
+        sv.status.set(f"New session #{next_session}")
         self.update_navigation_buttons()
     
     def check_entry_tab_changes(self):
         """Check for unsaved changes in Entry tab. Returns True if OK to proceed."""
         # Get current form state
-        current_date = self.date_var.get()
-        current_session = self.session_var.get()
-        current_handler = self.handler_var.get()
-        current_purpose = self.purpose_var.get()
-        current_field_support = self.field_support_var.get()
-        current_dog = self.dog_var.get()
-        current_search_area = self.search_area_var.get()
-        current_num_subjects = self.num_subjects_var.get()
-        current_handler_knowledge = self.handler_knowledge_var.get()
-        current_weather = self.weather_var.get()
-        current_temperature = self.temperature_var.get()
-        current_wind_direction = self.wind_direction_var.get()
-        current_wind_speed = self.wind_speed_var.get()
-        current_search_type = self.search_type_var.get()
-        current_drive_level = self.drive_level_var.get()
-        current_subjects_found = self.subjects_found_var.get()
+        current_date = sv.date.get()
+        current_session = sv.session_number.get()
+        current_handler = sv.handler.get()
+        current_purpose = sv.session_purpose.get()
+        current_field_support = sv.field_support.get()
+        current_dog = sv.dog.get()
+        current_search_area = sv.search_area_size.get()
+        current_num_subjects = sv.num_subjects.get()
+        current_handler_knowledge = sv.handler_knowledge.get()
+        current_weather = sv.weather.get()
+        current_temperature = sv.temperature.get()
+        current_wind_direction = sv.wind_direction.get()
+        current_wind_speed = sv.wind_speed.get()
+        current_search_type = sv.search_type.get()
+        current_drive_level = sv.drive_level.get()
+        current_subjects_found = sv.subjects_found.get()
         
         # Check if this session exists in database and compare
         try:
@@ -2317,7 +2303,7 @@ class AirScentingUI:
         except ValueError:
             return True  # Invalid session number, OK to proceed
         
-        db_type = self.db_type_var.get()
+        db_type = sv.db_type.get()
         
         try:
             # Get data from database
@@ -2424,10 +2410,10 @@ class AirScentingUI:
         self.selected_sessions_index = -1
         
         try:
-            session_num = int(self.session_var.get())
+            session_num = int(sv.session_number.get())
             if session_num < 1:
                 messagebox.showwarning("Invalid Session", "Session number must be at least 1")
-                self.session_var.set("1")
+                sv.session_number.set("1")
                 return
             
             max_session = self.get_next_session_number() - 1  # Current max
@@ -2438,7 +2424,7 @@ class AirScentingUI:
                     f"Maximum session is #{max_session}.\n"
                     f"Next available is #{max_session + 1}."
                 )
-                self.session_var.set(str(max_session + 1))
+                sv.session_number.set(str(max_session + 1))
                 return
             
             # Load session data if it exists
@@ -2447,25 +2433,21 @@ class AirScentingUI:
             
         except ValueError:
             messagebox.showwarning("Invalid Number", "Session number must be a valid number")
-            self.session_var.set(str(self.get_next_session_number()))
+            sv.session_number.set(str(self.get_next_session_number()))
     
     def load_session_by_number(self, session_number):
         """Load session data from database by session number and current dog"""
-        if not hasattr(self, 'dog_var'):
-            print("Warning: load_session_by_number called before dog_var initialized")
-            return
-
-        dog_name = self.dog_var.get().strip() if self.dog_var.get() else ""
+        dog_name = sv.dog.get().strip() if sv.dog.get() else ""
 
         if not dog_name:
             messagebox.showwarning("No Dog Selected", "Please select a dog first")
             return
 
         # Load session from database
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         
         # Show working dialog for networked databases
-        db_type = self.db_type_var.get()
+        db_type = sv.db_type.get()
         if db_type in ["postgres", "supabase", "mysql"]:
             working_dialog = WorkingDialog(self.root, "Loading", 
                                          f"Loading session from {db_type} database...")
@@ -2482,21 +2464,21 @@ class AirScentingUI:
         if session_data:
             # Populate form with session data
             self.set_date(session_data["date"])
-            self.handler_var.set(session_data["handler"])
-            self.purpose_var.set(session_data["session_purpose"])
-            self.field_support_var.set(session_data["field_support"])
-            self.dog_var.set(session_data["dog_name"])
-            self.location_var.set(session_data["location"])
-            self.search_area_var.set(session_data["search_area_size"])
-            self.num_subjects_var.set(session_data["num_subjects"])
-            self.handler_knowledge_var.set(session_data["handler_knowledge"])
-            self.weather_var.set(session_data["weather"])
-            self.temperature_var.set(session_data["temperature"])
-            self.wind_direction_var.set(session_data["wind_direction"])
-            self.wind_speed_var.set(session_data["wind_speed"])
-            self.search_type_var.set(session_data["search_type"])
-            self.drive_level_var.set(session_data["drive_level"])
-            self.subjects_found_var.set(session_data["subjects_found"])
+            sv.handler.set(session_data["handler"])
+            sv.session_purpose.set(session_data["session_purpose"])
+            sv.field_support.set(session_data["field_support"])
+            sv.dog.set(session_data["dog_name"])
+            sv.location.set(session_data["location"])
+            sv.search_area_size.set(session_data["search_area_size"])
+            sv.num_subjects.set(session_data["num_subjects"])
+            sv.handler_knowledge.set(session_data["handler_knowledge"])
+            sv.weather.set(session_data["weather"])
+            sv.temperature.set(session_data["temperature"])
+            sv.wind_direction.set(session_data["wind_direction"])
+            sv.wind_speed.set(session_data["wind_speed"])
+            sv.search_type.set(session_data["search_type"])
+            sv.drive_level.set(session_data["drive_level"])
+            sv.subjects_found.set(session_data["subjects_found"])
 
             # Load comments
             self.comments_text.delete("1.0", tk.END)
@@ -2524,17 +2506,19 @@ class AirScentingUI:
                 self.delete_map_button.config(state=tk.DISABLED)
 
             self.update_subjects_found()
-            self.subjects_found_var.set(session_data["subjects_found"])
+            sv.subjects_found.set(session_data["subjects_found"])
             self.update_subject_responses_grid()
 
             # Load selected terrains
             session_id = session_data["id"]
             self.accumulated_terrains = db_mgr.load_selected_terrains(session_id)
             self.accumulated_terrain_combo['values'] = self.accumulated_terrains
-            # Enable combobox if terrains were loaded, disable if empty
+            # Set the StringVar to show the last terrain (most recently added)
             if self.accumulated_terrains:
+                sv.accumulated_terrain.set(self.accumulated_terrains[-1])
                 self.accumulated_terrain_combo['state'] = 'readonly'
             else:
+                sv.accumulated_terrain.set("")
                 self.accumulated_terrain_combo['state'] = 'disabled'
 
             # Load subject responses
@@ -2551,34 +2535,34 @@ class AirScentingUI:
                         )
                     )
 
-            self.status_var.set(f"Loaded session #{session_number}")
+            sv.status.set(f"Loaded session #{session_number}")
         else:
             # Session doesn't exist - clear for new entry
             self.set_date(datetime.now().strftime("%Y-%m-%d"))
-            self.purpose_var.set("")
-            self.field_support_var.set("")
-            self.location_var.set("")
-            self.search_area_var.set("")
-            self.num_subjects_var.set("")
-            self.handler_knowledge_var.set("")
-            self.weather_var.set("")
-            self.temperature_var.set("")
-            self.wind_direction_var.set("")
-            self.wind_speed_var.set("")
-            self.search_type_var.set("")
-            self.drive_level_var.set("")
-            self.subjects_found_var.set("")
+            sv.session_purpose.set("")
+            sv.field_support.set("")
+            sv.location.set("")
+            sv.search_area_size.set("")
+            sv.num_subjects.set("")
+            sv.handler_knowledge.set("")
+            sv.weather.set("")
+            sv.temperature.set("")
+            sv.wind_direction.set("")
+            sv.wind_speed.set("")
+            sv.search_type.set("")
+            sv.drive_level.set("")
+            sv.subjects_found.set("")
             self.comments_text.delete("1.0", tk.END)
             self.accumulated_terrains = []
             self.accumulated_terrain_combo['values'] = []
-            self.accumulated_terrain_var.set("")
+            sv.accumulated_terrain.set("")
             self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
             self.map_files_list = []
             self.map_listbox.delete(0, tk.END)
             self.view_map_button.config(state=tk.DISABLED)
             self.delete_map_button.config(state=tk.DISABLED)
             self.update_subjects_found()
-            self.status_var.set(f"New session #{session_number}")
+            sv.status.set(f"New session #{session_number}")
 
     def update_navigation_buttons(self):
         """Enable/disable Previous and Next buttons based on current session number"""
@@ -2598,7 +2582,7 @@ class AirScentingUI:
         else:
             # Normal mode - use session number
             try:
-                current_session = int(self.session_var.get())
+                current_session = int(sv.session_number.get())
                 max_session = self.get_next_session_number() - 1
                 
                 # Enable Previous if session > 1
@@ -2619,12 +2603,12 @@ class AirScentingUI:
     
     def add_to_terrain_accumulator(self, event=None):
         """Add selected terrain type to the accumulated terrains list"""
-        terrain_type = self.terrain_var.get()
+        terrain_type = sv.terrain.get()
         if terrain_type:
             # Check for duplicates
             if terrain_type in self.accumulated_terrains:
                 messagebox.showinfo("Duplicate", f"'{terrain_type}' is already in the list")
-                self.terrain_var.set("")
+                sv.terrain.set("")
                 return
             
             # Add to list
@@ -2638,14 +2622,14 @@ class AirScentingUI:
                 self.accumulated_terrain_combo['state'] = 'readonly'
             
             # Display the last (newest) entry
-            self.accumulated_terrain_var.set(terrain_type)
+            sv.accumulated_terrain.set(terrain_type)
             
             # Clear selection in add terrain combobox
-            self.terrain_var.set("")
+            sv.terrain.set("")
     
     def remove_terrain_from_list(self, event):
         """Remove terrain type from list when clicked/selected"""
-        terrain_type = self.accumulated_terrain_var.get()
+        terrain_type = sv.accumulated_terrain.get()
         if not terrain_type:
             return
         
@@ -2664,18 +2648,18 @@ class AirScentingUI:
             # Determine what to display after removal
             if len(self.accumulated_terrains) == 0:
                 # List is now empty - show blank and disable combobox
-                self.accumulated_terrain_var.set("")
+                sv.accumulated_terrain.set("")
                 self.accumulated_terrain_combo['state'] = 'disabled'
             elif removed_index < len(self.accumulated_terrains):
                 # Show the item that's now at the same index (the one that was below)
-                self.accumulated_terrain_var.set(self.accumulated_terrains[removed_index])
+                sv.accumulated_terrain.set(self.accumulated_terrains[removed_index])
             else:
                 # The last item was removed - show the new last item
-                self.accumulated_terrain_var.set(self.accumulated_terrains[-1])
+                sv.accumulated_terrain.set(self.accumulated_terrains[-1])
     
     def update_subjects_found(self, event=None):
         """Update Subjects Found combobox values based on Number of Subjects"""
-        num_subjects = self.num_subjects_var.get()
+        num_subjects = sv.num_subjects.get()
         
         if num_subjects and num_subjects.isdigit():
             n = int(num_subjects)
@@ -2684,19 +2668,19 @@ class AirScentingUI:
             self.subjects_found_combo['values'] = values
             self.subjects_found_combo['state'] = 'readonly'
             # Clear current selection when choices change
-            self.subjects_found_var.set("")
+            sv.subjects_found.set("")
         else:
             # No number selected, disable and clear the subjects_found combobox
             self.subjects_found_combo['values'] = []
             self.subjects_found_combo['state'] = 'disabled'
-            self.subjects_found_var.set("")
+            sv.subjects_found.set("")
         
         # Update TFR and Re-find state whenever subjects_found changes
         self.update_subject_responses_grid()
     
     def update_subject_responses_grid(self, event=None):
         """Update subject responses grid - enable/disable rows based on Subjects Found value"""
-        subjects_found = self.subjects_found_var.get()
+        subjects_found = sv.subjects_found.get()
         
         # Parse subjects found value (e.g., "2 out of 3" -> 2 found)
         num_found = 0
@@ -2833,7 +2817,7 @@ class AirScentingUI:
         self.drop_label.configure(bg="#e0e0e0")
         
         # Check if trail maps folder is configured
-        trail_maps_folder = self.folder_path_var.get().strip()
+        trail_maps_folder = sv.trail_maps_folder.get().strip()
         if not trail_maps_folder or not os.path.exists(trail_maps_folder):
             messagebox.showerror(
                 "Trail Maps Folder Not Set",
@@ -2842,7 +2826,7 @@ class AirScentingUI:
             return
         
         # Check if dog is selected (needed for unique filename)
-        if not hasattr(self, 'dog_var') or not self.dog_var.get():
+        if not sv.dog.get():
             messagebox.showwarning(
                 "No Dog Selected",
                 "Please select a dog before adding maps/images.\n\n"
@@ -2850,8 +2834,8 @@ class AirScentingUI:
             )
             return
         
-        dog_name = self.dog_var.get()
-        session_number = self.session_var.get()
+        dog_name = sv.dog.get()
+        session_number = sv.session_number.get()
         
         # Parse dropped data - can be multiple files
         data = event.data.strip()
@@ -2911,7 +2895,7 @@ class AirScentingUI:
             self.view_map_button.config(state=tk.NORMAL)
             self.delete_map_button.config(state=tk.NORMAL)
             
-            self.status_var.set(f"{len(copied_files)} file(s) copied to trail maps folder")
+            sv.status.set(f"{len(copied_files)} file(s) copied to trail maps folder")
         else:
             messagebox.showerror("Error", "Only PDF, JPG, and PNG files supported!")
     
@@ -2929,7 +2913,7 @@ class AirScentingUI:
             filename = self.map_files_list[selected_index]
             
             # Build full path from trail maps folder
-            trail_maps_folder = self.folder_path_var.get().strip()
+            trail_maps_folder = sv.trail_maps_folder.get().strip()
             if trail_maps_folder:
                 filepath = os.path.join(trail_maps_folder, filename)
             else:
@@ -2962,7 +2946,7 @@ class AirScentingUI:
         
         # Delete the actual file from trail maps folder
         try:
-            trail_maps_folder = self.folder_path_var.get().strip()
+            trail_maps_folder = sv.trail_maps_folder.get().strip()
             if trail_maps_folder:
                 full_path = os.path.join(trail_maps_folder, filename)
             else:
@@ -2970,9 +2954,9 @@ class AirScentingUI:
             
             if os.path.exists(full_path):
                 os.remove(full_path)
-                self.status_var.set(f"Deleted file: {filename}")
+                sv.status.set(f"Deleted file: {filename}")
             else:
-                self.status_var.set(f"Removed from list (file not found): {filename}")
+                sv.status.set(f"Removed from list (file not found): {filename}")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to delete file:\n{str(e)}")
             return
@@ -3000,7 +2984,7 @@ class AirScentingUI:
             possible_paths = []
             
             # Try trail maps folder from config first
-            trail_maps_folder = self.folder_path_var.get()
+            trail_maps_folder = sv.trail_maps_folder.get()
             if trail_maps_folder and os.path.exists(trail_maps_folder):
                 possible_paths.append(Path(trail_maps_folder) / file_path)
             
@@ -3044,14 +3028,9 @@ class AirScentingUI:
     
     def load_prior_session(self):
         """Open dialog to select sessions to view/edit/delete for current dog"""
-        db_type = self.db_type_var.get()
+        db_type = sv.db_type.get()
         
-        # Check if dog_var exists
-        if not hasattr(self, 'dog_var'):
-            messagebox.showwarning("Initialization Error", "UI not fully initialized")
-            return
-        
-        dog_name = self.dog_var.get()
+        dog_name = sv.dog.get()
         
         # Check if dog is selected
         if not dog_name:
@@ -3187,12 +3166,12 @@ class AirScentingUI:
             self.selected_sessions_index = 0
             
             # Load the first selected session
-            self.session_var.set(str(self.selected_sessions[0]))
+            sv.session_number.set(str(self.selected_sessions[0]))
             self.load_session_by_number(self.selected_sessions[0])
             self.update_navigation_buttons()
             
             dialog.destroy()
-            self.status_var.set(f"Viewing {len(self.selected_sessions)} selected sessions")
+            sv.status.set(f"Viewing {len(self.selected_sessions)} selected sessions")
         
         def on_delete_selected():
             selected_indices = listbox.curselection()
@@ -3222,13 +3201,9 @@ class AirScentingUI:
     
     def delete_sessions(self, session_numbers):
         """Delete multiple sessions for current dog"""
-        if not hasattr(self, 'dog_var'):
-            messagebox.showerror("Error", "UI not fully initialized")
-            return
+        dog_name = sv.dog.get()
         
-        dog_name = self.dog_var.get()
-        
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         success, message = db_mgr.delete_sessions(session_numbers, dog_name)
         
         if success:
@@ -3245,19 +3220,19 @@ class AirScentingUI:
         if self.selected_sessions and self.selected_sessions_index > 0:
             self.selected_sessions_index -= 1
             session_num = self.selected_sessions[self.selected_sessions_index]
-            self.session_var.set(str(session_num))
+            sv.session_number.set(str(session_num))
             self.load_session_by_number(session_num)
             self.reset_subject_responses_tree_selection()  # Reset to subject 1
             self.update_navigation_buttons()
-            self.status_var.set(
+            sv.status.set(
                 f"Session {self.selected_sessions_index + 1} of {len(self.selected_sessions)} selected"
             )
         else:
             # Normal navigation - just decrement
             try:
-                current = int(self.session_var.get())
+                current = int(sv.session_number.get())
                 if current > 1:
-                    self.session_var.set(str(current - 1))
+                    sv.session_number.set(str(current - 1))
                     self.load_session_by_number(current - 1)
                     self.reset_subject_responses_tree_selection()  # Reset to subject 1
                     self.update_navigation_buttons()
@@ -3270,20 +3245,20 @@ class AirScentingUI:
         if self.selected_sessions and self.selected_sessions_index < len(self.selected_sessions) - 1:
             self.selected_sessions_index += 1
             session_num = self.selected_sessions[self.selected_sessions_index]
-            self.session_var.set(str(session_num))
+            sv.session_number.set(str(session_num))
             self.load_session_by_number(session_num)
             self.reset_subject_responses_tree_selection()  # Reset to subject 1
             self.update_navigation_buttons()
-            self.status_var.set(
+            sv.status.set(
                 f"Session {self.selected_sessions_index + 1} of {len(self.selected_sessions)} selected"
             )
         else:
             # Normal navigation - just increment
             try:
-                current = int(self.session_var.get())
+                current = int(sv.session_number.get())
                 max_session = self.get_next_session_number() - 1
                 if current < max_session + 1:
-                    self.session_var.set(str(current + 1))
+                    sv.session_number.set(str(current + 1))
                     self.load_session_by_number(current + 1)
                     self.reset_subject_responses_tree_selection()  # Reset to subject 1
                     self.update_navigation_buttons()
@@ -3293,12 +3268,12 @@ class AirScentingUI:
     def open_export_dialog(self):
         """Open export PDF dialog"""
         # Check if dog is selected
-        if not hasattr(self, 'dog_var') or not self.dog_var.get():
+        if not sv.dog.get():
             messagebox.showwarning("No Dog Selected", "Please select a dog before exporting")
             return
         
         # Check if trail maps folder is configured
-        trail_maps_folder = self.folder_path_var.get().strip()
+        trail_maps_folder = sv.trail_maps_folder.get().strip()
         if not trail_maps_folder:
             messagebox.showwarning("Trail Maps Folder Not Set", 
                                  "Trail maps folder not configured.\n\n"
@@ -3317,10 +3292,10 @@ class AirScentingUI:
         # Show export dialog
         export_pdf.show_export_dialog(
             parent=self.root,
-            db_type=self.db_type_var.get(),
-            current_dog=self.dog_var.get(),
+            db_type=sv.db_type.get(),
+            current_dog=sv.dog.get(),
             get_connection_func=get_connection,
-            backup_folder=self.backup_path_var.get().strip(),
+            backup_folder=sv.backup_folder.get().strip(),
             trail_maps_folder=trail_maps_folder
         )
     
@@ -3329,27 +3304,27 @@ class AirScentingUI:
         """Select database folder"""
         folder = filedialog.askdirectory(title="Select Database Folder")
         if folder:
-            self.db_path_var.set(folder)
+            sv.db_path.set(folder)
             self.machine_db_path = folder
     
     def select_folder(self):
         """Select trail maps folder"""
         folder = filedialog.askdirectory(title="Select Trail Maps Storage Folder")
         if folder:
-            self.folder_path_var.set(folder)
+            sv.trail_maps_folder.set(folder)
             self.machine_trail_maps_folder = folder
     
     def select_backup_folder(self):
         """Select backup folder"""
         folder = filedialog.askdirectory(title="Select Backup Folder")
         if folder:
-            self.backup_path_var.set(folder)
+            sv.backup_folder.set(folder)
             self.machine_backup_folder = folder
     
     def update_create_db_button_state(self, *args):
         """Enable/disable Create Database button based on folder selection and database type"""
-        db_type = self.db_type_var.get()
-        has_folder = bool(self.db_path_var.get().strip())
+        db_type = sv.db_type.get()
+        has_folder = bool(sv.db_path.get().strip())
         
         # For SQLite, require folder. For postgres/supabase/mysql, always enable
         if db_type == "sqlite":
@@ -3409,7 +3384,7 @@ class AirScentingUI:
     
     def on_db_type_changed(self):
         """Show/hide password field based on database type and load saved password"""
-        db_type = self.db_type_var.get()
+        db_type = sv.db_type.get()
         
         # Show password field for postgres, supabase, mysql
         # Hide for sqlite
@@ -3422,17 +3397,17 @@ class AirScentingUI:
             if check_crypto_available():
                 saved_password = get_decrypted_password(self.config, db_type)
                 if saved_password:
-                    self.db_password_var.set(saved_password)
+                    sv.db_password.set(saved_password)
                     # CRITICAL FIX: Actually set the password in the database configuration
                     # Without this, the password shows in the field but isn't used for connection
                     self.set_db_password()
                     # Only update status if status_var exists (may not during initialization)
                     if hasattr(self, 'status_var'):
-                        self.status_var.set(f"Loaded saved password for {db_type}")
+                        sv.status.set(f"Loaded saved password for {db_type}")
                 else:
-                    self.db_password_var.set("")
+                    sv.db_password.set("")
             else:
-                self.db_password_var.set("")
+                sv.db_password.set("")
         else:
             self.db_password_frame.pack_forget()
         
@@ -3445,7 +3420,7 @@ class AirScentingUI:
     
     def toggle_password_visibility(self):
         """Toggle password visibility in entry field"""
-        if self.show_password_var.get():
+        if sv.show_password.get():
             self.db_password_entry.config(show="")
         else:
             self.db_password_entry.config(show="*")
@@ -3454,8 +3429,8 @@ class AirScentingUI:
         """Set database password in config at runtime and optionally save encrypted"""
         import config
         
-        db_type = self.db_type_var.get()
-        password = self.db_password_var.get()
+        db_type = sv.db_type.get()
+        password = sv.db_password.get()
         
         if db_type in ["postgres", "supabase", "mysql"] and password:
             # Set the password in config
@@ -3476,7 +3451,7 @@ class AirScentingUI:
             
             # Save encrypted password if "Remember" is checked
             # Check if remember_password_var exists (may not during initialization)
-            if hasattr(self, 'remember_password_var') and self.remember_password_var.get():
+            if hasattr(self, 'remember_password_var') and sv.remember_password.get():
                 from password_manager import save_encrypted_password, check_crypto_available
                 
                 if check_crypto_available():
@@ -3484,7 +3459,7 @@ class AirScentingUI:
                         self.save_config()
                         # Only update status if status_var exists (may not during initialization)
                         if hasattr(self, 'status_var'):
-                            self.status_var.set(f"Password saved (encrypted) for {db_type}")
+                            sv.status.set(f"Password saved (encrypted) for {db_type}")
                     else:
                         messagebox.showwarning(
                             "Encryption Failed",
@@ -3500,7 +3475,7 @@ class AirScentingUI:
     
     def forget_password(self):
         """Clear saved encrypted password for current database type"""
-        db_type = self.db_type_var.get()
+        db_type = sv.db_type.get()
         
         if db_type not in ["postgres", "supabase", "mysql"]:
             return
@@ -3512,15 +3487,15 @@ class AirScentingUI:
         self.save_config()
         
         # Clear from UI
-        self.db_password_var.set("")
+        sv.db_password.set("")
         
-        self.status_var.set(f"Forgot saved password for {db_type}")
+        sv.status.set(f"Forgot saved password for {db_type}")
         messagebox.showinfo("Password Cleared", f"Saved password for {db_type} has been cleared.")
     
     def prepare_db_connection(self, db_type):
         """Prepare database connection by setting password if needed"""
         if db_type in ["postgres", "supabase", "mysql"]:
-            password = self.db_password_var.get().strip()
+            password = sv.db_password.get().strip()
             if not password:
                 messagebox.showerror(
                     "Password Required",
@@ -3529,7 +3504,7 @@ class AirScentingUI:
                 return False
             
             # Update the password
-            self.db_password_var.set(password)
+            sv.db_password.set(password)
             self.set_db_password()
         
         return True
@@ -3539,11 +3514,11 @@ class AirScentingUI:
         from pathlib import Path
         
         # Get selected database type
-        db_type = self.db_type_var.get()
+        db_type = sv.db_type.get()
         
         if db_type == "sqlite":
             # SQLite requires a folder
-            folder = self.db_path_var.get().strip()
+            folder = sv.db_path.get().strip()
             if not folder:
                 messagebox.showwarning("No Folder", "Please select a database folder first")
                 return
@@ -3572,7 +3547,7 @@ class AirScentingUI:
                 try:
                     from database import engine
                     engine.dispose()
-                    self.status_var.set("Closed database connections...")
+                    sv.status.set("Closed database connections...")
                 except Exception as e:
                     print(f"Note: Could not dispose engine: {e}")
                 
@@ -3623,7 +3598,7 @@ class AirScentingUI:
                 database.engine.dispose()
                 reload(database)
                 
-                self.status_var.set(f"Database created: {db_path}")
+                sv.status.set(f"Database created: {db_path}")
                 messagebox.showinfo(
                     "Success", 
                     f"SQLite database created successfully!\n\n{db_path}\n\n"
@@ -3637,25 +3612,25 @@ class AirScentingUI:
                 self.offer_load_default_types("sqlite")
                 
                 # Update session number and UI after database recreation
-                self.session_var.set(str(self.get_next_session_number()))
+                sv.session_number.set(str(self.get_next_session_number()))
                 self.selected_sessions = []
                 self.selected_sessions_index = -1
                 self.update_navigation_buttons()
                 # Clear form to new entry state
                 self.set_date(datetime.now().strftime("%Y-%m-%d"))
-                self.purpose_var.set("")
-                self.field_support_var.set("")
-                self.dog_var.set("")
-                self.search_area_var.set("")
-                self.num_subjects_var.set("")
-                self.handler_knowledge_var.set("")
-                self.weather_var.set("")
-                self.temperature_var.set("")
-                self.wind_direction_var.set("")
-                self.wind_speed_var.set("")
-                self.search_type_var.set("")
-                self.drive_level_var.set("")
-                self.subjects_found_var.set("")
+                sv.session_purpose.set("")
+                sv.field_support.set("")
+                sv.dog.set("")
+                sv.search_area_size.set("")
+                sv.num_subjects.set("")
+                sv.handler_knowledge.set("")
+                sv.weather.set("")
+                sv.temperature.set("")
+                sv.wind_direction.set("")
+                sv.wind_speed.set("")
+                sv.search_type.set("")
+                sv.drive_level.set("")
+                sv.subjects_found.set("")
                 # Update subjects_found combo state (will disable since num_subjects is blank)
                 self.update_subjects_found()
                 
@@ -3669,7 +3644,7 @@ class AirScentingUI:
         
         else:  # postgres, supabase, or mysql
             # Check if password has been entered
-            password = self.db_password_var.get().strip()
+            password = sv.db_password.get().strip()
             if not password:
                 messagebox.showerror(
                     "Password Required",
@@ -3739,7 +3714,7 @@ class AirScentingUI:
                     self.root.update()
                     try:
                         drop_tables()
-                        self.status_var.set("Dropped existing tables...")
+                        sv.status.set("Dropped existing tables...")
                     finally:
                         working_dialog.close(delay_ms=200)
                 
@@ -3757,7 +3732,7 @@ class AirScentingUI:
                 database.engine.dispose()
                 reload(database)
                 
-                self.status_var.set(f"{db_type.title()} schema created successfully")
+                sv.status.set(f"{db_type.title()} schema created successfully")
                 messagebox.showinfo(
                     "Success",
                     f"{db_type.title()} database schema created successfully!\n\n"
@@ -3772,25 +3747,25 @@ class AirScentingUI:
                 self.offer_load_default_types(db_type)
                 
                 # Update session number and UI after database recreation
-                self.session_var.set(str(self.get_next_session_number()))
+                sv.session_number.set(str(self.get_next_session_number()))
                 self.selected_sessions = []
                 self.selected_sessions_index = -1
                 self.update_navigation_buttons()
                 # Clear form to new entry state
                 self.set_date(datetime.now().strftime("%Y-%m-%d"))
-                self.purpose_var.set("")
-                self.field_support_var.set("")
-                self.dog_var.set("")
-                self.search_area_var.set("")
-                self.num_subjects_var.set("")
-                self.handler_knowledge_var.set("")
-                self.weather_var.set("")
-                self.temperature_var.set("")
-                self.wind_direction_var.set("")
-                self.wind_speed_var.set("")
-                self.search_type_var.set("")
-                self.drive_level_var.set("")
-                self.subjects_found_var.set("")
+                sv.session_purpose.set("")
+                sv.field_support.set("")
+                sv.dog.set("")
+                sv.search_area_size.set("")
+                sv.num_subjects.set("")
+                sv.handler_knowledge.set("")
+                sv.weather.set("")
+                sv.temperature.set("")
+                sv.wind_direction.set("")
+                sv.wind_speed.set("")
+                sv.search_type.set("")
+                sv.drive_level.set("")
+                sv.subjects_found.set("")
                 # Update subjects_found combo state (will disable since num_subjects is blank)
                 self.update_subjects_found()
                 
@@ -3827,7 +3802,7 @@ class AirScentingUI:
         # Ensure database is ready (critical for networked databases)
         self.ensure_db_ready()
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         locations = db_mgr.load_locations()
         
         # Update UI
@@ -3840,7 +3815,7 @@ class AirScentingUI:
         # Ensure database is ready (critical for networked databases)
         self.ensure_db_ready()
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         locations = db_mgr.load_locations()
         
         # Update combobox
@@ -3854,7 +3829,7 @@ class AirScentingUI:
         
         # Use DatabaseManager to get terrain types in correct order (by sort_order)
         from ui_database import get_db_manager
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         terrain_types = db_mgr.load_terrain_types()
         
         # Update combobox
@@ -3866,7 +3841,7 @@ class AirScentingUI:
         # Ensure database is ready (critical for networked databases)
         self.ensure_db_ready()
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         terrain_types = db_mgr.load_terrain_types()
         
         # Clear and populate treeview
@@ -3879,7 +3854,7 @@ class AirScentingUI:
         # Ensure database is ready (critical for networked databases)
         self.ensure_db_ready()
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         distraction_types = db_mgr.load_distraction_types()
         
         # Clear and populate treeview
@@ -3889,7 +3864,7 @@ class AirScentingUI:
     
     def update_location_button_states(self, *args):
         """Enable/disable location buttons based on entry content"""
-        has_text = bool(self.new_location_var.get().strip())
+        has_text = bool(sv.new_location.get().strip())
         self.add_location_btn.config(state="normal" if has_text else "disabled")
     
     def on_location_select(self, event):
@@ -3899,12 +3874,12 @@ class AirScentingUI:
     
     def add_location(self):
         """Add a new training location"""
-        location = self.new_location_var.get().strip()
+        location = sv.new_location.get().strip()
         if not location:
             return
         
-        db_mgr = get_db_manager(self.db_type_var.get())
-        db_type = self.db_type_var.get()
+        db_mgr = get_db_manager(sv.db_type.get())
+        db_type = sv.db_type.get()
         
         # Show working dialog for networked databases
         if db_type in ["postgres", "supabase", "mysql"]:
@@ -3923,8 +3898,8 @@ class AirScentingUI:
         if success:
             self.load_locations_from_database()
             self.refresh_location_list()
-            self.new_location_var.set("")
-            self.status_var.set(message)
+            sv.new_location.set("")
+            sv.status.set(message)
         else:
             if "already exists" in message:
                 messagebox.showinfo("Duplicate", message)
@@ -3944,13 +3919,13 @@ class AirScentingUI:
         if not result:
             return
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         success, message = db_mgr.remove_location(location)
         
         if success:
             self.load_locations_from_database()
             self.refresh_location_list()
-            self.status_var.set(message)
+            sv.status.set(message)
             self.remove_location_btn.config(state="disabled")
         else:
             messagebox.showerror("Database Error", message)
@@ -3960,7 +3935,7 @@ class AirScentingUI:
         # Ensure database is ready (critical for networked databases)
         self.ensure_db_ready()
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         dogs = db_mgr.load_dogs()
         
         # Update UI
@@ -3973,7 +3948,7 @@ class AirScentingUI:
         # Ensure database is ready (critical for networked databases)
         self.ensure_db_ready()
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         dogs = db_mgr.load_dogs()
         
         # Update combobox
@@ -3987,7 +3962,7 @@ class AirScentingUI:
     
     def update_dog_button_states(self, *args):
         """Enable/disable dog buttons based on entry content"""
-        has_text = bool(self.new_dog_var.get().strip())
+        has_text = bool(sv.new_dog.get().strip())
         self.add_dog_btn.config(state="normal" if has_text else "disabled")
     
     def on_dog_select(self, event):
@@ -3997,12 +3972,12 @@ class AirScentingUI:
     
     def add_dog(self):
         """Add a new dog"""
-        dog_name = self.new_dog_var.get().strip()
+        dog_name = sv.new_dog.get().strip()
         if not dog_name:
             return
         
-        db_mgr = get_db_manager(self.db_type_var.get())
-        db_type = self.db_type_var.get()
+        db_mgr = get_db_manager(sv.db_type.get())
+        db_type = sv.db_type.get()
         
         # Show working dialog for networked databases
         if db_type in ["postgres", "supabase", "mysql"]:
@@ -4022,8 +3997,8 @@ class AirScentingUI:
             self.load_dogs_from_database()
             if hasattr(self, 'dog_combo'):
                 self.refresh_dog_list()
-            self.new_dog_var.set("")
-            self.status_var.set(message)
+            sv.new_dog.set("")
+            sv.status.set(message)
         else:
             if "already exists" in message:
                 messagebox.showinfo("Duplicate", message)
@@ -4047,14 +4022,14 @@ class AirScentingUI:
         if not result:
             return
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         success, message = db_mgr.remove_dog(dog_name)
         
         if success:
             self.dog_listbox.delete(selection[0])
             if hasattr(self, 'dog_combo'):
                 self.refresh_dog_list()
-            self.status_var.set(message)
+            sv.status.set(message)
             self.remove_dog_btn.config(state="disabled")
         else:
             messagebox.showerror("Database Error", message)
@@ -4062,7 +4037,7 @@ class AirScentingUI:
     # Terrain Types methods
     def update_terrain_button_states(self, *args):
         """Enable/disable terrain buttons based on entry content and selection"""
-        has_text = bool(self.new_terrain_var.get().strip())
+        has_text = bool(sv.new_terrain.get().strip())
         self.add_terrain_btn.config(state="normal" if has_text else "disabled")
     
     def on_terrain_select(self, event):
@@ -4075,12 +4050,12 @@ class AirScentingUI:
     
     def add_terrain_type(self):
         """Add a new terrain type"""
-        terrain = self.new_terrain_var.get().strip()
+        terrain = sv.new_terrain.get().strip()
         if not terrain:
             return
         
-        db_mgr = get_db_manager(self.db_type_var.get())
-        db_type = self.db_type_var.get()
+        db_mgr = get_db_manager(sv.db_type.get())
+        db_type = sv.db_type.get()
         
         # Show working dialog for networked databases
         if db_type in ["postgres", "supabase", "mysql"]:
@@ -4101,8 +4076,8 @@ class AirScentingUI:
             # Also refresh Entry tab terrain combobox
             if hasattr(self, 'terrain_combo'):
                 self.refresh_terrain_list()
-            self.new_terrain_var.set("")
-            self.status_var.set(message)
+            sv.new_terrain.set("")
+            sv.status.set(message)
         else:
             if "already exists" in message:
                 messagebox.showinfo("Duplicate", message)
@@ -4124,7 +4099,7 @@ class AirScentingUI:
         if not result:
             return
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         success, message = db_mgr.remove_terrain_type(terrain)
         
         if success:
@@ -4132,7 +4107,7 @@ class AirScentingUI:
             # Also refresh Entry tab terrain combobox
             if hasattr(self, 'terrain_combo'):
                 self.refresh_terrain_list()
-            self.status_var.set(message)
+            sv.status.set(message)
         else:
             messagebox.showerror("Database Error", message)
     
@@ -4146,7 +4121,7 @@ class AirScentingUI:
         values = self.terrain_tree.item(item, 'values')
         terrain = values[0]
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         success, message = db_mgr.move_terrain_up(terrain)
         
         if success:
@@ -4161,7 +4136,7 @@ class AirScentingUI:
                     self.terrain_tree.selection_set(child)
                     self.terrain_tree.see(child)
                     break
-            self.status_var.set(message)
+            sv.status.set(message)
         else:
             if "Already at top" not in message:
                 messagebox.showinfo("Cannot Move", message)
@@ -4176,7 +4151,7 @@ class AirScentingUI:
         values = self.terrain_tree.item(item, 'values')
         terrain = values[0]
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         success, message = db_mgr.move_terrain_down(terrain)
         
         if success:
@@ -4191,7 +4166,7 @@ class AirScentingUI:
                     self.terrain_tree.selection_set(child)
                     self.terrain_tree.see(child)
                     break
-            self.status_var.set(message)
+            sv.status.set(message)
         else:
             if "Already at bottom" not in message:
                 messagebox.showinfo("Cannot Move", message)
@@ -4206,7 +4181,7 @@ class AirScentingUI:
         if not result:
             return
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         success, message = db_mgr.restore_default_terrain_types()
         
         if success:
@@ -4214,7 +4189,7 @@ class AirScentingUI:
             # Also refresh Entry tab terrain combobox
             if hasattr(self, 'terrain_combo'):
                 self.refresh_terrain_list()
-            self.status_var.set(message)
+            sv.status.set(message)
             messagebox.showinfo("Success", message)
         else:
             messagebox.showerror("Error", message)
@@ -4222,7 +4197,7 @@ class AirScentingUI:
     # Distraction Types methods
     def update_distraction_type_button_states(self, *args):
         """Enable/disable distraction type buttons"""
-        has_text = bool(self.new_distraction_var.get().strip())
+        has_text = bool(sv.new_distraction.get().strip())
         self.add_distraction_type_btn.config(state="normal" if has_text else "disabled")
     
     def on_distraction_type_select(self, event):
@@ -4235,12 +4210,12 @@ class AirScentingUI:
     
     def add_distraction_type(self):
         """Add a new distraction type"""
-        distraction = self.new_distraction_var.get().strip()
+        distraction = sv.new_distraction.get().strip()
         if not distraction:
             return
         
-        db_mgr = get_db_manager(self.db_type_var.get())
-        db_type = self.db_type_var.get()
+        db_mgr = get_db_manager(sv.db_type.get())
+        db_type = sv.db_type.get()
         
         # Show working dialog for networked databases
         if db_type in ["postgres", "supabase", "mysql"]:
@@ -4258,8 +4233,8 @@ class AirScentingUI:
         
         if success:
             self.load_distraction_from_database()
-            self.new_distraction_var.set("")
-            self.status_var.set(message)
+            sv.new_distraction.set("")
+            sv.status.set(message)
         else:
             if "already exists" in message:
                 messagebox.showinfo("Duplicate", message)
@@ -4281,12 +4256,12 @@ class AirScentingUI:
         if not result:
             return
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         success, message = db_mgr.remove_distraction_type(distraction)
         
         if success:
             self.load_distraction_from_database()
-            self.status_var.set(message)
+            sv.status.set(message)
         else:
             messagebox.showerror("Database Error", message)
     
@@ -4300,7 +4275,7 @@ class AirScentingUI:
         values = self.distraction_type_tree.item(item, 'values')
         distraction = values[0]
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         success, message = db_mgr.move_distraction_up(distraction)
         
         if success:
@@ -4312,7 +4287,7 @@ class AirScentingUI:
                     self.distraction_type_tree.selection_set(child)
                     self.distraction_type_tree.see(child)
                     break
-            self.status_var.set(message)
+            sv.status.set(message)
         else:
             if "Already at top" not in message:
                 messagebox.showinfo("Cannot Move", message)
@@ -4327,7 +4302,7 @@ class AirScentingUI:
         values = self.distraction_type_tree.item(item, 'values')
         distraction = values[0]
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         success, message = db_mgr.move_distraction_down(distraction)
         
         if success:
@@ -4339,7 +4314,7 @@ class AirScentingUI:
                     self.distraction_type_tree.selection_set(child)
                     self.distraction_type_tree.see(child)
                     break
-            self.status_var.set(message)
+            sv.status.set(message)
         else:
             if "Already at bottom" not in message:
                 messagebox.showinfo("Cannot Move", message)
@@ -4354,12 +4329,12 @@ class AirScentingUI:
         if not result:
             return
         
-        db_mgr = get_db_manager(self.db_type_var.get())
+        db_mgr = get_db_manager(sv.db_type.get())
         success, message = db_mgr.restore_default_distraction_types()
         
         if success:
             self.load_distraction_from_database()
-            self.status_var.set(message)
+            sv.status.set(message)
             messagebox.showinfo("Success", message)
         else:
             messagebox.showerror("Error", message)
@@ -4369,14 +4344,14 @@ class AirScentingUI:
         """Save all configuration settings"""
         # Check for text in entry fields that hasn't been added
         unadded_items = []
-        if self.new_location_var.get().strip():
-            unadded_items.append(f"Location: '{self.new_location_var.get().strip()}'")
-        if self.new_dog_var.get().strip():
-            unadded_items.append(f"Dog: '{self.new_dog_var.get().strip()}'")
-        if self.new_terrain_var.get().strip():
-            unadded_items.append(f"Terrain: '{self.new_terrain_var.get().strip()}'")
-        if self.new_distraction_var.get().strip():
-            unadded_items.append(f"Distraction: '{self.new_distraction_var.get().strip()}'")
+        if sv.new_location.get().strip():
+            unadded_items.append(f"Location: '{sv.new_location.get().strip()}'")
+        if sv.new_dog.get().strip():
+            unadded_items.append(f"Dog: '{sv.new_dog.get().strip()}'")
+        if sv.new_terrain.get().strip():
+            unadded_items.append(f"Terrain: '{sv.new_terrain.get().strip()}'")
+        if sv.new_distraction.get().strip():
+            unadded_items.append(f"Distraction: '{sv.new_distraction.get().strip()}'")
         
         if unadded_items:
             message = "You have typed text that hasn't been added:\n\n" + "\n".join(unadded_items)
@@ -4386,16 +4361,16 @@ class AirScentingUI:
                 return  # User cancelled
         
         # Update config with default values
-        self.config["handler_name"] = self.default_handler_var.get()
-        self.config["db_type"] = self.db_type_var.get()
+        self.config["handler_name"] = sv.default_handler.get()
+        self.config["db_type"] = sv.db_type.get()
         
         # Save config file
         self.save_config()
         
         # Save machine-specific paths
-        self.machine_db_path = self.db_path_var.get()
-        self.machine_trail_maps_folder = self.folder_path_var.get()
-        self.machine_backup_folder = self.backup_path_var.get()
+        self.machine_db_path = sv.db_path.get()
+        self.machine_trail_maps_folder = sv.trail_maps_folder.get()
+        self.machine_backup_folder = sv.backup_folder.get()
         self.save_bootstrap()
         
         # Save settings backup JSON file
@@ -4404,22 +4379,22 @@ class AirScentingUI:
         # Take new snapshot after saving
         self.take_form_snapshot()
         
-        self.status_var.set("Configuration saved successfully!")
+        sv.status.set("Configuration saved successfully!")
         messagebox.showinfo("Success", "Configuration saved successfully!")
     
     def get_form_state_string(self):
         """Get a string representation of all form fields for comparison"""
         parts = [
-            self.db_type_var.get(),
-            self.db_path_var.get(),
-            self.folder_path_var.get(),
-            self.backup_path_var.get(),
-            self.default_handler_var.get(),
+            sv.db_type.get(),
+            sv.db_path.get(),
+            sv.trail_maps_folder.get(),
+            sv.backup_folder.get(),
+            sv.default_handler.get(),
             # Include entry widget values (in case user typed but didn't click Add)
-            self.new_location_var.get(),
-            self.new_dog_var.get(),
-            self.new_terrain_var.get(),
-            self.new_distraction_var.get()
+            sv.new_location.get(),
+            sv.new_dog.get(),
+            sv.new_terrain.get(),
+            sv.new_distraction.get()
             # Note: Dogs, locations, terrain, and distraction types are stored in the database
             # and are saved immediately when added, so they don't need to be in this check
         ]
@@ -4481,10 +4456,10 @@ class AirScentingUI:
             
             # CRITICAL: Ensure password is set for networked databases before switching tabs
             # This prevents authentication errors when Session tab tries to connect
-            db_type = self.db_type_var.get()
+            db_type = sv.db_type.get()
             if db_type in ["postgres", "supabase", "mysql"]:
                 # Make sure password is set in database config
-                password = self.db_password_var.get().strip()
+                password = sv.db_password.get().strip()
                 if password:
                     self.set_db_password()
                 
@@ -4502,7 +4477,7 @@ class AirScentingUI:
     
     def check_setup_requirements(self):
         """Check if database and required folders are configured before leaving Setup tab"""
-        db_type = self.db_type_var.get()
+        db_type = sv.db_type.get()
         
         # For SQLite, check if database file exists BEFORE trying to connect
         if db_type == "sqlite":
@@ -4600,15 +4575,9 @@ class AirScentingUI:
                     print(f"Error checking database: {e}")
                     database_exists = True
         
-        # Check required folders (check if variables exist first)
-        backup_folder = ""
-        trail_maps_folder = ""
-        
-        if hasattr(self, 'backup_path_var'):
-            backup_folder = self.backup_path_var.get().strip()
-        
-        if hasattr(self, 'folder_path_var'):
-            trail_maps_folder = self.folder_path_var.get().strip()
+        # Check required folders - get directly from sv
+        backup_folder = sv.backup_folder.get().strip()
+        trail_maps_folder = sv.trail_maps_folder.get().strip()
         
         # DEBUG - show what we found
         # print(f"DEBUG check_setup_requirements:")
