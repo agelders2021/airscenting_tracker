@@ -14,6 +14,7 @@ from getpass import getuser
 from config import APP_TITLE, CONFIG_FILE, BOOTSTRAP_FILE
 from splash_screen import SplashScreen
 from ui_file_operations import FileOperations
+from ui_misc2 import Misc2Operations
 from ui_form_management import FormManagement
 from ui_navigation import Navigation
 from ui_database import DatabaseOperations
@@ -58,6 +59,7 @@ class AirScentingUI:
         self.form_mgmt = FormManagement(self)
         self.navigation = Navigation(self)
         self.misc_data_ops = MiscDataOperations(self)
+        self.misc2_ops = Misc2Operations(self)
         
         # Initialize file operations module
         self.file_ops = FileOperations(self)
@@ -225,244 +227,12 @@ class AirScentingUI:
             sv.date.set(today.strftime("%Y-%m-%d"))
             
     def on_dog_changed(self, event=None):
-        """Called when dog selection changes - update session number and clear form for new dog"""
-        dog_name = sv.dog.get()
-        # print(f"DEBUG on_dog_changed: dog_name = '{dog_name}'")  # DEBUG
-        if dog_name:
-            db_type = sv.db_type.get()
-            
-            # Show working dialog for networked databases
-            if db_type in ["postgres", "supabase", "mysql"]:
-                working_dialog = WorkingDialog(self.root, "Loading Dog Data", 
-                                             f"Loading data for {dog_name}...")
-                self.root.update()
-            else:
-                working_dialog = None
-            
-            try:
-                # Save dog to database for persistence across sessions
-                DatabaseOperations(self).save_db_setting("last_dog_name", dog_name)
-                
-                # Update session number to next available for this dog
-                next_session = DatabaseOperations(self).get_next_session_number(dog_name)
-                # print(f"DEBUG on_dog_changed: next_session = {next_session}")  # DEBUG
-                sv.session_number.set(str(next_session))
-                
-                # Clear form fields for new dog (like "New" button but keep handler and dog)
-                self.set_date(datetime.now().strftime("%Y-%m-%d"))
-                # handler_var is NOT cleared - keep current handler name
-                sv.session_purpose.set("")
-                sv.field_support.set("")
-                # dog_var is already set - don't clear it
-                sv.location.set("")
-                sv.search_area_size.set("")
-                sv.num_subjects.set("")
-                sv.handler_knowledge.set("")
-                sv.weather.set("")
-                sv.temperature.set("")
-                sv.wind_direction.set("")
-                sv.wind_speed.set("")
-                sv.search_type.set("")
-                sv.drive_level.set("")
-                sv.subjects_found.set("")
-                self.comments_text.delete("1.0", tk.END)
-                # Clear terrain accumulator
-                self.accumulated_terrains = []
-                self.accumulated_terrain_combo['values'] = []
-                sv.accumulated_terrain.set("")
-                self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
-                # Clear map files list
-                self.map_files_list = []
-                self.map_listbox.delete(0, tk.END)
-                self.view_map_button.config(state=tk.DISABLED)
-                self.delete_map_button.config(state=tk.DISABLED)
-                # Update subjects_found combo state
-                self.form_mgmt.update_subjects_found()
-                
-                # Clear selected sessions - switching dogs exits navigation mode
-                self.selected_sessions = []
-                self.selected_sessions_index = -1
-                
-                # Update navigation buttons
-                self.navigation.update_navigation_buttons()
-                
-                sv.status.set(f"Switched to {dog_name} - Next session: #{next_session}")
-                
-            finally:
-                if working_dialog:
-                    working_dialog.close(delay_ms=200)  # 200ms delay for UI to update
+        """Dog selection changed - delegate to Misc2Operations"""
+        self.misc2_ops.on_dog_changed(event)
     
     def save_session(self):
-        """Save the current training session"""
-        # Get all form values
-        date = self.date_picker.get_date().strftime("%Y-%m-%d")
-        session_number = sv.session_number.get()
-        handler = sv.handler.get()
-        session_purpose = sv.session_purpose.get()
-        field_support = sv.field_support.get()
-        dog_name = sv.dog.get().strip() if sv.dog.get() else ""
-
-        # Search parameters
-        location = sv.location.get()
-        search_area_size = sv.search_area_size.get()
-        num_subjects = sv.num_subjects.get()
-        handler_knowledge = sv.handler_knowledge.get()
-        weather = sv.weather.get()
-        temperature = sv.temperature.get()
-        wind_direction = sv.wind_direction.get()
-        wind_speed = sv.wind_speed.get()
-        search_type = sv.search_type.get()
-
-        # Search results
-        drive_level = sv.drive_level.get()
-        subjects_found = sv.subjects_found.get()
-        comments = self.comments_text.get("1.0", tk.END).strip()
-
-        # Map/image files - store as JSON string
-        image_files_json = json.dumps(self.map_files_list) if self.map_files_list else ""
-
-        # Validate required fields
-        if not date:
-            messagebox.showwarning("Missing Data", "Please enter a date")
-            return
-        if not session_number:
-            messagebox.showwarning("Missing Data", "Please enter a session number")
-            return
-        if not dog_name:
-            messagebox.showwarning("Missing Data", "Please select a dog")
-            return
-
-        try:
-            session_number = int(session_number)
-        except ValueError:
-            messagebox.showwarning("Invalid Data", "Session number must be a number")
-            return
-
-        # Prepare session data dict
-        session_data = {
-            "date": date,
-            "session_number": session_number,
-            "handler": handler,
-            "session_purpose": session_purpose,
-            "field_support": field_support,
-            "dog_name": dog_name,
-            "location": location,
-            "search_area_size": search_area_size,
-            "num_subjects": num_subjects,
-            "handler_knowledge": handler_knowledge,
-            "weather": weather,
-            "temperature": temperature,
-            "wind_direction": wind_direction,
-            "wind_speed": wind_speed,
-            "search_type": search_type,
-            "drive_level": drive_level,
-            "subjects_found": subjects_found,
-            "comments": comments,
-            "image_files": image_files_json
-        }
-
-        # Save to database using DatabaseManager
-        db_mgr = get_db_manager(sv.db_type.get())
-        
-        # Show working dialog for networked databases
-        db_type = sv.db_type.get()
-        if db_type in ["postgres", "supabase", "mysql"]:
-            working_dialog = WorkingDialog(self.root, "Saving", 
-                                         f"Saving session to {db_type} database...")
-            self.root.update()
-        else:
-            working_dialog = None
-        
-        try:
-            success, message, session_id = db_mgr.save_session(session_data)
-
-            if not success:
-                messagebox.showerror("Database Error", message)
-                return
-
-            # Save selected terrains
-            db_mgr.save_selected_terrains(session_id, self.accumulated_terrains)
-
-            # Save subject responses
-            subject_responses_list = []
-            for i in range(1, 11):
-                item_id = f'subject_{i}'
-                tags = self.subject_responses_tree.item(item_id, 'tags')
-
-                if 'enabled' in tags:
-                    values = self.subject_responses_tree.item(item_id, 'values')
-                    subject_responses_list.append({
-                        "subject_number": i,
-                        "tfr": values[1] if len(values) > 1 else '',
-                        "refind": values[2] if len(values) > 2 else ''
-                    })
-
-            db_mgr.save_subject_responses(session_id, subject_responses_list)
-        finally:
-            if working_dialog:
-                working_dialog.close(delay_ms=200)
-
-        # Save last handler name to config
-        if handler:
-            self.config["last_handler_name"] = handler
-            self.save_config()
-
-        # Save session to JSON backup
-        session_backup_data = {
-            **session_data,
-            "subject_responses": subject_responses_list,
-            "image_files": self.map_files_list,
-            "selected_terrains": self.accumulated_terrains,
-            "user_name": get_username()
-        }
-        self.misc_data_ops.save_session_to_json(session_backup_data)
-
-        sv.status.set(message)
-        messagebox.showinfo("Success", message)
-
-        # Auto-prepare for next entry
-        sv.session_number.set(str(DatabaseOperations(self).get_next_session_number()))
-        self.selected_sessions = []
-        self.selected_sessions_index = -1
-
-        # Clear form fields (keep handler and dog)
-        self.set_date(datetime.now().strftime("%Y-%m-%d"))
-        sv.session_purpose.set("")
-        sv.field_support.set("")
-        sv.location.set("")
-        sv.search_area_size.set("")
-        sv.num_subjects.set("")
-        sv.handler_knowledge.set("")
-        sv.weather.set("")
-        sv.temperature.set("")
-        sv.wind_direction.set("")
-        sv.wind_speed.set("")
-        sv.search_type.set("")
-        sv.drive_level.set("")
-        sv.subjects_found.set("")
-        self.comments_text.delete("1.0", tk.END)
-        self.accumulated_terrains = []
-        self.accumulated_terrain_combo['values'] = []
-        sv.accumulated_terrain.set("")
-        self.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
-        self.map_files_list = []
-        self.map_listbox.delete(0, tk.END)
-        self.view_map_button.config(state=tk.DISABLED)
-        self.delete_map_button.config(state=tk.DISABLED)
-        self.form_mgmt.update_subjects_found()
-        # Clear subject responses tree
-        for i in range(1, 11):
-            item_id = f'subject_{i}'
-            if self.subject_responses_tree.exists(item_id):
-                self.subject_responses_tree.item(item_id, tags='disabled')
-                self.subject_responses_tree.item(item_id, values=(
-                    f'Subject {i}', '', ''
-                ))
-        
-        # Reset tree selection to subject 1 after clearing form
-        self.reset_subject_responses_tree_selection()
-        self.navigation.update_navigation_buttons()
-
+        """Delegate to Misc2Operations"""
+        return self.misc2_ops.save_session()
     def load_bootstrap(self):
         """Load machine-specific paths from bootstrap file"""
         if self.bootstrap_file.exists():
