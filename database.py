@@ -11,6 +11,13 @@ def get_db_url():
     else:
         # For postgres, supabase, mysql - check if URL has been set at runtime
         url = config.DB_CONFIG[config.DB_TYPE].get("url")
+
+        # print(f"DEBUG URL: {url}") # added by ahg
+        # import traceback
+        # print("DEBUG TRACEBACK:")
+        # traceback.print_stack()
+        # print("-" * 70)
+
         if url:
             return url
         else:

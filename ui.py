@@ -15,6 +15,7 @@ from config import APP_TITLE, CONFIG_FILE, BOOTSTRAP_FILE
 from splash_screen import SplashScreen
 from ui_file_operations import FileOperations
 from ui_misc2 import Misc2Operations
+from setup_tab import SetupTab
 from ui_form_management import FormManagement
 from ui_navigation import Navigation
 from ui_database import DatabaseOperations
@@ -53,6 +54,17 @@ class AirScentingUI:
         # Create main window and withdraw it while splash is showing
         # Use TkinterDnD.Tk() instead of tk.Tk() for drag-and-drop support
         self.root = TkinterDnD.Tk()
+        # Initialize sv module with the root window
+        # This must be done AFTER root is created but BEFORE any sv usage
+        sv.initialize(self.root)
+        sv.db_type.set(self.config.get("db_type","sqlite")) # Added by ahg.
+        # Load saved password immediately for networked databases
+        if sv.db_type.get() in ["postgres", "supabase", "mysql"]:
+            from password_manager import get_decrypted_password, check_crypto_available
+            if check_crypto_available():
+                saved_password = get_decrypted_password(self.config, sv.db_type.get())
+                if saved_password:
+                    sv.db_password.set(saved_password)
         
         # Initialize file operations module
         self.file_ops = FileOperations(self)
@@ -60,13 +72,26 @@ class AirScentingUI:
         self.navigation = Navigation(self)
         self.misc_data_ops = MiscDataOperations(self)
         self.misc2_ops = Misc2Operations(self)
+        self.setup_tab_mgr = SetupTab(self)
         
+        """
         # Initialize file operations module
-        self.file_ops = FileOperations(self)
+        #self.file_ops = FileOperations(self)
         
         # Initialize sv module with the root window
         # This must be done AFTER root is created but BEFORE any sv usage
         sv.initialize(self.root)
+        # Load saved password immediately for networked databases
+        if sv.db_type.get() in ["postgres", "supabase", "mysql"]:
+            from password_manager import get_decrypted_password, check_crypto_available
+            if check_crypto_available():
+                saved_password = get_decrypted_password(self.config, sv.db_type.get())
+                if saved_password:
+                    sv.db_password.set(saved_password)
+        """
+
+        #sv.db_type.set(self.config.get("db_type","sqlite")) # Added by ahg.
+
         
         # Load bootstrap values into sv
         sv.db_path.set(self.machine_db_path)
@@ -159,7 +184,7 @@ class AirScentingUI:
         self.setup_entry_tab()
         
         # Select initial tab based on database existence
-        self.misc_data_ops.select_initial_tab()
+        self.root.after(250,self.misc_data_ops.select_initial_tab)
         
         # Status bar at bottom (create before using it below)
         status_bar = tk.Label(self.root, textvariable=sv.status, 
@@ -315,328 +340,8 @@ class AirScentingUI:
             json.dump(self.config, f, indent=2)
     
     def setup_setup_tab(self):
-        """Setup the Setup tab with all configuration options"""
-        # Create scrollable frame
-        canvas = tk.Canvas(self.setup_tab)
-        scrollbar = ttk.Scrollbar(self.setup_tab, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-        
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-        
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        
-        frame = tk.Frame(scrollable_frame, padx=20, pady=20)
-        frame.pack(fill="both", expand=True)
-        
-        # Database Type Selection
-        db_type_frame = tk.LabelFrame(frame, text="Database Type", padx=10, pady=5)
-        db_type_frame.pack(fill="x", pady=5)
-        
-        radio_container = tk.Frame(db_type_frame)
-        radio_container.pack(pady=5)
-        
-        tk.Radiobutton(radio_container, text="SQLite", variable=sv.db_type, 
-                      value="sqlite", command=self.on_db_type_changed).pack(side="left", padx=20)
-        tk.Radiobutton(radio_container, text="PostgreSQL", variable=sv.db_type, 
-                      value="postgres", command=self.on_db_type_changed).pack(side="left", padx=20)
-        tk.Radiobutton(radio_container, text="Supabase", variable=sv.db_type, 
-                      value="supabase", command=self.on_db_type_changed).pack(side="left", padx=20)
-        tk.Radiobutton(radio_container, text="MySQL", variable=sv.db_type, 
-                      value="mysql", command=self.on_db_type_changed).pack(side="left", padx=20)
-        
-        # Database Password (for postgres, supabase, mysql)
-        self.db_password_frame = tk.Frame(db_type_frame)
-        self.db_password_frame.pack(pady=5)
-        
-        tk.Label(self.db_password_frame, text="Database Password:").pack(side="left", padx=5)
-        self.db_password_entry = tk.Entry(self.db_password_frame, textvariable=sv.db_password, 
-                                          width=30, show="*")
-        self.db_password_entry.pack(side="left", padx=5)
-        
-        # Add right-click context menu for password entry (Cut/Copy/Paste)
-        self.add_entry_context_menu(self.db_password_entry)
-        
-        # Show/Hide password checkbox
-        tk.Checkbutton(self.db_password_frame, text="Show", variable=sv.show_password,
-                      command=self.toggle_password_visibility).pack(side="left", padx=5)
-        
-        # Remember Password checkbox
-        tk.Checkbutton(self.db_password_frame, text="Remember", variable=sv.remember_password).pack(side="left", padx=5)
-        
-        # Forget Password button
-        tk.Button(self.db_password_frame, text="Forget Saved Password", 
-                 command=self.forget_password, width=18).pack(side="left", padx=5)
-        
-        # Add trace to update Create Database button when database type changes
-        sv.db_type.trace_add('write', self.update_create_db_button_state)
-        
-        # Initialize button state and password field visibility
-        self.root.after(100, self.update_create_db_button_state)
-        self.root.after(100, self.on_db_type_changed)
-        
-        # Database folder selection
-        db_frame = tk.LabelFrame(frame, text="Database Folder", padx=10, pady=5)
-        db_frame.pack(fill="x", pady=5)
-        
-        tk.Entry(db_frame, textvariable=sv.db_path, width=70).pack(side="left", padx=5)
-        tk.Button(db_frame, text="Browse", command=self.file_ops.select_db_folder).pack(side="left", padx=5)
-        self.create_db_btn = tk.Button(db_frame, text="Create Database", 
-                                       command=self.create_database, state="disabled")
-        self.create_db_btn.pack(side="left", padx=5)
-        
-        # Add trace to db_path_var to enable/disable Create Database button
-        sv.db_path.trace_add('write', self.update_create_db_button_state)
-        
-        # Trail maps folder
-        folder_frame = tk.LabelFrame(frame, text="Trail Maps Storage Folder", padx=10, pady=5)
-        folder_frame.pack(fill="x", pady=5)
-        
-        tk.Entry(folder_frame, textvariable=sv.trail_maps_folder, width=70).pack(side="left", padx=5)
-        tk.Button(folder_frame, text="Browse", command=self.file_ops.select_folder).pack(side="left", padx=5)
-        
-        # Backup folder
-        backup_frame = tk.LabelFrame(frame, text="Backup Folder", padx=10, pady=5)
-        backup_frame.pack(fill="x", pady=5)
-        
-        tk.Entry(backup_frame, textvariable=sv.backup_folder, width=70).pack(side="left", padx=5)
-        tk.Button(backup_frame, text="Browse", command=self.file_ops.select_backup_folder).pack(side="left", padx=5)
-        tk.Button(backup_frame, text="Restore Settings from Backup", 
-                 command=self.misc_data_ops.restore_settings_from_json).pack(side="left", padx=5)
-        
-        # Default values
-        defaults_frame = tk.LabelFrame(frame, text="Default Values (Optional)", padx=10, pady=5)
-        defaults_frame.pack(fill="x", pady=5)
-        
-        tk.Label(defaults_frame, text="Handler Name:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        tk.Entry(defaults_frame, textvariable=sv.default_handler, width=30).grid(row=0, column=1, padx=5, pady=2)
-        
-        # Note about saving
-        tk.Label(defaults_frame, text="(Click 'Save Configuration' button at bottom to save all settings)",
-                font=("Helvetica", 8, "italic"), fg="gray").grid(row=1, column=0, columnspan=2, pady=5)
-        
-        # Container frame for the management sections (uses grid internally)
-        management_container = tk.Frame(frame)
-        management_container.pack(fill="both", expand=True, pady=5)
-        
-        # Create vertical container for column 0 (Training Locations and Dog Names)
-        column0_container = tk.Frame(management_container)
-        column0_container.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        
-        # Training Locations Management
-        locations_frame = tk.LabelFrame(column0_container, text="Training Locations", padx=10, pady=5)
-        locations_frame.pack(fill="x", pady=(0, 5))
-        
-        # Listbox with scrollbar
-        loc_list_frame = tk.Frame(locations_frame)
-        loc_list_frame.pack(side="left", fill="both", expand=True)
-        
-        loc_scrollbar = tk.Scrollbar(loc_list_frame)
-        loc_scrollbar.pack(side="right", fill="y")
-        
-        self.location_listbox = tk.Listbox(loc_list_frame, yscrollcommand=loc_scrollbar.set, height=4)
-        self.location_listbox.pack(side="left", fill="both", expand=True)
-        loc_scrollbar.config(command=self.location_listbox.yview)
-        
-        # Populate listbox with locations from database
-        # NOTE: Commented out - will be loaded after splash screen starts
-        # self.load_locations_from_database()
-        
-        # Buttons for managing locations
-        loc_button_frame = tk.Frame(locations_frame)
-        loc_button_frame.pack(side="right", padx=(10, 0))
-        
-        tk.Label(loc_button_frame, text="Location:").pack(anchor="w")
-        location_entry = tk.Entry(loc_button_frame, textvariable=sv.new_location, width=20)
-        location_entry.pack(pady=2)
-        location_entry.bind('<Return>', lambda e: self.add_location())
-        
-        self.add_location_btn = tk.Button(loc_button_frame, text="Add Location", 
-                                         command=self.add_location, width=15, state="disabled")
-        self.add_location_btn.pack(pady=2)
-        
-        self.remove_location_btn = tk.Button(loc_button_frame, text="Remove Selected", 
-                                            command=self.remove_location, width=15, state="disabled")
-        self.remove_location_btn.pack(pady=2)
-        
-        # Add trace and selection binding for locations
-        sv.new_location.trace_add('write', self.update_location_button_states)
-        self.location_listbox.bind('<<ListboxSelect>>', self.on_location_select)
-        
-        # Dog Names Management
-        dogs_frame = tk.LabelFrame(column0_container, text="Dog Names", padx=10, pady=5)
-        dogs_frame.pack(fill="x")
-        
-        # Listbox with scrollbar
-        list_frame = tk.Frame(dogs_frame)
-        list_frame.pack(side="left", fill="both", expand=True)
-        
-        scrollbar = tk.Scrollbar(list_frame)
-        scrollbar.pack(side="right", fill="y")
-        
-        self.dog_listbox = tk.Listbox(list_frame, yscrollcommand=scrollbar.set, height=3)
-        self.dog_listbox.pack(side="left", fill="both", expand=True)
-        scrollbar.config(command=self.dog_listbox.yview)
-        
-        # Populate listbox with dogs from database
-        # NOTE: Commented out - will be loaded after splash screen starts
-        # self.load_dogs_from_database()
-        
-        # Buttons for managing dogs
-        button_frame = tk.Frame(dogs_frame)
-        button_frame.pack(side="right", padx=(10, 0))
-        
-        tk.Label(button_frame, text="Dog Name:").pack(anchor="w")
-        dog_entry = tk.Entry(button_frame, textvariable=sv.new_dog, width=20)
-        dog_entry.pack(pady=2)
-        dog_entry.bind('<Return>', lambda e: self.add_dog())
-        
-        self.add_dog_btn = tk.Button(button_frame, text="Add Dog", 
-                                     command=self.add_dog, width=15, state="disabled")
-        self.add_dog_btn.pack(pady=2)
-        
-        self.remove_dog_btn = tk.Button(button_frame, text="Remove Selected", 
-                                       command=self.remove_dog, width=15, state="disabled")
-        self.remove_dog_btn.pack(pady=2)
-        
-        # Add trace to entry field and bind listbox selection
-        sv.new_dog.trace_add('write', self.update_dog_button_states)
-        self.dog_listbox.bind('<<ListboxSelect>>', self.on_dog_select)
-        
-        # Terrain Types Management
-        terrain_frame = tk.LabelFrame(management_container, text="Terrain Types", padx=10, pady=5)
-        terrain_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
-        
-        # Treeview with scrollbar
-        tree_frame = tk.Frame(terrain_frame)
-        tree_frame.pack(side="left", fill="both", expand=True)
-        
-        tree_scrollbar = ttk.Scrollbar(tree_frame, orient="vertical")
-        tree_scrollbar.pack(side="right", fill="y")
-        
-        self.terrain_tree = ttk.Treeview(tree_frame, columns=('Terrain',), show='tree headings', 
-                                        yscrollcommand=tree_scrollbar.set, height=8, selectmode='browse')
-        self.terrain_tree.heading('#0', text='#')
-        self.terrain_tree.heading('Terrain', text='Terrain Type')
-        self.terrain_tree.column('#0', width=40)
-        self.terrain_tree.column('Terrain', width=150)
-        self.terrain_tree.pack(side="left", fill="both", expand=True)
-        tree_scrollbar.config(command=self.terrain_tree.yview)
-        
-        # Populate treeview with terrain types from database
-        # NOTE: Commented out - will be loaded after splash screen starts
-        # self.load_terrain_from_database()
-        
-        # Buttons for managing terrain types
-        terrain_button_frame = tk.Frame(terrain_frame)
-        terrain_button_frame.pack(side="right", padx=(10, 0))
-        
-        tk.Label(terrain_button_frame, text="Terrain Type:").pack(anchor="w")
-        terrain_entry = tk.Entry(terrain_button_frame, textvariable=sv.new_terrain, width=20)
-        terrain_entry.pack(pady=2)
-        terrain_entry.bind('<Return>', lambda e: self.add_terrain_type())
-        
-        self.add_terrain_btn = tk.Button(terrain_button_frame, text="Add Terrain Type", 
-                                        command=self.add_terrain_type, width=15, state="disabled")
-        self.add_terrain_btn.pack(pady=2)
-        
-        self.remove_terrain_btn = tk.Button(terrain_button_frame, text="Remove Selected", 
-                                           command=self.remove_terrain_type, width=15, state="disabled")
-        self.remove_terrain_btn.pack(pady=2)
-        
-        self.move_terrain_up_btn = tk.Button(terrain_button_frame, text="Move Up", 
-                                            command=self.move_terrain_up, width=15, state="disabled")
-        self.move_terrain_up_btn.pack(pady=2)
-        
-        self.move_terrain_down_btn = tk.Button(terrain_button_frame, text="Move Down", 
-                                              command=self.move_terrain_down, width=15, state="disabled")
-        self.move_terrain_down_btn.pack(pady=2)
-        
-        tk.Button(terrain_button_frame, text="Restore Defaults", 
-                 command=self.restore_default_terrain_types, width=15).pack(pady=2)
-        
-        # Add trace and selection binding
-        sv.new_terrain.trace_add('write', self.update_terrain_button_states)
-        self.terrain_tree.bind('<<TreeviewSelect>>', self.on_terrain_select)
-        
-        # Distraction Types Management
-        distraction_frame = tk.LabelFrame(management_container, text="Distraction Types", padx=10, pady=5)
-        distraction_frame.grid(row=0, column=2, sticky="nsew", padx=5, pady=5)
-        
-        # Treeview with scrollbar
-        dist_tree_frame = tk.Frame(distraction_frame)
-        dist_tree_frame.pack(side="left", fill="both", expand=True)
-        
-        dist_tree_scrollbar = ttk.Scrollbar(dist_tree_frame, orient="vertical")
-        dist_tree_scrollbar.pack(side="right", fill="y")
-        
-        self.distraction_type_tree = ttk.Treeview(dist_tree_frame, columns=('Distraction',), show='tree headings', 
-                                                 yscrollcommand=dist_tree_scrollbar.set, height=8, selectmode='browse')
-        self.distraction_type_tree.heading('#0', text='#')
-        self.distraction_type_tree.heading('Distraction', text='Distraction Type')
-        self.distraction_type_tree.column('#0', width=40)
-        self.distraction_type_tree.column('Distraction', width=150)
-        self.distraction_type_tree.pack(side="left", fill="both", expand=True)
-        dist_tree_scrollbar.config(command=self.distraction_type_tree.yview)
-        
-        # Populate treeview with distraction types from database
-        # NOTE: Commented out - will be loaded after splash screen starts
-        # self.load_distraction_from_database()
-        
-        # Buttons for managing distraction types
-        distraction_button_frame = tk.Frame(distraction_frame)
-        distraction_button_frame.pack(side="right", padx=(10, 0))
-        
-        tk.Label(distraction_button_frame, text="Distraction Type:").pack(anchor="w")
-        distraction_entry = tk.Entry(distraction_button_frame, textvariable=sv.new_distraction, width=20)
-        distraction_entry.pack(pady=2)
-        distraction_entry.bind('<Return>', lambda e: self.add_distraction_type())
-        
-        self.add_distraction_type_btn = tk.Button(distraction_button_frame, text="Add Distraction Type", 
-                                                 command=self.add_distraction_type, width=17, state="disabled")
-        self.add_distraction_type_btn.pack(pady=2)
-        
-        self.remove_distraction_type_btn = tk.Button(distraction_button_frame, text="Remove Selected", 
-                                                    command=self.remove_distraction_type, width=17, state="disabled")
-        self.remove_distraction_type_btn.pack(pady=2)
-        
-        self.move_distraction_type_up_btn = tk.Button(distraction_button_frame, text="Move Up", 
-                                                     command=self.move_distraction_up, width=17, state="disabled")
-        self.move_distraction_type_up_btn.pack(pady=2)
-        
-        self.move_distraction_type_down_btn = tk.Button(distraction_button_frame, text="Move Down", 
-                                                       command=self.move_distraction_down, width=17, state="disabled")
-        self.move_distraction_type_down_btn.pack(pady=2)
-        
-        tk.Button(distraction_button_frame, text="Restore Defaults", 
-                 command=self.restore_default_distraction_types, width=17).pack(pady=2)
-        
-        # Add trace and selection binding
-        sv.new_distraction.trace_add('write', self.update_distraction_type_button_states)
-        self.distraction_type_tree.bind('<<TreeviewSelect>>', self.on_distraction_type_select)
-        
-        # Configure grid weights so they expand properly
-        management_container.grid_columnconfigure(0, weight=1)
-        management_container.grid_columnconfigure(1, weight=1)
-        management_container.grid_columnconfigure(2, weight=1)
-        
-        # Save Configuration Button
-        save_config_frame = tk.Frame(frame)
-        save_config_frame.pack(pady=20)
-        
-        tk.Button(save_config_frame, text="💾 Save Configuration",
-                 command=self.save_configuration_settings,
-                 bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold"),
-                 width=30, height=2).pack()
-        
-        tk.Label(save_config_frame, text="Save all file paths and settings to config file",
-                font=("Helvetica", 9, "italic"), fg="gray").pack(pady=(5, 0))
+        """Setup the Setup tab - delegate to SetupTab module"""
+        self.setup_tab_mgr.setup_setup_tab()
     
     def setup_entry_tab(self):
         """Setup the Training Session Entry tab"""
@@ -729,11 +434,9 @@ class AirScentingUI:
         tk.Label(session_frame, text="Dog:").grid(row=1, column=6, sticky="e", padx=5, pady=2)
         # Load last dog from database (deferred until password is loaded)
         # NOTE: Commented out - will be loaded in load_initial_database_data()
-        # last_dog = DatabaseOperations(self).load_db_setting("last_dog_name", "")
         self.dog_combo = ttk.Combobox(session_frame, textvariable=sv.dog, width=15, state="readonly")
         # Load dogs from database (deferred)
         # NOTE: Commented out - will be loaded in load_initial_database_data()
-        # self.refresh_dog_list()
         self.dog_combo.grid(row=1, column=7, sticky="w", padx=5, pady=2)
         # Bind dog change to update session number
         self.dog_combo.bind('<<ComboboxSelected>>', self.on_dog_changed)
@@ -746,7 +449,7 @@ class AirScentingUI:
         self.location_combo = ttk.Combobox(search_frame, textvariable=sv.location, width=18, state="readonly")
         self.location_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
         # Load locations from database
-        self.refresh_location_list()
+        self.root.after(150,self.refresh_location_list)
         
         tk.Label(search_frame, text="Search Area (Acres):").grid(row=0, column=2, sticky="w", padx=5, pady=2)
         tk.Entry(search_frame, textvariable=sv.search_area_size, width=18).grid(row=0, column=3, sticky="w", padx=5, pady=2)
@@ -789,11 +492,8 @@ class AirScentingUI:
         
         tk.Label(search_frame, text="Add Terrain Type:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
         # Load terrain types from database using DatabaseManager (respects sort_order)
-        db_mgr = get_db_manager(sv.db_type.get())
-        terrain_types = db_mgr.load_terrain_types()
-        
         self.terrain_combo = ttk.Combobox(search_frame, textvariable=sv.terrain, width=15, state="readonly",
-                                         values=terrain_types)
+                                         values=[])
         self.terrain_combo.grid(row=2, column=3, sticky="w", padx=5, pady=2)
         self.terrain_combo.bind('<<ComboboxSelected>>', self.add_to_terrain_accumulator)
         
@@ -989,6 +689,19 @@ class AirScentingUI:
         self.subjects_found_combo['state'] = 'disabled'
     
     # Placeholder methods for Entry tab buttons
+    def initialize_entry_tab_data(self):
+        """Load all database data for Entry tab - called after password is loaded"""
+        from sv import sv
+        
+        # last_dog = DatabaseOperations(self).load_db_setting("last_dog_name", "")
+        # self.refresh_dog_list()
+        db_mgr = get_db_manager(sv.db_type.get())
+        terrain_types = db_mgr.load_terrain_types()
+        # Update terrain combobox with loaded data
+        if hasattr(self, 'terrain_combo'):
+            self.terrain_combo['values'] = terrain_types
+
+
     def add_to_terrain_accumulator(self, event=None):
         """Add selected terrain type to the accumulated terrains list"""
         terrain_type = sv.terrain.get()
@@ -1207,36 +920,12 @@ class AirScentingUI:
     
     # File/Folder selection methods
     def update_create_db_button_state(self, *args):
-        """Enable/disable Create Database button based on folder selection and database type"""
-        db_type = sv.db_type.get()
-        has_folder = bool(sv.db_path.get().strip())
-        
-        # For SQLite, require folder. For postgres/supabase/mysql, always enable
-        if db_type == "sqlite":
-            self.create_db_btn.config(state="normal" if has_folder else "disabled")
-        else:  # postgres, supabase, or mysql
-            self.create_db_btn.config(state="normal")
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.update_create_db_button_state(*args)
     
     def add_entry_context_menu(self, entry_widget):
-        """Add right-click context menu to Entry widget with Cut/Copy/Paste/Select All"""
-        context_menu = tk.Menu(entry_widget, tearoff=0)
-        
-        context_menu.add_command(label="Cut", command=lambda: self.entry_cut(entry_widget))
-        context_menu.add_command(label="Copy", command=lambda: self.entry_copy(entry_widget))
-        context_menu.add_command(label="Paste", command=lambda: self.entry_paste(entry_widget))
-        context_menu.add_separator()
-        context_menu.add_command(label="Select All", command=lambda: self.entry_select_all(entry_widget))
-        
-        def show_context_menu(event):
-            try:
-                context_menu.tk_popup(event.x_root, event.y_root)
-            finally:
-                context_menu.grab_release()
-        
-        # Bind right-click (Button-3 on Linux/Windows, Button-2 on Mac)
-        entry_widget.bind("<Button-3>", show_context_menu)
-        # Also bind Control-Button-1 for Mac users
-        entry_widget.bind("<Control-Button-1>", show_context_menu)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.add_entry_context_menu(entry_widget)
     
     def entry_cut(self, entry_widget):
         """Cut selected text from Entry widget"""
@@ -1268,47 +957,12 @@ class AirScentingUI:
             pass
     
     def on_db_type_changed(self):
-        """Show/hide password field based on database type and load saved password"""
-        db_type = sv.db_type.get()
-        
-        # Show password field for postgres, supabase, mysql
-        # Hide for sqlite
-        if db_type in ["postgres", "supabase", "mysql"]:
-            self.db_password_frame.pack(pady=5)
-            
-            # Try to load saved encrypted password for this database type
-            from password_manager import get_decrypted_password, check_crypto_available
-            
-            if check_crypto_available():
-                saved_password = get_decrypted_password(self.config, db_type)
-                if saved_password:
-                    sv.db_password.set(saved_password)
-                    # CRITICAL FIX: Actually set the password in the database configuration
-                    # Without this, the password shows in the field but isn't used for connection
-                    self.set_db_password()
-                    # Only update status if status_var exists (may not during initialization)
-                    if hasattr(self, 'status_var'):
-                        sv.status.set(f"Loaded saved password for {db_type}")
-                else:
-                    sv.db_password.set("")
-            else:
-                sv.db_password.set("")
-        else:
-            self.db_password_frame.pack_forget()
-        
-        # Force UI update to keep splash countdown animating
-        if hasattr(self, 'root'):
-            try:
-                self.root.update_idletasks()
-            except:
-                pass
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.on_db_type_changed()
     
     def toggle_password_visibility(self):
-        """Toggle password visibility in entry field"""
-        if sv.show_password.get():
-            self.db_password_entry.config(show="")
-        else:
-            self.db_password_entry.config(show="*")
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.toggle_password_visibility()
     
     def set_db_password(self):
         """Set database password in config at runtime and optionally save encrypted"""
@@ -1359,23 +1013,8 @@ class AirScentingUI:
                     )
     
     def forget_password(self):
-        """Clear saved encrypted password for current database type"""
-        db_type = sv.db_type.get()
-        
-        if db_type not in ["postgres", "supabase", "mysql"]:
-            return
-        
-        from password_manager import clear_saved_password
-        
-        # Clear from config
-        clear_saved_password(self.config, db_type)
-        self.save_config()
-        
-        # Clear from UI
-        sv.db_password.set("")
-        
-        sv.status.set(f"Forgot saved password for {db_type}")
-        messagebox.showinfo("Password Cleared", f"Saved password for {db_type} has been cleared.")
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.forget_password()
     
     def prepare_db_connection(self, db_type):
         """Prepare database connection by setting password if needed"""
@@ -1395,293 +1034,9 @@ class AirScentingUI:
         return True
     
     def create_database(self):
-        """Create or rebuild database schema"""
-        from pathlib import Path
-        
-        # Get selected database type
-        db_type = sv.db_type.get()
-        
-        if db_type == "sqlite":
-            # SQLite requires a folder
-            folder = sv.db_path.get().strip()
-            if not folder:
-                messagebox.showwarning("No Folder", "Please select a database folder first")
-                return
-            
-            # Check if folder exists
-            folder_path = Path(folder)
-            if not folder_path.exists():
-                messagebox.showerror("Invalid Folder", f"Folder does not exist:\n{folder}")
-                return
-            
-            db_path = folder_path / "air_scenting.db"
-            db_exists = db_path.exists()
-            
-            if db_exists:
-                result = messagebox.askyesno(
-                    "Database Exists",
-                    f"A database already exists at:\n{db_path}\n\n"
-                    "Do you want to rebuild it?\n\n"
-                    "WARNING: This will delete all existing data!",
-                    icon='warning'
-                )
-                if not result:
-                    return
-                
-                # Close any existing database connections
-                try:
-                    from database import engine
-                    engine.dispose()
-                    sv.status.set("Closed database connections...")
-                except Exception as e:
-                    print(f"Note: Could not dispose engine: {e}")
-                
-                # Delete existing database
-                try:
-                    db_path.unlink()
-                except PermissionError:
-                    messagebox.showerror(
-                        "Database In Use",
-                        f"Cannot delete database - it may be in use by another program.\n\n"
-                        f"Please close any programs using the database and try again.\n\n"
-                        f"Database: {db_path}"
-                    )
-                    return
-                except Exception as e:
-                    messagebox.showerror("Error", f"Failed to delete existing database:\n{e}")
-                    return
-            
-            # Create new SQLite database with schema
-            try:
-                import sqlite3
-                conn = sqlite3.connect(str(db_path))
-                conn.close()
-                
-                # Update config.py temporarily for schema creation
-                import config
-                old_db_type = config.DB_TYPE
-                old_db_url = config.DB_CONFIG[old_db_type]["url"]
-                
-                # Temporarily point to the new database
-                config.DB_TYPE = "sqlite"
-                config.DB_CONFIG["sqlite"]["url"] = f"sqlite:///{db_path}"
-                
-                # Recreate engine with new database
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                # Create schema
-                from schema import create_tables
-                create_tables()
-                
-                # Restore original config
-                config.DB_TYPE = old_db_type
-                config.DB_CONFIG[old_db_type]["url"] = old_db_url
-                database.engine.dispose()
-                reload(database)
-                
-                sv.status.set(f"Database created: {db_path}")
-                messagebox.showinfo(
-                    "Success", 
-                    f"SQLite database created successfully!\n\n{db_path}\n\n"
-                    f"Schema initialized with training_sessions table."
-                )
-                
-                # Offer to restore from JSON backups
-                self.misc_data_ops.restore_from_json_backups("sqlite")
-                
-                # Offer to load default terrain and distraction types
-                self.misc_data_ops.offer_load_default_types("sqlite")
-                
-                # Update session number and UI after database recreation
-                sv.session_number.set(str(DatabaseOperations(self).get_next_session_number()))
-                self.selected_sessions = []
-                self.selected_sessions_index = -1
-                self.navigation.update_navigation_buttons()
-                # Clear form to new entry state
-                self.set_date(datetime.now().strftime("%Y-%m-%d"))
-                sv.session_purpose.set("")
-                sv.field_support.set("")
-                sv.dog.set("")
-                sv.search_area_size.set("")
-                sv.num_subjects.set("")
-                sv.handler_knowledge.set("")
-                sv.weather.set("")
-                sv.temperature.set("")
-                sv.wind_direction.set("")
-                sv.wind_speed.set("")
-                sv.search_type.set("")
-                sv.drive_level.set("")
-                sv.subjects_found.set("")
-                # Update subjects_found combo state (will disable since num_subjects is blank)
-                self.form_mgmt.update_subjects_found()
-                
-                # Refresh dog list on Setup tab (new database has no dogs)
-                self.refresh_dog_list()
-                
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to create database:\n{e}\n\n{type(e).__name__}")
-                import traceback
-                traceback.print_exc()
-        
-        else:  # postgres, supabase, or mysql
-            # Check if password has been entered
-            password = sv.db_password.get().strip()
-            if not password:
-                messagebox.showerror(
-                    "Password Required",
-                    f"Please enter the database password for {db_type}."
-                )
-                return
-            
-            # Set the password in config at runtime
-            self.set_db_password()
-            
-            # For PostgreSQL/Supabase/MySQL, check if tables exist and offer to rebuild
-            try:
-                # Temporarily switch to the selected database type
-                import config
-                old_db_type = config.DB_TYPE
-                
-                config.DB_TYPE = db_type
-                
-                # Reload database module with new DB_TYPE
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                from schema import create_tables, drop_tables
-                from sqlalchemy import text
-                
-                # Show working dialog while checking connection
-                working_dialog = WorkingDialog(self.root, "Connecting", 
-                                             f"Connecting to {db_type} database...")
-                self.root.update()
-                
-                # Check if training_sessions table exists
-                try:
-                    with database.get_connection() as conn:
-                        check_query = text("""
-                            SELECT EXISTS (
-                                SELECT FROM information_schema.tables 
-                                WHERE table_name = 'training_sessions'
-                            )
-                        """)
-                        
-                        result = conn.execute(check_query)
-                        table_exists = result.scalar()
-                finally:
-                    working_dialog.close(delay_ms=200)
-                
-                if table_exists:
-                    result = messagebox.askyesno(
-                        "Database Tables Exist",
-                        f"Tables already exist in the {db_type} database.\n\n"
-                        "Do you want to rebuild them?\n\n"
-                        "WARNING: This will delete all existing data!",
-                        icon='warning'
-                    )
-                    if not result:
-                        # Restore original DB_TYPE
-                        config.DB_TYPE = old_db_type
-                        database.engine.dispose()
-                        reload(database)
-                        return
-                    
-                    # Drop existing tables
-                    working_dialog = WorkingDialog(self.root, "Deleting", 
-                                                 f"Deleting existing {db_type} tables...")
-                    self.root.update()
-                    try:
-                        drop_tables()
-                        sv.status.set("Dropped existing tables...")
-                    finally:
-                        working_dialog.close(delay_ms=200)
-                
-                # Create tables
-                working_dialog = WorkingDialog(self.root, "Creating Database", 
-                                             f"Creating {db_type} database schema...")
-                self.root.update()
-                try:
-                    create_tables()
-                finally:
-                    working_dialog.close(delay_ms=200)
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-                
-                sv.status.set(f"{db_type.title()} schema created successfully")
-                messagebox.showinfo(
-                    "Success",
-                    f"{db_type.title()} database schema created successfully!\n\n"
-                    f"Tables initialized:\n"
-                    f"  - training_sessions"
-                )
-                
-                # Offer to restore from JSON backups
-                self.misc_data_ops.restore_from_json_backups(db_type)
-                
-                # Offer to load default terrain and distraction types
-                self.misc_data_ops.offer_load_default_types(db_type)
-                
-                # Update session number and UI after database recreation
-                sv.session_number.set(str(DatabaseOperations(self).get_next_session_number()))
-                self.selected_sessions = []
-                self.selected_sessions_index = -1
-                self.navigation.update_navigation_buttons()
-                # Clear form to new entry state
-                self.set_date(datetime.now().strftime("%Y-%m-%d"))
-                sv.session_purpose.set("")
-                sv.field_support.set("")
-                sv.dog.set("")
-                sv.search_area_size.set("")
-                sv.num_subjects.set("")
-                sv.handler_knowledge.set("")
-                sv.weather.set("")
-                sv.temperature.set("")
-                sv.wind_direction.set("")
-                sv.wind_speed.set("")
-                sv.search_type.set("")
-                sv.drive_level.set("")
-                sv.subjects_found.set("")
-                # Update subjects_found combo state (will disable since num_subjects is blank)
-                self.form_mgmt.update_subjects_found()
-                
-                # Refresh dog list on Setup tab (new database has no dogs)
-                self.refresh_dog_list()
-                
-            except Exception as e:
-                # Restore original DB_TYPE on error
-                try:
-                    import config
-                    import database
-                    from importlib import reload
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except:
-                    pass
-                
-                messagebox.showerror(
-                    "Database Error",
-                    f"Failed to create {db_type} database schema:\n\n{e}\n\n{type(e).__name__}\n\n"
-                    f"Make sure:\n"
-                    f"1. Database password is correct\n"
-                    f"2. Database server is accessible\n"
-                    f"3. You have proper credentials and permissions\n"
-                    f"4. Connection string in config.py is correct"
-                )
-                import traceback
-                traceback.print_exc()
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.create_database()
     
-    # Training Locations methods
     def load_locations_from_database(self):
         """Load training locations from database into Setup tab listbox"""
         # Ensure database is ready (critical for networked databases)
@@ -1748,72 +1103,20 @@ class AirScentingUI:
             self.distraction_type_tree.insert('', tk.END, text=str(idx), values=(distraction,))
     
     def update_location_button_states(self, *args):
-        """Enable/disable location buttons based on entry content"""
-        has_text = bool(sv.new_location.get().strip())
-        self.add_location_btn.config(state="normal" if has_text else "disabled")
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.update_location_button_states(*args)
     
     def on_location_select(self, event):
-        """Handle location selection in listbox"""
-        selection = self.location_listbox.curselection()
-        self.remove_location_btn.config(state="normal" if selection else "disabled")
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.on_location_select(event)
     
     def add_location(self):
-        """Add a new training location"""
-        location = sv.new_location.get().strip()
-        if not location:
-            return
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        db_type = sv.db_type.get()
-        
-        # Show working dialog for networked databases
-        if db_type in ["postgres", "supabase", "mysql"]:
-            working_dialog = WorkingDialog(self.root, "Adding Location", 
-                                         f"Adding location to {db_type} database...")
-            self.root.update()
-        else:
-            working_dialog = None
-        
-        try:
-            success, message = db_mgr.add_location(location)
-        finally:
-            if working_dialog:
-                working_dialog.close(delay_ms=200)
-        
-        if success:
-            self.load_locations_from_database()
-            self.refresh_location_list()
-            sv.new_location.set("")
-            sv.status.set(message)
-        else:
-            if "already exists" in message:
-                messagebox.showinfo("Duplicate", message)
-            else:
-                messagebox.showerror("Database Error", message)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.add_location()
     
     def remove_location(self):
-        """Remove selected training location"""
-        selection = self.location_listbox.curselection()
-        if not selection:
-            return
-        
-        location = self.location_listbox.get(selection[0])
-        
-        result = messagebox.askyesno("Confirm Delete", 
-                                     f"Delete location '{location}'?")
-        if not result:
-            return
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        success, message = db_mgr.remove_location(location)
-        
-        if success:
-            self.load_locations_from_database()
-            self.refresh_location_list()
-            sv.status.set(message)
-            self.remove_location_btn.config(state="disabled")
-        else:
-            messagebox.showerror("Database Error", message)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.remove_location()
     
     def load_dogs_from_database(self):
         """Load dog names from database into listbox"""
@@ -1846,426 +1149,80 @@ class AirScentingUI:
             self.dog_listbox.insert(tk.END, dog)
     
     def update_dog_button_states(self, *args):
-        """Enable/disable dog buttons based on entry content"""
-        has_text = bool(sv.new_dog.get().strip())
-        self.add_dog_btn.config(state="normal" if has_text else "disabled")
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.update_dog_button_states(*args)
     
     def on_dog_select(self, event):
-        """Handle dog selection in listbox"""
-        selection = self.dog_listbox.curselection()
-        self.remove_dog_btn.config(state="normal" if selection else "disabled")
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.on_dog_select(event)
     
     def add_dog(self):
-        """Add a new dog"""
-        dog_name = sv.new_dog.get().strip()
-        if not dog_name:
-            return
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        db_type = sv.db_type.get()
-        
-        # Show working dialog for networked databases
-        if db_type in ["postgres", "supabase", "mysql"]:
-            working_dialog = WorkingDialog(self.root, "Adding Dog", 
-                                         f"Adding dog to {db_type} database...")
-            self.root.update()
-        else:
-            working_dialog = None
-        
-        try:
-            success, message = db_mgr.add_dog(dog_name)
-        finally:
-            if working_dialog:
-                working_dialog.close(delay_ms=200)
-        
-        if success:
-            self.load_dogs_from_database()
-            if hasattr(self, 'dog_combo'):
-                self.refresh_dog_list()
-            sv.new_dog.set("")
-            sv.status.set(message)
-        else:
-            if "already exists" in message:
-                messagebox.showinfo("Duplicate", message)
-            else:
-                messagebox.showerror("Database Error", message)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.add_dog()
     
     def remove_dog(self):
-        """Remove selected dog"""
-        selection = self.dog_listbox.curselection()
-        if not selection:
-            return
-        
-        dog_name = self.dog_listbox.get(selection[0])
-        
-        # Confirm deletion
-        result = messagebox.askyesno(
-            "Confirm Delete",
-            f"Are you sure you want to delete dog '{dog_name}'?\n\n"
-            "This will not delete training sessions for this dog."
-        )
-        if not result:
-            return
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        success, message = db_mgr.remove_dog(dog_name)
-        
-        if success:
-            self.dog_listbox.delete(selection[0])
-            if hasattr(self, 'dog_combo'):
-                self.refresh_dog_list()
-            sv.status.set(message)
-            self.remove_dog_btn.config(state="disabled")
-        else:
-            messagebox.showerror("Database Error", message)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.remove_dog()
     
-    # Terrain Types methods
     def update_terrain_button_states(self, *args):
-        """Enable/disable terrain buttons based on entry content and selection"""
-        has_text = bool(sv.new_terrain.get().strip())
-        self.add_terrain_btn.config(state="normal" if has_text else "disabled")
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.update_terrain_button_states(*args)
     
     def on_terrain_select(self, event):
-        """Handle terrain type selection"""
-        selection = self.terrain_tree.selection()
-        has_selection = bool(selection)
-        self.remove_terrain_btn.config(state="normal" if has_selection else "disabled")
-        self.move_terrain_up_btn.config(state="normal" if has_selection else "disabled")
-        self.move_terrain_down_btn.config(state="normal" if has_selection else "disabled")
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.on_terrain_select(event)
     
     def add_terrain_type(self):
-        """Add a new terrain type"""
-        terrain = sv.new_terrain.get().strip()
-        if not terrain:
-            return
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        db_type = sv.db_type.get()
-        
-        # Show working dialog for networked databases
-        if db_type in ["postgres", "supabase", "mysql"]:
-            working_dialog = WorkingDialog(self.root, "Adding Terrain", 
-                                         f"Adding terrain type to {db_type} database...")
-            self.root.update()
-        else:
-            working_dialog = None
-        
-        try:
-            success, message = db_mgr.add_terrain_type(terrain)
-        finally:
-            if working_dialog:
-                working_dialog.close(delay_ms=200)
-        
-        if success:
-            self.load_terrain_from_database()
-            # Also refresh Entry tab terrain combobox
-            if hasattr(self, 'terrain_combo'):
-                self.refresh_terrain_list()
-            sv.new_terrain.set("")
-            sv.status.set(message)
-        else:
-            if "already exists" in message:
-                messagebox.showinfo("Duplicate", message)
-            else:
-                messagebox.showerror("Database Error", message)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.add_terrain_type()
     
     def remove_terrain_type(self):
-        """Remove selected terrain type"""
-        selection = self.terrain_tree.selection()
-        if not selection:
-            return
-        
-        item = selection[0]
-        values = self.terrain_tree.item(item, 'values')
-        terrain = values[0]
-        
-        result = messagebox.askyesno("Confirm Delete", 
-                                    f"Delete terrain type '{terrain}'?")
-        if not result:
-            return
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        success, message = db_mgr.remove_terrain_type(terrain)
-        
-        if success:
-            self.load_terrain_from_database()
-            # Also refresh Entry tab terrain combobox
-            if hasattr(self, 'terrain_combo'):
-                self.refresh_terrain_list()
-            sv.status.set(message)
-        else:
-            messagebox.showerror("Database Error", message)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.remove_terrain_type()
     
     def move_terrain_up(self):
-        """Move selected terrain type up"""
-        selection = self.terrain_tree.selection()
-        if not selection:
-            return
-        
-        item = selection[0]
-        values = self.terrain_tree.item(item, 'values')
-        terrain = values[0]
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        success, message = db_mgr.move_terrain_up(terrain)
-        
-        if success:
-            # Reload and reselect
-            self.load_terrain_from_database()
-            # Also refresh Entry tab terrain combobox
-            if hasattr(self, 'terrain_combo'):
-                self.refresh_terrain_list()
-            # Find and select the moved item
-            for child in self.terrain_tree.get_children():
-                if self.terrain_tree.item(child, 'values')[0] == terrain:
-                    self.terrain_tree.selection_set(child)
-                    self.terrain_tree.see(child)
-                    break
-            sv.status.set(message)
-        else:
-            if "Already at top" not in message:
-                messagebox.showinfo("Cannot Move", message)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.move_terrain_up()
     
     def move_terrain_down(self):
-        """Move selected terrain type down"""
-        selection = self.terrain_tree.selection()
-        if not selection:
-            return
-        
-        item = selection[0]
-        values = self.terrain_tree.item(item, 'values')
-        terrain = values[0]
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        success, message = db_mgr.move_terrain_down(terrain)
-        
-        if success:
-            # Reload and reselect
-            self.load_terrain_from_database()
-            # Also refresh Entry tab terrain combobox
-            if hasattr(self, 'terrain_combo'):
-                self.refresh_terrain_list()
-            # Find and select the moved item
-            for child in self.terrain_tree.get_children():
-                if self.terrain_tree.item(child, 'values')[0] == terrain:
-                    self.terrain_tree.selection_set(child)
-                    self.terrain_tree.see(child)
-                    break
-            sv.status.set(message)
-        else:
-            if "Already at bottom" not in message:
-                messagebox.showinfo("Cannot Move", message)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.move_terrain_down()
     
     def restore_default_terrain_types(self):
-        """Restore default terrain types"""
-        result = messagebox.askyesno(
-            "Restore Defaults",
-            "This will DELETE all existing terrain types and restore the default list.\n\n"
-            "Are you sure you want to continue?"
-        )
-        if not result:
-            return
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        success, message = db_mgr.restore_default_terrain_types()
-        
-        if success:
-            self.load_terrain_from_database()
-            # Also refresh Entry tab terrain combobox
-            if hasattr(self, 'terrain_combo'):
-                self.refresh_terrain_list()
-            sv.status.set(message)
-            messagebox.showinfo("Success", message)
-        else:
-            messagebox.showerror("Error", message)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.restore_default_terrain_types()
     
-    # Distraction Types methods
     def update_distraction_type_button_states(self, *args):
-        """Enable/disable distraction type buttons"""
-        has_text = bool(sv.new_distraction.get().strip())
-        self.add_distraction_type_btn.config(state="normal" if has_text else "disabled")
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.update_distraction_type_button_states(*args)
     
     def on_distraction_type_select(self, event):
-        """Handle distraction type selection"""
-        selection = self.distraction_type_tree.selection()
-        has_selection = bool(selection)
-        self.remove_distraction_type_btn.config(state="normal" if has_selection else "disabled")
-        self.move_distraction_type_up_btn.config(state="normal" if has_selection else "disabled")
-        self.move_distraction_type_down_btn.config(state="normal" if has_selection else "disabled")
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.on_distraction_type_select(event)
     
     def add_distraction_type(self):
-        """Add a new distraction type"""
-        distraction = sv.new_distraction.get().strip()
-        if not distraction:
-            return
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        db_type = sv.db_type.get()
-        
-        # Show working dialog for networked databases
-        if db_type in ["postgres", "supabase", "mysql"]:
-            working_dialog = WorkingDialog(self.root, "Adding Distraction", 
-                                         f"Adding distraction type to {db_type} database...")
-            self.root.update()
-        else:
-            working_dialog = None
-        
-        try:
-            success, message = db_mgr.add_distraction_type(distraction)
-        finally:
-            if working_dialog:
-                working_dialog.close(delay_ms=200)
-        
-        if success:
-            self.load_distraction_from_database()
-            sv.new_distraction.set("")
-            sv.status.set(message)
-        else:
-            if "already exists" in message:
-                messagebox.showinfo("Duplicate", message)
-            else:
-                messagebox.showerror("Database Error", message)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.add_distraction_type()
     
     def remove_distraction_type(self):
-        """Remove selected distraction type"""
-        selection = self.distraction_type_tree.selection()
-        if not selection:
-            return
-        
-        item = selection[0]
-        values = self.distraction_type_tree.item(item, 'values')
-        distraction = values[0]
-        
-        result = messagebox.askyesno("Confirm Delete", 
-                                    f"Delete distraction type '{distraction}'?")
-        if not result:
-            return
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        success, message = db_mgr.remove_distraction_type(distraction)
-        
-        if success:
-            self.load_distraction_from_database()
-            sv.status.set(message)
-        else:
-            messagebox.showerror("Database Error", message)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.remove_distraction_type()
     
     def move_distraction_up(self):
-        """Move selected distraction type up"""
-        selection = self.distraction_type_tree.selection()
-        if not selection:
-            return
-        
-        item = selection[0]
-        values = self.distraction_type_tree.item(item, 'values')
-        distraction = values[0]
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        success, message = db_mgr.move_distraction_up(distraction)
-        
-        if success:
-            # Reload and reselect
-            self.load_distraction_from_database()
-            # Find and select the moved item
-            for child in self.distraction_type_tree.get_children():
-                if self.distraction_type_tree.item(child, 'values')[0] == distraction:
-                    self.distraction_type_tree.selection_set(child)
-                    self.distraction_type_tree.see(child)
-                    break
-            sv.status.set(message)
-        else:
-            if "Already at top" not in message:
-                messagebox.showinfo("Cannot Move", message)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.move_distraction_up()
     
     def move_distraction_down(self):
-        """Move selected distraction type down"""
-        selection = self.distraction_type_tree.selection()
-        if not selection:
-            return
-        
-        item = selection[0]
-        values = self.distraction_type_tree.item(item, 'values')
-        distraction = values[0]
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        success, message = db_mgr.move_distraction_down(distraction)
-        
-        if success:
-            # Reload and reselect
-            self.load_distraction_from_database()
-            # Find and select the moved item
-            for child in self.distraction_type_tree.get_children():
-                if self.distraction_type_tree.item(child, 'values')[0] == distraction:
-                    self.distraction_type_tree.selection_set(child)
-                    self.distraction_type_tree.see(child)
-                    break
-            sv.status.set(message)
-        else:
-            if "Already at bottom" not in message:
-                messagebox.showinfo("Cannot Move", message)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.move_distraction_down()
     
     def restore_default_distraction_types(self):
-        """Restore default distraction types"""
-        result = messagebox.askyesno(
-            "Restore Defaults",
-            "This will DELETE all existing distraction types and restore the default list.\n\n"
-            "Are you sure you want to continue?"
-        )
-        if not result:
-            return
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        success, message = db_mgr.restore_default_distraction_types()
-        
-        if success:
-            self.load_distraction_from_database()
-            sv.status.set(message)
-            messagebox.showinfo("Success", message)
-        else:
-            messagebox.showerror("Error", message)
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.restore_default_distraction_types()
     
-    # Configuration management
     def save_configuration_settings(self):
-        """Save all configuration settings"""
-        # Check for text in entry fields that hasn't been added
-        unadded_items = []
-        if sv.new_location.get().strip():
-            unadded_items.append(f"Location: '{sv.new_location.get().strip()}'")
-        if sv.new_dog.get().strip():
-            unadded_items.append(f"Dog: '{sv.new_dog.get().strip()}'")
-        if sv.new_terrain.get().strip():
-            unadded_items.append(f"Terrain: '{sv.new_terrain.get().strip()}'")
-        if sv.new_distraction.get().strip():
-            unadded_items.append(f"Distraction: '{sv.new_distraction.get().strip()}'")
-        
-        if unadded_items:
-            message = "You have typed text that hasn't been added:\n\n" + "\n".join(unadded_items)
-            message += "\n\nDo you want to save anyway?\n(This text will be lost)"
-            result = messagebox.askyesno("Unadded Items", message, icon='warning')
-            if not result:
-                return  # User cancelled
-        
-        # Update config with default values
-        self.config["handler_name"] = sv.default_handler.get()
-        self.config["db_type"] = sv.db_type.get()
-        
-        # Save config file
-        self.save_config()
-        
-        # Save machine-specific paths
-        self.machine_db_path = sv.db_path.get()
-        self.machine_trail_maps_folder = sv.trail_maps_folder.get()
-        self.machine_backup_folder = sv.backup_folder.get()
-        self.save_bootstrap()
-        
-        # Save settings backup JSON file
-        self.misc_data_ops.save_settings_backup()
-        
-        # Take new snapshot after saving
-        self.form_mgmt.take_form_snapshot()
-        
-        sv.status.set("Configuration saved successfully!")
-        messagebox.showinfo("Success", "Configuration saved successfully!")
+        """Delegate to SetupTab module"""
+        return self.setup_tab_mgr.save_configuration_settings()
     
     def on_closing(self):
         """Handle window close event"""
