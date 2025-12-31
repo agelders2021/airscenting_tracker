@@ -78,7 +78,6 @@ class FormManagement:
             return False
         elif result:  # Yes - save first
             # Import here to avoid circular dependency
-            from ui_setup_tab import SetupTab
             setup = SetupTab(self.ui)
             setup.save_configuration_settings()
             return True
