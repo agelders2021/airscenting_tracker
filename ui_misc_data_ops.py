@@ -59,23 +59,23 @@ class MiscDataOperations:
         
         def step6():
             # Refresh Entry tab comboboxes if they exist
-            if hasattr(self.ui, 'dog_combo'):
+            if hasattr(self.ui, 'a_dog_combo'):
                 self.ui.refresh_dog_list()
             self.ui.root.after(50, step7)
         
         def step7():
-            if hasattr(self.ui, 'location_combo'):
+            if hasattr(self.ui, 'a_location_combo'):
                 self.ui.refresh_location_list()
             self.ui.root.after(50, step8)
         
         def step8():
-            if hasattr(self.ui, 'terrain_combo'):
+            if hasattr(self.ui, 'a_terrain_combo'):
                 self.ui.refresh_terrain_list()
             self.ui.root.after(50, step9)
         
         def step9():
             # Update navigation buttons now that dog and session are loaded
-            if hasattr(self.ui, 'prev_session_btn'):
+            if hasattr(self.ui, 'a_prev_session_btn'):
                 self.ui.navigation.update_navigation_buttons()
         
         # Start the chain
@@ -541,18 +541,18 @@ class MiscDataOperations:
             
             # Refresh UI
             self.ui.load_dogs_from_database()
-            if hasattr(self.ui, 'dog_combo'):
+            if hasattr(self.ui, 'a_dog_combo'):
                 self.ui.refresh_dog_list()
             
             self.ui.load_locations_from_database()
-            if hasattr(self.ui, 'location_combo'):
+            if hasattr(self.ui, 'a_location_combo'):
                 self.ui.refresh_location_list()
             
             # Reload terrain and distraction lists from database
             self.ui.load_terrain_from_database()
             self.ui.load_distraction_from_database()
             # Also refresh Entry tab terrain combobox
-            if hasattr(self.ui, 'terrain_combo'):
+            if hasattr(self.ui, 'a_terrain_combo'):
                 self.ui.refresh_terrain_list()
             
             # Show summary
@@ -781,12 +781,12 @@ class MiscDataOperations:
             
             # Refresh dog list in UI
             self.ui.load_dogs_from_database()
-            if hasattr(self.ui, 'dog_combo'):
+            if hasattr(self.ui, 'a_dog_combo'):
                 self.ui.refresh_dog_list()
             
             # Refresh location list in UI
             self.ui.load_locations_from_database()
-            if hasattr(self.ui, 'location_combo'):
+            if hasattr(self.ui, 'a_location_combo'):
                 self.ui.refresh_location_list()
             
             # Also try to restore from settings backup if it exists
@@ -834,7 +834,7 @@ class MiscDataOperations:
                     self.ui.load_terrain_from_database()
                     self.ui.load_distraction_from_database()
                     # Also refresh Entry tab terrain combobox
-                    if hasattr(self.ui, 'terrain_combo'):
+                    if hasattr(self.ui, 'a_terrain_combo'):
                         self.ui.refresh_terrain_list()
                     
                     settings_restored = True
@@ -919,7 +919,7 @@ class MiscDataOperations:
         self.ui.load_distraction_from_database()  # Setup tab treeview
         
         # CRITICAL: Also refresh Entry tab comboboxes!
-        if hasattr(self.ui, 'terrain_combo'):
+        if hasattr(self.ui, 'a_terrain_combo'):
             self.ui.refresh_terrain_list()  # Entry tab terrain combobox
         
         # Show summary

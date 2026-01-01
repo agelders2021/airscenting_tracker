@@ -56,17 +56,17 @@ class FileOperations:
     
     def drag_enter(self, event):
         """Visual feedback when dragging over drop zone"""
-        self.ui.drop_label.configure(bg="#90EE90")
+        self.ui.a_drop_label.configure(bg="#90EE90")
     
     def drag_leave(self, event):
         """Reset visual feedback"""
-        self.ui.drop_label.configure(bg="#e0e0e0")
+        self.ui.a_drop_label.configure(bg="#e0e0e0")
     
     def handle_drop(self, event):
         """Handle dropped files (supports multiple) - copies to trail maps folder"""
         from sv import sv
         
-        self.ui.drop_label.configure(bg="#e0e0e0")
+        self.ui.a_drop_label.configure(bg="#e0e0e0")
         
         # Check if trail maps folder is configured
         trail_maps_folder = sv.trail_maps_folder.get().strip()
@@ -137,13 +137,13 @@ class FileOperations:
             self.ui.map_files_list = [x for x in self.ui.map_files_list if not (x in seen or seen.add(x))]
             
             # Update listbox
-            self.ui.map_listbox.delete(0, "end")
+            self.ui.a_map_listbox.delete(0, "end")
             for filename in self.ui.map_files_list:
-                self.ui.map_listbox.insert("end", filename)
+                self.ui.a_map_listbox.insert("end", filename)
             
             # Enable view and delete buttons
-            self.ui.view_map_button.config(state="normal")
-            self.ui.delete_map_button.config(state="normal")
+            self.ui.a_view_map_button.config(state="normal")
+            self.ui.a_delete_map_button.config(state="normal")
             
             sv.status.set(f"{len(copied_files)} file(s) copied to trail maps folder")
         else:
@@ -157,12 +157,12 @@ class FileOperations:
         """Open the selected map/image file from trail maps folder"""
         from sv import sv
         
-        selection = self.ui.map_listbox.curselection()
+        selection = self.ui.a_map_listbox.curselection()
         if not selection:
             messagebox.showinfo("No Selection", "Please select a file from the list to view")
             return
         
-        # Get the filename from map_files_list using the index
+        # Get the filename from a_map_files_list using the index
         selected_index = selection[0]
         if selected_index < len(self.ui.map_files_list):
             filename = self.ui.map_files_list[selected_index]
@@ -180,7 +180,7 @@ class FileOperations:
         """Delete the selected map/image file from trail maps folder"""
         from sv import sv
         
-        selection = self.ui.map_listbox.curselection()
+        selection = self.ui.a_map_listbox.curselection()
         if not selection:
             messagebox.showinfo("No Selection", "Please select a file from the list to delete")
             return
@@ -220,12 +220,12 @@ class FileOperations:
         
         # Remove from list and listbox
         self.ui.map_files_list.pop(selected_index)
-        self.ui.map_listbox.delete(selected_index)
+        self.ui.a_map_listbox.delete(selected_index)
         
         # Update button states
         if not self.ui.map_files_list:
-            self.ui.view_map_button.config(state="disabled")
-            self.ui.delete_map_button.config(state="disabled")
+            self.ui.a_view_map_button.config(state="disabled")
+            self.ui.a_delete_map_button.config(state="disabled")
     
     def open_external_file(self, file_path):
         """Open a file (PDF, image, etc.) with the system's default application"""

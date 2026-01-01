@@ -233,7 +233,7 @@ class AirScentingUI:
     
     def on_date_changed(self, event=None):
         """Called when date picker value changes"""
-        selected_date = self.date_picker.get_date()
+        selected_date = self.a_date_picker.get_date()
         sv.date.set(selected_date.strftime("%Y-%m-%d"))
     
     def set_date(self, date_string):
@@ -242,13 +242,13 @@ class AirScentingUI:
             # Parse the date string
             date_obj = datetime.strptime(date_string, "%Y-%m-%d")
             # Update the DateEntry widget
-            self.date_picker.set_date(date_obj)
+            self.a_date_picker.set_date(date_obj)
             # Update the StringVar
             sv.date.set(date_string)
         except ValueError:
             # If invalid date, use today
             today = datetime.now()
-            self.date_picker.set_date(today)
+            self.a_date_picker.set_date(today)
             sv.date.set(today.strftime("%Y-%m-%d"))
             
     def on_dog_changed(self, event=None):
@@ -371,7 +371,7 @@ class AirScentingUI:
         # Row 0: Date, Session #, and action buttons
         tk.Label(session_frame, text="Date:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         # Use DateEntry for date picker
-        self.date_picker = DateEntry(
+        self.a_date_picker = DateEntry(
             session_frame,
             width=12,
             background='darkblue',
@@ -382,29 +382,29 @@ class AirScentingUI:
             month=datetime.now().month,
             day=datetime.now().day
         )
-        self.date_picker.grid(row=0, column=1, sticky="w", padx=5, pady=2)
+        self.a_date_picker.grid(row=0, column=1, sticky="w", padx=5, pady=2)
         # Create StringVar to track the date for compatibility with existing code
         # Bind date picker changes to update the StringVar
-        self.date_picker.bind("<<DateEntrySelected>>", self.on_date_changed)
+        self.a_date_picker.bind("<<DateEntrySelected>>", self.on_date_changed)
         
         tk.Label(session_frame, text="Session #:").grid(row=0, column=2, sticky="e", padx=5, pady=2)
         # Initialize with "1" for now, will update after password is loaded
-        self.session_entry = tk.Entry(session_frame, textvariable=sv.session_number, width=10)
-        self.session_entry.grid(row=0, column=3, sticky="w", padx=5, pady=2)
-        self.session_entry.bind("<FocusOut>", self.navigation.on_session_number_changed)
-        self.session_entry.bind("<Return>", self.navigation.on_session_number_changed)
+        self.a_session_entry = tk.Entry(session_frame, textvariable=sv.session_number, width=10)
+        self.a_session_entry.grid(row=0, column=3, sticky="w", padx=5, pady=2)
+        self.a_session_entry.bind("<FocusOut>", self.navigation.on_session_number_changed)
+        self.a_session_entry.bind("<Return>", self.navigation.on_session_number_changed)
         tk.Button(session_frame, text="New", command=self.form_mgmt.new_session).grid(row=0, column=4, padx=5)
         
         tk.Button(session_frame, text="Edit/Delete Prior Session", command=self.navigation.load_prior_session, 
                  bg="#4169E1", fg="white").grid(row=0, column=5, padx=5, pady=2)
         
         # Previous and Next session navigation buttons
-        self.prev_session_btn = tk.Button(session_frame, text="◀ Previous", bg="#FF8C00", fg="white",
+        self.a_prev_session_btn = tk.Button(session_frame, text="◀ Previous", bg="#FF8C00", fg="white",
                                          width=10, command=self.navigation.navigate_previous_session, state=tk.DISABLED)
-        self.prev_session_btn.grid(row=0, column=6, padx=2, pady=2)
-        self.next_session_btn = tk.Button(session_frame, text="Next ▶", bg="#FF8C00", fg="white",
+        self.a_prev_session_btn.grid(row=0, column=6, padx=2, pady=2)
+        self.a_next_session_btn = tk.Button(session_frame, text="Next ▶", bg="#FF8C00", fg="white",
                                          width=10, command=self.navigation.navigate_next_session, state=tk.DISABLED)
-        self.next_session_btn.grid(row=0, column=7, padx=2, pady=2)
+        self.a_next_session_btn.grid(row=0, column=7, padx=2, pady=2)
         
         # Export PDF button
         tk.Button(session_frame, text="Export PDF", bg="#9370DB", fg="white", width=12, 
@@ -434,20 +434,20 @@ class AirScentingUI:
         tk.Label(session_frame, text="Dog:").grid(row=1, column=6, sticky="e", padx=5, pady=2)
         # Load last dog from database (deferred until password is loaded)
         # NOTE: Commented out - will be loaded in load_initial_database_data()
-        self.dog_combo = ttk.Combobox(session_frame, textvariable=sv.dog, width=15, state="readonly")
+        self.a_dog_combo = ttk.Combobox(session_frame, textvariable=sv.dog, width=15, state="readonly")
         # Load dogs from database (deferred)
         # NOTE: Commented out - will be loaded in load_initial_database_data()
-        self.dog_combo.grid(row=1, column=7, sticky="w", padx=5, pady=2)
+        self.a_dog_combo.grid(row=1, column=7, sticky="w", padx=5, pady=2)
         # Bind dog change to update session number
-        self.dog_combo.bind('<<ComboboxSelected>>', self.on_dog_changed)
+        self.a_dog_combo.bind('<<ComboboxSelected>>', self.on_dog_changed)
         
         # Search Parameters
         search_frame = tk.LabelFrame(frame, text="Search Parameters", padx=10, pady=5)
         search_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=5)
         
         tk.Label(search_frame, text="Location:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        self.location_combo = ttk.Combobox(search_frame, textvariable=sv.location, width=18, state="readonly")
-        self.location_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
+        self.a_location_combo = ttk.Combobox(search_frame, textvariable=sv.location, width=18, state="readonly")  # ahg added a_ 
+        self.a_location_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)  # ahg added a_ 
         # Load locations from database
         self.root.after(150,self.refresh_location_list)
         
@@ -455,10 +455,10 @@ class AirScentingUI:
         tk.Entry(search_frame, textvariable=sv.search_area_size, width=18).grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(search_frame, text="Number of Subjects:").grid(row=0, column=4, sticky="w", padx=5, pady=2)
-        self.num_subjects_combo = ttk.Combobox(search_frame, textvariable=sv.num_subjects, width=15, state="readonly",
+        self.a_num_subjects_combo = ttk.Combobox(search_frame, textvariable=sv.num_subjects, width=15, state="readonly",
                                      values=['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
-        self.num_subjects_combo.grid(row=0, column=5, sticky="w", padx=5, pady=2)
-        self.num_subjects_combo.bind('<<ComboboxSelected>>', self.form_mgmt.update_subjects_found)
+        self.a_num_subjects_combo.grid(row=0, column=5, sticky="w", padx=5, pady=2)
+        self.a_num_subjects_combo.bind('<<ComboboxSelected>>', self.form_mgmt.update_subjects_found)
         
         tk.Label(search_frame, text="Handler Knowledge:").grid(row=0, column=6, sticky="w", padx=5, pady=2)
         handler_knowledge_combo = ttk.Combobox(search_frame, textvariable=sv.handler_knowledge, width=25, state="readonly",
@@ -492,21 +492,21 @@ class AirScentingUI:
         
         tk.Label(search_frame, text="Add Terrain Type:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
         # Load terrain types from database using DatabaseManager (respects sort_order)
-        self.terrain_combo = ttk.Combobox(search_frame, textvariable=sv.terrain, width=15, state="readonly",
+        self.a_terrain_combo = ttk.Combobox(search_frame, textvariable=sv.terrain, width=15, state="readonly",
                                          values=[])
-        self.terrain_combo.grid(row=2, column=3, sticky="w", padx=5, pady=2)
-        self.terrain_combo.bind('<<ComboboxSelected>>', self.add_to_terrain_accumulator)
+        self.a_terrain_combo.grid(row=2, column=3, sticky="w", padx=5, pady=2)
+        self.a_terrain_combo.bind('<<ComboboxSelected>>', self.add_to_terrain_accumulator)
         
         # Combobox for accumulated terrain types
         tk.Label(search_frame, text="Selected Terrains:").grid(row=2, column=4, sticky="w", padx=5, pady=2)
-        self.accumulated_terrain_combo = ttk.Combobox(search_frame, textvariable=sv.accumulated_terrain, 
+        self.a_accumulated_terrain_combo = ttk.Combobox(search_frame, textvariable=sv.accumulated_terrain, 
                                                       width=15, state="disabled", values=[])  # Start disabled
-        self.accumulated_terrain_combo.grid(row=2, column=5, sticky="w", padx=5, pady=2)
-        self.accumulated_terrain_combo.bind('<<ComboboxSelected>>', self.remove_terrain_from_list)
+        self.a_accumulated_terrain_combo.grid(row=2, column=5, sticky="w", padx=5, pady=2)
+        self.a_accumulated_terrain_combo.bind('<<ComboboxSelected>>', self.remove_terrain_from_list)
         
         # Add tooltip to accumulated terrain combobox
         from tips import ToolTip
-        ToolTip(self.accumulated_terrain_combo, "Terrain List Accumulator\nClick an entry to remove from list", delay=750)
+        ToolTip(self.a_accumulated_terrain_combo, "Terrain List Accumulator\nClick an entry to remove from list", delay=750)
         
         # Track accumulated terrains as a list
         self.accumulated_terrains = []
@@ -524,16 +524,16 @@ class AirScentingUI:
         drive_level_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(results_frame, text="Subjects Found:").grid(row=0, column=2, sticky="w", padx=5, pady=2)
-        self.subjects_found_combo = ttk.Combobox(results_frame, textvariable=sv.subjects_found, width=15, state="readonly")
-        self.subjects_found_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
+        self.a_subjects_found_combo = ttk.Combobox(results_frame, textvariable=sv.subjects_found, width=15, state="readonly")
+        self.a_subjects_found_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
         # Add tooltip that only shows when subjects_found is disabled
-        ConditionalToolTip(self.subjects_found_combo, 
+        ConditionalToolTip(self.a_subjects_found_combo, 
                           "Enter number of subjects found (in Search Parameters)", 
                           show_when_disabled=True)
         
         # Bind to update subject responses grid when subjects found changes
-        self.subjects_found_combo.bind('<<ComboboxSelected>>', self.update_subject_responses_grid)
+        self.a_subjects_found_combo.bind('<<ComboboxSelected>>', self.update_subject_responses_grid)
         
         # Subject Responses Treeview (row 0, columns 4-7, rowspan=2) - no LabelFrame wrapper
         # Create container with scrollbar for the treeview
@@ -545,7 +545,7 @@ class AirScentingUI:
         tree_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
         # Treeview - 3 visible rows (4th row requires scrolling)
-        self.subject_responses_tree = ttk.Treeview(
+        self.a_subject_responses_tree = ttk.Treeview(
             tree_container,
             columns=('subject', 'tfr', 'refind'),
             show='headings',
@@ -553,39 +553,39 @@ class AirScentingUI:
             yscrollcommand=tree_scrollbar.set,
             selectmode='browse'
         )
-        self.subject_responses_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        tree_scrollbar.config(command=self.subject_responses_tree.yview)
+        self.a_subject_responses_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tree_scrollbar.config(command=self.a_subject_responses_tree.yview)
         
         # Configure columns
-        self.subject_responses_tree.heading('subject', text='Subject #')
-        self.subject_responses_tree.heading('tfr', text='TFR')
-        self.subject_responses_tree.heading('refind', text='Re-find')
+        self.a_subject_responses_tree.heading('subject', text='Subject #')
+        self.a_subject_responses_tree.heading('tfr', text='TFR')
+        self.a_subject_responses_tree.heading('refind', text='Re-find')
         
-        self.subject_responses_tree.column('subject', width=80, anchor='center')
-        self.subject_responses_tree.column('tfr', width=150, anchor='w')
-        self.subject_responses_tree.column('refind', width=150, anchor='w')
+        self.a_subject_responses_tree.column('subject', width=80, anchor='center')
+        self.a_subject_responses_tree.column('tfr', width=150, anchor='w')
+        self.a_subject_responses_tree.column('refind', width=150, anchor='w')
         
         # Pre-populate with 10 empty/disabled rows to support up to 10 subjects
         for i in range(1, 11):
             # Determine odd/even for alternating shading
             row_tag = 'odd' if i % 2 == 1 else 'even'
-            self.subject_responses_tree.insert('', tk.END, iid=f'subject_{i}',
+            self.a_subject_responses_tree.insert('', tk.END, iid=f'subject_{i}',
                                               values=(f'Subject {i}', '', ''),
                                               tags=(row_tag, 'disabled'))
         
         # Style for alternating rows
-        self.subject_responses_tree.tag_configure('odd', background='#f0f0f0')  # Light gray
-        self.subject_responses_tree.tag_configure('even', background='#ffffff')  # White
+        self.a_subject_responses_tree.tag_configure('odd', background='#f0f0f0')  # Light gray
+        self.a_subject_responses_tree.tag_configure('even', background='#ffffff')  # White
         
         # Style for enabled/disabled (text color only, preserves background)
-        self.subject_responses_tree.tag_configure('disabled', foreground='gray')
-        self.subject_responses_tree.tag_configure('enabled', foreground='black')
+        self.a_subject_responses_tree.tag_configure('disabled', foreground='gray')
+        self.a_subject_responses_tree.tag_configure('enabled', foreground='black')
         
         # Bind single-click to edit with inline combobox
-        self.subject_responses_tree.bind('<Button-1>', self.on_treeview_click)
+        self.a_subject_responses_tree.bind('<Button-1>', self.on_treeview_click)
         
         # Add tooltip to explain how to edit cells
-        ToolTip(self.subject_responses_tree, 
+        ToolTip(self.a_subject_responses_tree, 
                 "Click cell under desired heading on desired row to edit value", 
                 delay=750)
         
@@ -594,14 +594,14 @@ class AirScentingUI:
         self.refind_options = ['Immediate', 'Required cue', 'None']
         
         # Track current editing combobox
-        self.tree_edit_combo = None
+        self.a_tree_edit_combo = None
         self.tree_edit_item = None
         self.tree_edit_column = None
         
         # Comments textbox (row 1, columns 0-3) - below Drive Level/Subjects Found, aligns with bottom of Subject Responses
-        self.comments_text = tk.Text(results_frame, width=60, height=3, wrap=tk.WORD)
-        self.comments_text.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=5, pady=(0, 5))
-        ToolTip(self.comments_text, "Enter comments about search here")
+        self.a_comments_text = tk.Text(results_frame, width=60, height=3, wrap=tk.WORD)
+        self.a_comments_text.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=5, pady=(0, 5))
+        ToolTip(self.a_comments_text, "Enter comments about search here")
         
         # Maps and Images
         map_frame = tk.LabelFrame(frame, text="Maps and Images", padx=10, pady=5)
@@ -615,20 +615,20 @@ class AirScentingUI:
         drop_frame = tk.Frame(map_container)
         drop_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         
-        self.drop_label = tk.Label(
+        self.a_drop_label = tk.Label(
             drop_frame,
             text="Drag & Drop Maps/Images\n(PDF/JPG/PNG)",
             bg="#e0e0e0",
             relief="ridge",
             height=4
         )
-        self.drop_label.pack(fill=tk.BOTH, expand=True)
+        self.a_drop_label.pack(fill=tk.BOTH, expand=True)
         
         # Enable drag and drop
-        self.drop_label.drop_target_register(DND_FILES)
-        self.drop_label.dnd_bind('<<Drop>>', self.file_ops.handle_drop)
-        self.drop_label.dnd_bind('<<DragEnter>>', self.file_ops.drag_enter)
-        self.drop_label.dnd_bind('<<DragLeave>>', self.file_ops.drag_leave)
+        self.a_drop_label.drop_target_register(DND_FILES)
+        self.a_drop_label.dnd_bind('<<Drop>>', self.file_ops.handle_drop)
+        self.a_drop_label.dnd_bind('<<DragEnter>>', self.file_ops.drag_enter)
+        self.a_drop_label.dnd_bind('<<DragLeave>>', self.file_ops.drag_leave)
         
         # Right side - Listbox with scrollbar and view button
         list_frame = tk.Frame(map_container)
@@ -641,30 +641,30 @@ class AirScentingUI:
         listbox_container = tk.Frame(list_button_container)
         listbox_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
-        self.map_listbox = tk.Listbox(listbox_container, height=3, font=('Arial', 9))
+        self.a_map_listbox = tk.Listbox(listbox_container, height=3, font=('Arial', 9))
         map_scroll = ttk.Scrollbar(listbox_container, orient=tk.VERTICAL,
-                                   command=self.map_listbox.yview)
-        self.map_listbox.config(yscrollcommand=map_scroll.set)
+                                   command=self.a_map_listbox.yview)
+        self.a_map_listbox.config(yscrollcommand=map_scroll.set)
         
-        self.map_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.a_map_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         map_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         
         # Bind double-click to open file
-        self.map_listbox.bind('<Double-Button-1>', lambda e: self.file_ops.view_selected_map())
+        self.a_map_listbox.bind('<Double-Button-1>', lambda e: self.file_ops.view_selected_map())
         
         # Button frame to the right of listbox
         map_button_frame = tk.Frame(list_button_container)
         map_button_frame.pack(side=tk.RIGHT, padx=(5, 0))
         
         # View button
-        self.view_map_button = tk.Button(map_button_frame, text="View Selected", 
+        self.a_view_map_button = tk.Button(map_button_frame, text="View Selected", 
                                          command=self.file_ops.view_selected_map, state=tk.DISABLED, width=12)
-        self.view_map_button.pack(pady=(0, 2))
+        self.a_view_map_button.pack(pady=(0, 2))
         
         # Delete button
-        self.delete_map_button = tk.Button(map_button_frame, text="Delete Selected", 
+        self.a_delete_map_button = tk.Button(map_button_frame, text="Delete Selected", 
                                          command=self.file_ops.delete_selected_map, state=tk.DISABLED, width=12)
-        self.delete_map_button.pack(pady=(2, 0))
+        self.a_delete_map_button.pack(pady=(2, 0))
         
         self.map_files_list = []  # Store list of files
         
@@ -686,7 +686,7 @@ class AirScentingUI:
         self.root.after(500, self.navigation.update_navigation_buttons)
         
         # Initialize subjects_found as disabled (no subjects selected yet)
-        self.subjects_found_combo['state'] = 'disabled'
+        self.a_subjects_found_combo['state'] = 'disabled'
     
     # Placeholder methods for Entry tab buttons
     def initialize_entry_tab_data(self):
@@ -699,7 +699,7 @@ class AirScentingUI:
         terrain_types = db_mgr.load_terrain_types()
         # Update terrain combobox with loaded data
         if hasattr(self, 'terrain_combo'):
-            self.terrain_combo['values'] = terrain_types
+            self.a_terrain_combo['values'] = terrain_types
 
 
     def add_to_terrain_accumulator(self, event=None):
@@ -716,11 +716,11 @@ class AirScentingUI:
             self.accumulated_terrains.append(terrain_type)
             
             # Update combobox values
-            self.accumulated_terrain_combo['values'] = self.accumulated_terrains
+            self.a_accumulated_terrain_combo['values'] = self.accumulated_terrains
             
             # Enable the combobox if this is the first item
             if len(self.accumulated_terrains) == 1:
-                self.accumulated_terrain_combo['state'] = 'readonly'
+                self.a_accumulated_terrain_combo['state'] = 'readonly'
             
             # Display the last (newest) entry
             sv.accumulated_terrain.set(terrain_type)
@@ -744,13 +744,13 @@ class AirScentingUI:
             self.accumulated_terrains.remove(terrain_type)
             
             # Update combobox values
-            self.accumulated_terrain_combo['values'] = self.accumulated_terrains
+            self.a_accumulated_terrain_combo['values'] = self.accumulated_terrains
             
             # Determine what to display after removal
             if len(self.accumulated_terrains) == 0:
                 # List is now empty - show blank and disable combobox
                 sv.accumulated_terrain.set("")
-                self.accumulated_terrain_combo['state'] = 'disabled'
+                self.a_accumulated_terrain_combo['state'] = 'disabled'
             elif removed_index < len(self.accumulated_terrains):
                 # Show the item that's now at the same index (the one that was below)
                 sv.accumulated_terrain.set(self.accumulated_terrains[removed_index])
@@ -778,26 +778,26 @@ class AirScentingUI:
             
             if i <= num_found:
                 # Enable this row (keep odd/even tag for background shading)
-                self.subject_responses_tree.item(item_id, tags=(row_tag, 'enabled'))
+                self.a_subject_responses_tree.item(item_id, tags=(row_tag, 'enabled'))
             else:
                 # Disable this row and clear values (keep odd/even tag for background shading)
-                self.subject_responses_tree.item(item_id, values=(f'Subject {i}', '', ''), tags=(row_tag, 'disabled'))
+                self.a_subject_responses_tree.item(item_id, values=(f'Subject {i}', '', ''), tags=(row_tag, 'disabled'))
     
     def on_treeview_click(self, event):
         """Handle click on treeview - show inline combobox for TFR/Re-find columns"""
         # Identify what was clicked
-        region = self.subject_responses_tree.identify_region(event.x, event.y)
+        region = self.a_subject_responses_tree.identify_region(event.x, event.y)
         if region != 'cell':
             return
         
-        item = self.subject_responses_tree.identify_row(event.y)
-        column = self.subject_responses_tree.identify_column(event.x)
+        item = self.a_subject_responses_tree.identify_row(event.y)
+        column = self.a_subject_responses_tree.identify_column(event.x)
         
         if not item or not column:
             return
         
         # Check if row is enabled
-        tags = self.subject_responses_tree.item(item, 'tags')
+        tags = self.a_subject_responses_tree.item(item, 'tags')
         if 'disabled' in tags:
             return  # Don't allow editing disabled rows
         
@@ -812,10 +812,10 @@ class AirScentingUI:
         self.close_tree_edit()
         
         # Get the bounding box of the cell
-        x, y, width, height = self.subject_responses_tree.bbox(item, column)
+        x, y, width, height = self.a_subject_responses_tree.bbox(item, column)
         
         # Get current values
-        values = list(self.subject_responses_tree.item(item, 'values'))
+        values = list(self.a_subject_responses_tree.item(item, 'values'))
         current_value = values[col_index - 1] if col_index <= len(values) else ''
         
         # Determine options based on column
@@ -825,50 +825,50 @@ class AirScentingUI:
             options = self.refind_options
         
         # Create combobox positioned over the cell
-        self.tree_edit_combo = ttk.Combobox(
-            self.subject_responses_tree,
+        self.a_tree_edit_combo = ttk.Combobox(
+            self.a_subject_responses_tree,
             values=options,
             state='readonly'
         )
-        self.tree_edit_combo.set(current_value)
+        self.a_tree_edit_combo.set(current_value)
         
         # Position the combobox
-        self.tree_edit_combo.place(x=x, y=y, width=width, height=height)
+        self.a_tree_edit_combo.place(x=x, y=y, width=width, height=height)
         
         # Store editing context
         self.tree_edit_item = item
         self.tree_edit_column = col_index
         
         # Bind events
-        self.tree_edit_combo.bind('<<ComboboxSelected>>', self.on_tree_edit_select)
-        self.tree_edit_combo.bind('<FocusOut>', lambda e: self.close_tree_edit())
-        self.tree_edit_combo.bind('<Escape>', lambda e: self.close_tree_edit())
+        self.a_tree_edit_combo.bind('<<ComboboxSelected>>', self.on_tree_edit_select)
+        self.a_tree_edit_combo.bind('<FocusOut>', lambda e: self.close_tree_edit())
+        self.a_tree_edit_combo.bind('<Escape>', lambda e: self.close_tree_edit())
         
         # Focus and open dropdown
-        self.tree_edit_combo.focus_set()
-        self.tree_edit_combo.event_generate('<Button-1>')
+        self.a_tree_edit_combo.focus_set()
+        self.a_tree_edit_combo.event_generate('<Button-1>')
     
     def on_tree_edit_select(self, event=None):
         """Handle selection in inline edit combobox"""
-        if not self.tree_edit_combo or not self.tree_edit_item:
+        if not self.a_tree_edit_combo or not self.tree_edit_item:
             return
         
         # Get the new value
-        new_value = self.tree_edit_combo.get()
+        new_value = self.a_tree_edit_combo.get()
         
         # Update the treeview
-        values = list(self.subject_responses_tree.item(self.tree_edit_item, 'values'))
+        values = list(self.a_subject_responses_tree.item(self.tree_edit_item, 'values'))
         values[self.tree_edit_column - 1] = new_value
-        self.subject_responses_tree.item(self.tree_edit_item, values=values)
+        self.a_subject_responses_tree.item(self.tree_edit_item, values=values)
         
         # Close the combobox
         self.close_tree_edit()
     
     def close_tree_edit(self):
         """Close the inline edit combobox"""
-        if self.tree_edit_combo:
-            self.tree_edit_combo.destroy()
-            self.tree_edit_combo = None
+        if self.a_tree_edit_combo:
+            self.a_tree_edit_combo.destroy()
+            self.a_tree_edit_combo = None
         self.tree_edit_item = None
         self.tree_edit_column = None
     
@@ -876,13 +876,13 @@ class AirScentingUI:
         """Reset tree selection and scroll to subject 1"""
         if hasattr(self, 'subject_responses_tree'):
             # Clear any current selection
-            self.subject_responses_tree.selection_remove(self.subject_responses_tree.selection())
+            self.a_subject_responses_tree.selection_remove(self.a_subject_responses_tree.selection())
             
             # Select subject 1 (first item)
             first_item = 'subject_1'
-            if self.subject_responses_tree.exists(first_item):
-                self.subject_responses_tree.selection_set(first_item)
-                self.subject_responses_tree.see(first_item)  # Scroll to make it visible
+            if self.a_subject_responses_tree.exists(first_item):
+                self.a_subject_responses_tree.selection_set(first_item)
+                self.a_subject_responses_tree.see(first_item)  # Scroll to make it visible
     
     def open_export_dialog(self):
         """Open export PDF dialog"""
@@ -920,9 +920,9 @@ class AirScentingUI:
     
     # File/Folder selection methods
     def update_create_db_button_state(self, *args):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.update_create_db_button_state(*args)
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.update_create_db_button_state()
+
     def add_entry_context_menu(self, entry_widget):
         """Delegate to SetupTab module"""
         return self.setup_tab_mgr.add_entry_context_menu(entry_widget)
@@ -996,9 +996,8 @@ class AirScentingUI:
                 if check_crypto_available():
                     if save_encrypted_password(self.config, db_type, password):
                         self.save_config()
-                        # Only update status if status_var exists (may not during initialization)
-                        if hasattr(self, 'status_var'):
-                            sv.status.set(f"Password saved (encrypted) for {db_type}")
+                        # Update status (sv.status is always available from sv module)
+                        sv.status.set(f"Password saved (encrypted) for {db_type}")
                     else:
                         messagebox.showwarning(
                             "Encryption Failed",
@@ -1034,34 +1033,17 @@ class AirScentingUI:
         return True
     
     def create_database(self):
-        """Delegate to SetupTab module"""
+        """Delegate to Setup tab manager"""
         return self.setup_tab_mgr.create_database()
-    
+
     def load_locations_from_database(self):
-        """Load training locations from database into Setup tab listbox"""
-        # Ensure database is ready (critical for networked databases)
-        self.misc_data_ops.ensure_db_ready()
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        locations = db_mgr.load_locations()
-        
-        # Update UI
-        self.location_listbox.delete(0, tk.END)
-        for location in locations:
-            self.location_listbox.insert(tk.END, location)
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.load_locations_from_database()
+
     def refresh_location_list(self):
-        """Refresh the location combobox in Entry tab"""
-        # Ensure database is ready (critical for networked databases)
-        self.misc_data_ops.ensure_db_ready()
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        locations = db_mgr.load_locations()
-        
-        # Update combobox
-        if hasattr(self, 'location_combo'):
-            self.location_combo['values'] = locations
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.refresh_location_list()
+
     def refresh_terrain_list(self):
         """Refresh the terrain type combobox in Entry tab"""
         # Ensure database is ready (critical for networked databases)
@@ -1074,156 +1056,116 @@ class AirScentingUI:
         
         # Update combobox
         if hasattr(self, 'terrain_combo'):
-            self.terrain_combo['values'] = terrain_types
+            self.a_terrain_combo['values'] = terrain_types
     
     def load_terrain_from_database(self):
-        """Load terrain types from database into Setup tab treeview"""
-        # Ensure database is ready (critical for networked databases)
-        self.misc_data_ops.ensure_db_ready()
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        terrain_types = db_mgr.load_terrain_types()
-        
-        # Clear and populate treeview
-        self.terrain_tree.delete(*self.terrain_tree.get_children())
-        for idx, terrain in enumerate(terrain_types, 1):
-            self.terrain_tree.insert('', tk.END, text=str(idx), values=(terrain,))
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.load_terrain_from_database()
+
     def load_distraction_from_database(self):
-        """Load distraction types from database into Setup tab treeview"""
-        # Ensure database is ready (critical for networked databases)
-        self.misc_data_ops.ensure_db_ready()
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        distraction_types = db_mgr.load_distraction_types()
-        
-        # Clear and populate treeview
-        self.distraction_type_tree.delete(*self.distraction_type_tree.get_children())
-        for idx, distraction in enumerate(distraction_types, 1):
-            self.distraction_type_tree.insert('', tk.END, text=str(idx), values=(distraction,))
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.load_distraction_from_database()
+
     def update_location_button_states(self, *args):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.update_location_button_states(*args)
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.update_location_button_states(*args)
+
     def on_location_select(self, event):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.on_location_select(event)
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.on_location_select(event)
+
     def add_location(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.add_location()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.add_location()
+
     def remove_location(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.remove_location()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.remove_location()
+
     def load_dogs_from_database(self):
-        """Load dog names from database into listbox"""
-        # Ensure database is ready (critical for networked databases)
-        self.misc_data_ops.ensure_db_ready()
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        dogs = db_mgr.load_dogs()
-        
-        # Update UI
-        self.dog_listbox.delete(0, tk.END)
-        for dog in dogs:
-            self.dog_listbox.insert(tk.END, dog)
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.load_dogs_from_database()
+
     def refresh_dog_list(self):
-        """Refresh the dog combobox in Entry tab"""
-        # Ensure database is ready (critical for networked databases)
-        self.misc_data_ops.ensure_db_ready()
-        
-        db_mgr = get_db_manager(sv.db_type.get())
-        dogs = db_mgr.load_dogs()
-        
-        # Update combobox
-        if hasattr(self, 'dog_combo'):
-            self.dog_combo['values'] = dogs
-        
-        # Also update Setup tab listbox
-        self.dog_listbox.delete(0, tk.END)
-        for dog in dogs:
-            self.dog_listbox.insert(tk.END, dog)
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.refresh_dog_list()
+
     def update_dog_button_states(self, *args):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.update_dog_button_states(*args)
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.update_dog_button_states(*args)
+
     def on_dog_select(self, event):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.on_dog_select(event)
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.on_dog_select(event)
+
     def add_dog(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.add_dog()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.add_dog()
+
     def remove_dog(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.remove_dog()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.remove_dog()
+
     def update_terrain_button_states(self, *args):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.update_terrain_button_states(*args)
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.update_terrain_button_states(*args)
+
     def on_terrain_select(self, event):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.on_terrain_select(event)
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.on_terrain_select(event)
+
     def add_terrain_type(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.add_terrain_type()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.add_terrain_type()
+
     def remove_terrain_type(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.remove_terrain_type()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.remove_terrain_type()
+
     def move_terrain_up(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.move_terrain_up()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.move_terrain_up()
+
     def move_terrain_down(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.move_terrain_down()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.move_terrain_down()
+
     def restore_default_terrain_types(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.restore_default_terrain_types()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.restore_default_terrain_types()
+
     def update_distraction_type_button_states(self, *args):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.update_distraction_type_button_states(*args)
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.update_distraction_type_button_states(*args)
+
     def on_distraction_type_select(self, event):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.on_distraction_type_select(event)
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.on_distraction_type_select(event)
+
     def add_distraction_type(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.add_distraction_type()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.add_distraction_type()
+
     def remove_distraction_type(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.remove_distraction_type()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.remove_distraction_type()
+
     def move_distraction_up(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.move_distraction_up()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.move_distraction_up()
+
     def move_distraction_down(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.move_distraction_down()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.move_distraction_down()
+
     def restore_default_distraction_types(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.restore_default_distraction_types()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.restore_default_distraction_types()
+
     def save_configuration_settings(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.save_configuration_settings()
-    
+        """Delegate to Setup tab manager"""
+        self.setup_tab_mgr.save_configuration_settings()
+
     def on_closing(self):
         """Handle window close event"""
         if self.form_mgmt.check_unsaved_changes("exit"):

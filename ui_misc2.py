@@ -64,17 +64,17 @@ class Misc2Operations:
                 sv.search_type.set("")
                 sv.drive_level.set("")
                 sv.subjects_found.set("")
-                self.ui.comments_text.delete("1.0", tk.END)
+                self.ui.a_comments_text.delete("1.0", tk.END)
                 # Clear terrain accumulator
                 self.ui.accumulated_terrains = []
-                self.ui.accumulated_terrain_combo['values'] = []
+                self.ui.a_accumulated_terrain_combo['values'] = []
                 sv.accumulated_terrain.set("")
-                self.ui.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
+                self.ui.a_accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
                 # Clear map files list
                 self.ui.map_files_list = []
-                self.ui.map_listbox.delete(0, tk.END)
-                self.ui.view_map_button.config(state=tk.DISABLED)
-                self.ui.delete_map_button.config(state=tk.DISABLED)
+                self.ui.a_map_listbox.delete(0, tk.END)
+                self.ui.a_view_map_button.config(state=tk.DISABLED)
+                self.ui.a_delete_map_button.config(state=tk.DISABLED)
                 # Update subjects_found combo state
                 self.ui.form_mgmt.update_subjects_found()
                 
@@ -94,7 +94,7 @@ class Misc2Operations:
         from sv import sv
         """Save the current training session"""
         # Get all form values
-        date = self.ui.date_picker.get_date().strftime("%Y-%m-%d")
+        date = self.ui.a_date_picker.get_date().strftime("%Y-%m-%d")
         session_number = sv.session_number.get()
         handler = sv.handler.get()
         session_purpose = sv.session_purpose.get()
@@ -115,7 +115,7 @@ class Misc2Operations:
         # Search results
         drive_level = sv.drive_level.get()
         subjects_found = sv.subjects_found.get()
-        comments = self.ui.comments_text.get("1.0", tk.END).strip()
+        comments = self.ui.a_comments_text.get("1.0", tk.END).strip()
 
         # Map/image files - store as JSON string
         image_files_json = json.dumps(self.ui.map_files_list) if self.ui.map_files_list else ""
@@ -186,10 +186,10 @@ class Misc2Operations:
             subject_responses_list = []
             for i in range(1, 11):
                 item_id = f'subject_{i}'
-                tags = self.ui.subject_responses_tree.item(item_id, 'tags')
+                tags = self.ui.a_subject_responses_tree.item(item_id, 'tags')
 
                 if 'enabled' in tags:
-                    values = self.ui.subject_responses_tree.item(item_id, 'values')
+                    values = self.ui.a_subject_responses_tree.item(item_id, 'values')
                     subject_responses_list.append({
                         "subject_number": i,
                         "tfr": values[1] if len(values) > 1 else '',
@@ -239,22 +239,22 @@ class Misc2Operations:
         sv.search_type.set("")
         sv.drive_level.set("")
         sv.subjects_found.set("")
-        self.ui.comments_text.delete("1.0", tk.END)
+        self.ui.a_comments_text.delete("1.0", tk.END)
         self.ui.accumulated_terrains = []
-        self.ui.accumulated_terrain_combo['values'] = []
+        self.ui.a_accumulated_terrain_combo['values'] = []
         sv.accumulated_terrain.set("")
-        self.ui.accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
+        self.ui.a_accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
         self.ui.map_files_list = []
-        self.ui.map_listbox.delete(0, tk.END)
-        self.ui.view_map_button.config(state=tk.DISABLED)
-        self.ui.delete_map_button.config(state=tk.DISABLED)
+        self.ui.a_map_listbox.delete(0, tk.END)
+        self.ui.a_view_map_button.config(state=tk.DISABLED)
+        self.ui.a_delete_map_button.config(state=tk.DISABLED)
         self.ui.form_mgmt.update_subjects_found()
         # Clear subject responses tree
         for i in range(1, 11):
             item_id = f'subject_{i}'
-            if self.ui.subject_responses_tree.exists(item_id):
-                self.ui.subject_responses_tree.item(item_id, tags='disabled')
-                self.ui.subject_responses_tree.item(item_id, values=(
+            if self.ui.a_subject_responses_tree.exists(item_id):
+                self.ui.a_subject_responses_tree.item(item_id, tags='disabled')
+                self.ui.a_subject_responses_tree.item(item_id, values=(
                     f'Subject {i}', '', ''
                 ))
         

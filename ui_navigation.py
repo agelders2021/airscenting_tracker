@@ -32,15 +32,15 @@ class Navigation:
         if self.ui.selected_sessions:
             # Enable Previous if not at first selected session
             if self.ui.selected_sessions_index > 0:
-                self.ui.prev_session_btn.config(state="normal")
+                self.ui.a_prev_session_btn.config(state="normal")
             else:
-                self.ui.prev_session_btn.config(state="disabled")
+                self.ui.a_prev_session_btn.config(state="disabled")
             
             # Enable Next if not at last selected session
             if self.ui.selected_sessions_index < len(self.ui.selected_sessions) - 1:
-                self.ui.next_session_btn.config(state="normal")
+                self.ui.a_next_session_btn.config(state="normal")
             else:
-                self.ui.next_session_btn.config(state="disabled")
+                self.ui.a_next_session_btn.config(state="disabled")
         else:
             # Normal mode - use session number
             try:
@@ -50,19 +50,19 @@ class Navigation:
                 
                 # Enable Previous if session > 1
                 if current_session > 1:
-                    self.ui.prev_session_btn.config(state="normal")
+                    self.ui.a_prev_session_btn.config(state="normal")
                 else:
-                    self.ui.prev_session_btn.config(state="disabled")
+                    self.ui.a_prev_session_btn.config(state="disabled")
                 
                 # Enable Next if session < max + 1
                 if current_session < max_session + 1:
-                    self.ui.next_session_btn.config(state="normal")
+                    self.ui.a_next_session_btn.config(state="normal")
                 else:
-                    self.ui.next_session_btn.config(state="disabled")
+                    self.ui.a_next_session_btn.config(state="disabled")
                     
             except ValueError:
-                self.ui.prev_session_btn.config(state="disabled")
-                self.ui.next_session_btn.config(state="disabled")
+                self.ui.a_prev_session_btn.config(state="disabled")
+                self.ui.a_next_session_btn.config(state="disabled")
     
     def navigate_previous_session(self):
         """Navigate to previous session"""
@@ -201,9 +201,9 @@ class Navigation:
             
             # Load comments into text widget
             comments = session_dict.get("comments", "")
-            self.ui.comments_text.delete("1.0", tk.END)
+            self.ui.a_comments_text.delete("1.0", tk.END)
             if comments:
-                self.ui.comments_text.insert("1.0", comments)
+                self.ui.a_comments_text.insert("1.0", comments)
             
             # Load image files
             image_files_str = session_dict.get("image_files", "")
@@ -216,28 +216,28 @@ class Navigation:
                 self.ui.map_files_list = []
             
             # Update listbox
-            self.ui.map_listbox.delete(0, tk.END)
+            self.ui.a_map_listbox.delete(0, tk.END)
             for filename in self.ui.map_files_list:
-                self.ui.map_listbox.insert(tk.END, filename)
+                self.ui.a_map_listbox.insert(tk.END, filename)
             
             # Update button states
             if self.ui.map_files_list:
-                self.ui.view_map_button.config(state=tk.NORMAL)
-                self.ui.delete_map_button.config(state=tk.NORMAL)
+                self.ui.a_view_map_button.config(state=tk.NORMAL)
+                self.ui.a_delete_map_button.config(state=tk.NORMAL)
             else:
-                self.ui.view_map_button.config(state=tk.DISABLED)
-                self.ui.delete_map_button.config(state=tk.DISABLED)
+                self.ui.a_view_map_button.config(state=tk.DISABLED)
+                self.ui.a_delete_map_button.config(state=tk.DISABLED)
             
             # Load selected terrains
             selected_terrains = session_dict.get("selected_terrains", [])
             self.ui.accumulated_terrains = selected_terrains.copy()
             
             # Update accumulated terrain combo
-            if hasattr(self.ui, 'accumulated_terrain_combo'):
-                self.ui.accumulated_terrain_combo['values'] = self.ui.accumulated_terrains
+            if hasattr(self.ui, 'a_accumulated_terrain_combo'):
+                self.ui.a_accumulated_terrain_combo['values'] = self.ui.accumulated_terrains
                 if self.ui.accumulated_terrains:
                     sv.accumulated_terrain.set(self.ui.accumulated_terrains[0])
-                    self.ui.accumulated_terrain_combo['state'] = 'readonly'
+                    self.ui.a_accumulated_terrain_combo['state'] = 'readonly'
             
             # Load subject responses into treeview
             subject_responses = session_dict.get("subject_responses", [])
@@ -245,11 +245,11 @@ class Navigation:
             # Clear existing subject responses
             for i in range(1, 11):
                 item_id = f'subject_{i}'
-                if self.ui.subject_responses_tree.exists(item_id):
+                if self.ui.a_subject_responses_tree.exists(item_id):
                     # Disable the item
-                    self.ui.subject_responses_tree.item(item_id, tags='disabled')
+                    self.ui.a_subject_responses_tree.item(item_id, tags='disabled')
                     # Clear values
-                    self.ui.subject_responses_tree.item(item_id, values=(
+                    self.ui.a_subject_responses_tree.item(item_id, values=(
                         f'Subject {i}', '', ''
                     ))
             
@@ -258,11 +258,11 @@ class Navigation:
                 subject_num = response.get("subject_number", 0)
                 if 1 <= subject_num <= 10:
                     item_id = f'subject_{subject_num}'
-                    if self.ui.subject_responses_tree.exists(item_id):
+                    if self.ui.a_subject_responses_tree.exists(item_id):
                         # Enable the item
-                        self.ui.subject_responses_tree.item(item_id, tags='enabled')
+                        self.ui.a_subject_responses_tree.item(item_id, tags='enabled')
                         # Set values
-                        self.ui.subject_responses_tree.item(item_id, values=(
+                        self.ui.a_subject_responses_tree.item(item_id, values=(
                             f'Subject {subject_num}',
                             response.get("tfr", ""),
                             response.get("refind", "")
@@ -295,26 +295,26 @@ class Navigation:
             sv.subjects_found.set("")
             
             # Clear comments
-            self.ui.comments_text.delete("1.0", tk.END)
+            self.ui.a_comments_text.delete("1.0", tk.END)
             
             # Clear map files list
             self.ui.map_files_list = []
-            self.ui.map_listbox.delete(0, tk.END)
-            self.ui.view_map_button.config(state=tk.DISABLED)
-            self.ui.delete_map_button.config(state=tk.DISABLED)
+            self.ui.a_map_listbox.delete(0, tk.END)
+            self.ui.a_view_map_button.config(state=tk.DISABLED)
+            self.ui.a_delete_map_button.config(state=tk.DISABLED)
             
             # Clear selected terrains
             self.ui.accumulated_terrains = []
-            if hasattr(self.ui, 'accumulated_terrain_combo'):
-                self.ui.accumulated_terrain_combo['values'] = []
+            if hasattr(self.ui, 'a_accumulated_terrain_combo'):
+                self.ui.a_accumulated_terrain_combo['values'] = []
                 sv.accumulated_terrain.set("")
             
             # Clear subject responses
             for i in range(1, 11):
                 item_id = f'subject_{i}'
-                if self.ui.subject_responses_tree.exists(item_id):
-                    self.ui.subject_responses_tree.item(item_id, tags='disabled')
-                    self.ui.subject_responses_tree.item(item_id, values=(
+                if self.ui.a_subject_responses_tree.exists(item_id):
+                    self.ui.a_subject_responses_tree.item(item_id, tags='disabled')
+                    self.ui.a_subject_responses_tree.item(item_id, values=(
                         f'Subject {i}', '', ''
                     ))
             

@@ -110,7 +110,7 @@ class FormManagement:
         current_search_type = sv.search_type.get()
         current_drive_level = sv.drive_level.get()
         current_subjects_found = sv.subjects_found.get()
-        current_comments = self.ui.comments_text.get("1.0", tk.END).strip()
+        current_comments = self.ui.a_comments_text.get("1.0", tk.END).strip()
         
         # Check if this session exists in database and compare
         try:
@@ -197,9 +197,9 @@ class FormManagement:
                 current_responses_dict = {}
                 for i in range(1, 11):
                     item_id = f'subject_{i}'
-                    tags = self.ui.subject_responses_tree.item(item_id, 'tags')
+                    tags = self.ui.a_subject_responses_tree.item(item_id, 'tags')
                     if 'enabled' in tags:
-                        values = self.ui.subject_responses_tree.item(item_id, 'values')
+                        values = self.ui.a_subject_responses_tree.item(item_id, 'values')
                         tfr = values[1] if len(values) > 1 else ''
                         refind = values[2] if len(values) > 2 else ''
                         current_responses_dict[i] = (tfr, refind)
@@ -261,26 +261,26 @@ class FormManagement:
             sv.subjects_found.set("")
             
             # Clear comments textbox
-            self.ui.comments_text.delete("1.0", tk.END)
+            self.ui.a_comments_text.delete("1.0", tk.END)
             
             # Clear map files list
             self.ui.map_files_list = []
-            self.ui.map_listbox.delete(0, tk.END)
-            self.ui.view_map_button.config(state=tk.DISABLED)
-            self.ui.delete_map_button.config(state=tk.DISABLED)
+            self.ui.a_map_listbox.delete(0, tk.END)
+            self.ui.a_view_map_button.config(state=tk.DISABLED)
+            self.ui.a_delete_map_button.config(state=tk.DISABLED)
             
             # Clear selected terrains
             self.ui.accumulated_terrains = []
-            if hasattr(self.ui, 'accumulated_terrain_combo'):
-                self.ui.accumulated_terrain_combo['values'] = []
+            if hasattr(self.ui, 'a_accumulated_terrain_combo'):
+                self.ui.a_accumulated_terrain_combo['values'] = []
                 sv.accumulated_terrain.set("")
             
             # Clear subject responses tree
             for i in range(1, 11):
                 item_id = f'subject_{i}'
-                if self.ui.subject_responses_tree.exists(item_id):
-                    self.ui.subject_responses_tree.item(item_id, tags='disabled')
-                    self.ui.subject_responses_tree.item(item_id, values=(
+                if self.ui.a_subject_responses_tree.exists(item_id):
+                    self.ui.a_subject_responses_tree.item(item_id, tags='disabled')
+                    self.ui.a_subject_responses_tree.item(item_id, values=(
                         f'Subject {i}', '', ''
                     ))
             
@@ -333,27 +333,27 @@ class FormManagement:
         
         # Clear map files list
         self.ui.map_files_list = []
-        self.ui.map_listbox.delete(0, "end")
-        self.ui.view_map_button.config(state="disabled")
-        self.ui.delete_map_button.config(state="disabled")
+        self.ui.a_map_listbox.delete(0, "end")
+        self.ui.a_view_map_button.config(state="disabled")
+        self.ui.a_delete_map_button.config(state="disabled")
         
         # Clear comments textbox
-        self.ui.comments_text.delete("1.0", tk.END)
+        self.ui.a_comments_text.delete("1.0", tk.END)
         
         # Clear map files list (already present but adding comments/terrains)
         
         # Clear selected terrains
         self.ui.accumulated_terrains = []
-        if hasattr(self.ui, 'accumulated_terrain_combo'):
-            self.ui.accumulated_terrain_combo['values'] = []
+        if hasattr(self.ui, 'a_accumulated_terrain_combo'):
+            self.ui.a_accumulated_terrain_combo['values'] = []
             sv.accumulated_terrain.set("")
         
         # Clear subject responses tree
         for i in range(1, 11):
             item_id = f'subject_{i}'
-            if self.ui.subject_responses_tree.exists(item_id):
-                self.ui.subject_responses_tree.item(item_id, tags='disabled')
-                self.ui.subject_responses_tree.item(item_id, values=(
+            if self.ui.a_subject_responses_tree.exists(item_id):
+                self.ui.a_subject_responses_tree.item(item_id, tags='disabled')
+                self.ui.a_subject_responses_tree.item(item_id, values=(
                     f'Subject {i}', '', ''
                 ))
         
@@ -380,12 +380,12 @@ class FormManagement:
             n = int(num_subjects)
             # Generate values: "0 out of n", "1 out of n", ..., "n out of n"
             values = [f"{i} out of {n}" for i in range(n + 1)]
-            self.ui.subjects_found_combo['values'] = values
-            self.ui.subjects_found_combo['state'] = 'readonly'
+            self.ui.a_subjects_found_combo['values'] = values
+            self.ui.a_subjects_found_combo['state'] = 'readonly'
             # Clear current selection when choices change
             sv.subjects_found.set("")
         else:
             # No number selected, disable and clear the subjects_found combobox
-            self.ui.subjects_found_combo['values'] = []
-            self.ui.subjects_found_combo['state'] = 'disabled'
+            self.ui.a_subjects_found_combo['values'] = []
+            self.ui.a_subjects_found_combo['state'] = 'disabled'
             sv.subjects_found.set("")
