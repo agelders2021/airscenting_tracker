@@ -1155,4 +1155,30 @@ class DatabaseOperations:
         """Delete multiple sessions"""
         return self.db_manager.delete_sessions(session_numbers, dog_name)
 
+    def dispose_all_engines(self):
+        """
+        Dispose all database engine connections
+        
+        Forces all engines to close connections and reconnect on next use.
+        Useful when database password changes.
+        """
+        try:
+            # Import here to avoid circular imports
+            from database import engine
+            import config
+            from importlib import reload
+            import database as db_module
+            
+            # Dispose the main engine
+            engine.dispose()
+            
+            # Reload database module to pick up new configuration
+            reload(db_module)
+            
+            print("[OK] All database engines disposed and reloaded")
+            
+        except Exception as e:
+            print(f"[WARN] Error disposing engines: {e}")
+
+
 

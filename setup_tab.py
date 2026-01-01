@@ -22,6 +22,7 @@ from sqlalchemy import text
 import sv  # Import centralized StringVars module
 from ui_database import DatabaseOperations
 from ui_misc_data_ops import MiscDataOperations
+import ui_utils
 
 
 class SetupTab:
@@ -55,21 +56,6 @@ class SetupTab:
         self.s_remove_distraction_type_btn = None
         self.s_move_distraction_type_up_btn = None
         self.s_move_distraction_type_down_btn = None
-    
-    def get_username(self):
-        """Get the current system username"""
-        try:
-            return getuser()
-        except:
-            return "unknown"
-    
-    def get_default_terrain_types(self):
-        """Get the default terrain type list"""
-        return [
-            "Urban", "Rural", "Forest", "Scrub", "Desert", "Sandy", "Rocky", 
-            "City park", "Meadow", "Dense brush", "Many cacti", "Stream", 
-            "Roadway", "Marsh", "Mixed", "Industrial", "Residential"
-        ]
     
     def get_default_distraction_types(self):
         """Get the default distraction type list"""
@@ -112,24 +98,50 @@ class SetupTab:
         radio_container.pack(pady=5)
         
         tk.Radiobutton(radio_container, text="SQLite", variable=sv.db_type, 
-                      value="sqlite").pack(side="left", padx=20)
+                      value="sqlite", command=self.ui.on_db_type_changed).pack(side="left", padx=20)
         tk.Radiobutton(radio_container, text="PostgreSQL", variable=sv.db_type, 
-                      value="postgres").pack(side="left", padx=20)
+                      value="postgres", command=self.ui.on_db_type_changed).pack(side="left", padx=20)
         tk.Radiobutton(radio_container, text="Supabase", variable=sv.db_type, 
-                      value="supabase").pack(side="left", padx=20)
+                      value="supabase", command=self.ui.on_db_type_changed).pack(side="left", padx=20)
+        tk.Radiobutton(radio_container, text="MySQL", variable=sv.db_type, 
+                      value="mysql", command=self.ui.on_db_type_changed).pack(side="left", padx=20)
+        
+        # Database Password (for postgres, supabase, mysql)
+        self.s_db_password_frame = tk.Frame(db_type_frame)
+        self.s_db_password_frame.pack(pady=5)
+        
+        tk.Label(self.s_db_password_frame, text="Database Password:").pack(side="left", padx=5)
+        self.s_db_password_entry = tk.Entry(self.s_db_password_frame, textvariable=sv.db_password, 
+                                          width=30, show="*")
+        self.s_db_password_entry.pack(side="left", padx=5)
+        
+        # Add right-click context menu for password entry (Cut/Copy/Paste)
+        self.ui.add_entry_context_menu(self.s_db_password_entry)
+        
+        # Show/Hide password checkbox
+        tk.Checkbutton(self.s_db_password_frame, text="Show", variable=sv.show_password,
+                      command=self.ui.toggle_password_visibility).pack(side="left", padx=5)
+        
+        # Remember Password checkbox
+        tk.Checkbutton(self.s_db_password_frame, text="Remember", variable=sv.remember_password).pack(side="left", padx=5)
+        
+        # Forget Password button
+        tk.Button(self.s_db_password_frame, text="Forget Saved Password", 
+                 command=self.ui.forget_password, width=18).pack(side="left", padx=5)
         
         # Add trace to update Create Database button when database type changes
         sv.db_type.trace_add('write', self.update_create_db_button_state)
         
-        # Initialize button state
+        # Initialize button state and password field visibility
         self.ui.root.after(100, self.update_create_db_button_state)
+        self.ui.root.after(100, self.ui.on_db_type_changed)
         
         # Database folder selection
         db_frame = tk.LabelFrame(frame, text="Database Folder", padx=10, pady=5)
         db_frame.pack(fill="x", pady=5)
         
         tk.Entry(db_frame, textvariable=sv.db_path, width=70).pack(side="left", padx=5)
-        tk.Button(db_frame, text="Browse", command=self.select_db_folder).pack(side="left", padx=5)
+        tk.Button(db_frame, text="Browse", command=self.ui.file_ops.select_db_folder).pack(side="left", padx=5)
         self.s_create_db_btn = tk.Button(db_frame, text="Create Database", 
                                        command=self.create_database, state="disabled")
         self.s_create_db_btn.pack(side="left", padx=5)
@@ -142,16 +154,16 @@ class SetupTab:
         folder_frame.pack(fill="x", pady=5)
         
         tk.Entry(folder_frame, textvariable=sv.trail_maps_folder, width=70).pack(side="left", padx=5)
-        tk.Button(folder_frame, text="Browse", command=self.select_folder).pack(side="left", padx=5)
+        tk.Button(folder_frame, text="Browse", command=self.ui.file_ops.select_folder).pack(side="left", padx=5)
         
         # Backup folder
         backup_frame = tk.LabelFrame(frame, text="Backup Folder", padx=10, pady=5)
         backup_frame.pack(fill="x", pady=5)
         
         tk.Entry(backup_frame, textvariable=sv.backup_folder, width=70).pack(side="left", padx=5)
-        tk.Button(backup_frame, text="Browse", command=self.select_backup_folder).pack(side="left", padx=5)
+        tk.Button(backup_frame, text="Browse", command=self.ui.file_ops.select_backup_folder).pack(side="left", padx=5)
         tk.Button(backup_frame, text="Restore Settings from Backup", 
-                 command=self.restore_settings_from_json).pack(side="left", padx=5)
+                 command=self.ui.misc_data_ops.restore_settings_from_json).pack(side="left", padx=5)
         
         # Default values
         defaults_frame = tk.LabelFrame(frame, text="Default Values (Optional)", padx=10, pady=5)
@@ -389,582 +401,9 @@ class SetupTab:
         scrollbar = ttk.Scrollbar(self.entry_tab, orient="vertical", command=canvas.yview)
         scrollable_frame = ttk.Frame(canvas)
 
-    def restore_settings_from_json(self):
-        """Restore settings from JSON backup file"""
-        backup_folder = sv.backup_folder.get().strip()
-        if not backup_folder:
-            messagebox.showwarning("No Backup Folder", "Please select a backup folder first")
-            return
-        
-        from pathlib import Path
-        backup_path = Path(backup_folder)
-        if not backup_path.exists():
-            messagebox.showwarning("Invalid Folder", f"Backup folder does not exist:\n{backup_folder}")
-            return
-        
-        settings_path = backup_path / "airscenting_settings.json"
-        if not settings_path.exists():
-            messagebox.showinfo("No Settings Backup", 
-                               f"No settings backup file found in:\n{backup_folder}\n\n"
-                               f"Looking for: airscenting_settings.json")
-            return
-        
-        try:
-            # Load settings
-            with open(settings_path, 'r') as f:
-                settings = json.load(f)
-            
-            db_type = sv.db_type.get()
-            
-            # Insert dogs to database
-            dogs = settings.get("dogs", [])
-            dogs_added = 0
-            
-            if dogs:
-                try:
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    
-                    from sqlalchemy import text
-                    
-                    for dog_name in dogs:
-                        try:
-                            with database.get_connection() as conn:
-                                conn.execute(
-                                    text("INSERT INTO dogs (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": dog_name, "user_name": self.get_username()}
-                                )
-                                conn.commit()
-                            dogs_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add dog '{dog_name}': {e}")
-                    
-                    # Restore original DB_TYPE
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except Exception as e:
-                    print(f"Error restoring dogs: {e}")
-            
-            # Insert locations to database
-            locations = settings.get("training_locations", [])
-            locations_added = 0
-            
-            if locations:
-                try:
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    
-                    from sqlalchemy import text
-                    
-                    for location in locations:
-                        try:
-                            with database.get_connection() as conn:
-                                conn.execute(
-                                    text("INSERT INTO training_locations (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": location, "user_name": self.get_username()}
-                                )
-                                conn.commit()
-                            locations_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add location '{location}': {e}")
-                    
-                    # Restore original DB_TYPE
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except Exception as e:
-                    print(f"Error restoring locations: {e}")
-            
-            # Insert terrain types to database
-            terrain_types = settings.get("terrain_types", [])
-            terrain_added = 0
-            
-            if terrain_types:
-                try:
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    
-                    from sqlalchemy import text
-                    
-                    for terrain in terrain_types:
-                        try:
-                            with database.get_connection() as conn:
-                                conn.execute(
-                                    text("INSERT INTO terrain_types (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": terrain, "user_name": self.get_username()}
-                                )
-                                conn.commit()
-                            terrain_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add terrain type '{terrain}': {e}")
-                    
-                    # Restore original DB_TYPE
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except Exception as e:
-                    print(f"Error restoring terrain types: {e}")
-            
-            # Insert distraction types to database
-            distraction_types = settings.get("distraction_types", [])
-            distraction_added = 0
-            
-            if distraction_types:
-                try:
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    
-                    from sqlalchemy import text
-                    
-                    for distraction in distraction_types:
-                        try:
-                            with database.get_connection() as conn:
-                                conn.execute(
-                                    text("INSERT INTO distraction_types (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": distraction, "user_name": self.get_username()}
-                                )
-                                conn.commit()
-                            distraction_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add distraction type '{distraction}': {e}")
-                    
-                    # Restore original DB_TYPE
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except Exception as e:
-                    print(f"Error restoring distraction types: {e}")
-            
-            # Save handler name to config
-            if "handler_name" in settings:
-                self.ui.config["handler_name"] = settings["handler_name"]
-                sv.default_handler.set(settings["handler_name"])
-            
-            self.ui.save_config()
-            
-            # Refresh UI
-            self.load_dogs_from_database()
-            if hasattr(self.ui, 'a_dog_combo'):
-                self.refresh_dog_list()
-            
-            self.load_locations_from_database()
-            if hasattr(self.ui, 'a_location_combo'):
-                self.refresh_location_list()
-            
-            # Reload terrain and distraction lists from database
-            self.load_terrain_from_database()
-            self.load_distraction_from_database()
-            
-            # Show summary
-            msg = "Settings restored successfully!\n\n"
-            if dogs_added > 0:
-                msg += f"Added {dogs_added} dog(s)\n"
-            if locations_added > 0:
-                msg += f"Added {locations_added} location(s)\n"
-            if terrain_added > 0:
-                msg += f"Added {terrain_added} terrain type(s)\n"
-            if distraction_added > 0:
-                msg += f"Added {distraction_added} distraction type(s)\n"
-            if "handler_name" in settings:
-                msg += f"Restored handler name: {settings['handler_name']}\n"
-            
-            messagebox.showinfo("Restore Complete", msg)
-            
-        except Exception as e:
-            messagebox.showerror("Restore Error", f"Failed to restore settings:\n{e}")
-            print(f"Error restoring settings: {e}")
-    
 
-    def restore_from_json_backups(self, db_type):
-        """Restore database from JSON backup files"""
-        backup_folder = sv.backup_folder.get().strip()
-        if not backup_folder:
-            messagebox.showwarning("No Backup Folder", "No backup folder configured")
-            return False
-        
-        from pathlib import Path
-        backup_path = Path(backup_folder)
-        if not backup_path.exists():
-            messagebox.showwarning("Invalid Folder", f"Backup folder does not exist:\n{backup_folder}")
-            return False
-        
-        # Find all session JSON files (both old and new format)
-        # Old format: session_<number>_<date>.json
-        # New format: <dogname>_session_<number>_<date>.json
-        json_files = list(backup_path.glob("*session_*.json"))
-        if not json_files:
-            messagebox.showinfo("No Backups Found", 
-                               f"No session backup files found in:\n{backup_folder}")
-            return False
-        
-        # Ask user to confirm restore
-        result = messagebox.askyesno(
-            "Restore from Backups",
-            f"Found {len(json_files)} session backup files.\n\n"
-            f"Do you want to restore these sessions to the new database?",
-            icon='question'
-        )
-        
-        if not result:
-            return False
-        
-        # Restore sessions
-        try:
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            restored_count = 0
-            failed_count = 0
-            dog_names = set()  # Collect unique dog names
-            location_names = set()  # Collect unique location names
-            
-            for json_file in sorted(json_files):
-                try:
-                    with open(json_file, 'r') as f:
-                        session_data = json.load(f)
-                    
-                    # Collect dog name for later insertion
-                    dog_name = session_data.get('dog_name')
-                    if dog_name:
-                        dog_names.add(dog_name)
-                    
-                    # Collect location name for later insertion
-                    location = session_data.get('location')
-                    if location:
-                        location_names.add(location)
-                    
-                    # Insert into database
-                    with database.get_connection() as conn:
-                        # Convert image_files list to JSON string if present
-                        image_files = session_data.get('image_files', [])
-                        image_files_json = json.dumps(image_files) if isinstance(image_files, list) else (image_files or "")
-                        
-                        conn.execute(
-                            text("""
-                                INSERT INTO training_sessions 
-                                (date, session_number, handler, session_purpose, field_support, dog_name, location,
-                                 search_area_size, num_subjects, handler_knowledge, weather, temperature, 
-                                 wind_direction, wind_speed, search_type, drive_level, subjects_found, image_files, user_name)
-                                VALUES (:date, :session_number, :handler, :session_purpose, :field_support, :dog_name, :location,
-                                        :search_area_size, :num_subjects, :handler_knowledge, :weather, :temperature, 
-                                        :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, :image_files, :user_name)
-                            """),
-                            {
-                                "date": session_data.get('date'),
-                                "session_number": session_data.get('session_number'),
-                                "handler": session_data.get('handler'),
-                                "session_purpose": session_data.get('session_purpose'),
-                                "field_support": session_data.get('field_support'),
-                                "dog_name": session_data.get('dog_name'),
-                                "location": session_data.get('location'),
-                                "search_area_size": session_data.get('search_area_size'),
-                                "num_subjects": session_data.get('num_subjects'),
-                                "handler_knowledge": session_data.get('handler_knowledge'),
-                                "weather": session_data.get('weather'),
-                                "temperature": session_data.get('temperature'),
-                                "wind_direction": session_data.get('wind_direction'),
-                                "wind_speed": session_data.get('wind_speed'),
-                                "search_type": session_data.get('search_type'),
-                                "drive_level": session_data.get('drive_level'),
-                                "subjects_found": session_data.get('subjects_found'),
-                                "image_files": image_files_json,
-                                "user_name": session_data.get('user_name', self.get_username())
-                            }
-                        )
-                        conn.commit()
-                    
-                    restored_count += 1
-                    
-                except Exception as e:
-                    print(f"Failed to restore {json_file.name}: {e}")
-                    failed_count += 1
-            
-            # Now insert all unique dog names into dogs table
-            # print(f"DEBUG: Found {len(dog_names)} unique dogs in backups: {sorted(dog_names)}")  # DEBUG
-            dogs_added = 0
-            for dog_name in sorted(dog_names):
-                try:
-                    with database.get_connection() as conn:
-                        conn.execute(
-                            text("INSERT INTO dogs (name, user_name) VALUES (:name, :user_name)"),
-                            {"name": dog_name, "user_name": self.get_username()}
-                        )
-                        conn.commit()
-                    dogs_added += 1
-                    # print(f"DEBUG: Added dog '{dog_name}' to dogs table")  # DEBUG
-                except Exception as e:
-                    # Dog might already exist (UNIQUE constraint), that's OK
-                    if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
-                        # print(f"DEBUG: Dog '{dog_name}' already exists in dogs table")  # DEBUG
-                        pass  # Duplicate is OK, continue with next dog
-                    else:
-                        # print(f"DEBUG: Failed to add dog '{dog_name}': {e}")  # DEBUG
-                        pass  # Other errors are logged but don't stop the process
-            
-            # print(f"DEBUG: Added {dogs_added} new dogs to dogs table")  # DEBUG
-            
-            # Now insert all unique location names into training_locations table
-            # print(f"DEBUG: Found {len(location_names)} unique locations in backups: {sorted(location_names)}")  # DEBUG
-            locations_added = 0
-            for location in sorted(location_names):
-                try:
-                    with database.get_connection() as conn:
-                        conn.execute(
-                            text("INSERT INTO training_locations (name, user_name) VALUES (:name, :user_name)"),
-                            {"name": location, "user_name": self.get_username()}
-                        )
-                        conn.commit()
-                    locations_added += 1
-                    # print(f"DEBUG: Added location '{location}' to training_locations table")  # DEBUG
-                except Exception as e:
-                    # Location might already exist (UNIQUE constraint), that's OK
-                    if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
-                        # print(f"DEBUG: Location '{location}' already exists in training_locations table")  # DEBUG
-                        pass  # Duplicate is OK, continue with next location
-                    else:
-                        # print(f"DEBUG: Failed to add location '{location}': {e}")  # DEBUG
-                        pass  # Other errors are logged but don't stop the process
-            
-            # print(f"DEBUG: Added {locations_added} new locations to training_locations table")  # DEBUG
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            # Refresh dog list in UI
-            self.load_dogs_from_database()
-            if hasattr(self.ui, 'a_dog_combo'):
-                self.refresh_dog_list()
-            
-            # Refresh location list in UI
-            self.load_locations_from_database()
-            if hasattr(self.ui, 'a_location_combo'):
-                self.refresh_location_list()
-            
-            # Also try to restore from settings backup if it exists
-            settings_restored = False
-            terrain_added = 0
-            distraction_added = 0
-            
-            settings_path = backup_path / "airscenting_settings.json"
-            if settings_path.exists():
-                try:
-                    with open(settings_path, 'r') as f:
-                        settings = json.load(f)
-                    
-                    # Insert terrain types
-                    terrain_types = settings.get("terrain_types", [])
-                    for terrain in terrain_types:
-                        try:
-                            with database.get_connection() as conn:
-                                conn.execute(
-                                    text("INSERT INTO terrain_types (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": terrain, "user_name": self.get_username()}
-                                )
-                                conn.commit()
-                            terrain_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add terrain type '{terrain}': {e}")
-                    
-                    # Insert distraction types
-                    distraction_types = settings.get("distraction_types", [])
-                    for distraction in distraction_types:
-                        try:
-                            with database.get_connection() as conn:
-                                conn.execute(
-                                    text("INSERT INTO distraction_types (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": distraction, "user_name": self.get_username()}
-                                )
-                                conn.commit()
-                            distraction_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add distraction type '{distraction}': {e}")
-                    
-                    # Refresh UI
-                    self.load_terrain_from_database()
-                    self.load_distraction_from_database()
-                    
-                    settings_restored = True
-                    
-                except Exception as e:
-                    print(f"Could not restore settings backup: {e}")
-            
-            # Show results
-            if restored_count > 0:
-                msg = f"Successfully restored {restored_count} session(s)"
-                if dogs_added > 0:
-                    msg += f"\nAdded {dogs_added} dog(s) to database"
-                if locations_added > 0:
-                    msg += f"\nAdded {locations_added} location(s) to database"
-                if settings_restored:
-                    if terrain_added > 0:
-                        msg += f"\nAdded {terrain_added} terrain type(s) from settings"
-                    if distraction_added > 0:
-                        msg += f"\nAdded {distraction_added} distraction type(s) from settings"
-                if failed_count > 0:
-                    msg += f"\n{failed_count} session(s) failed to restore"
-                messagebox.showinfo("Restore Complete", msg)
-                return True
-            else:
-                messagebox.showerror("Restore Failed", "No sessions were restored")
-                return False
-            
-        except Exception as e:
-            # Restore original DB_TYPE on error
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            messagebox.showerror("Restore Error", f"Failed to restore sessions:\n{e}")
-            import traceback
-            traceback.print_exc()
-            return False
-    
 
-    def offer_load_default_types(self, db_type):
-        """Offer to load default terrain and distraction types into new database"""
-        result = messagebox.askyesno(
-            "Load Default Types?",
-            "Would you like to load the default terrain and distraction types?\n\n"
-            "Terrain types (17):\n"
-            "Urban, Rural, Forest, Scrub, Desert, Sandy, Rocky, City park, Meadow, etc.\n\n"
-            "Distraction types (7):\n"
-            "Critter, Horse, Loud noise, Motorcycle, Hikers, Cow, Vehicle"
-        )
-        
-        if not result:
-            return
-        
-        try:
-            # Temporarily switch to selected database type
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            # Reload database module
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            from sqlalchemy import text
-            
-            terrain_added = 0
-            distraction_added = 0
-            
-            # Insert terrain types
-            terrain_types = self.get_default_terrain_types()
-            for terrain in terrain_types:
-                try:
-                    with database.get_connection() as conn:
-                        conn.execute(
-                            text("INSERT INTO terrain_types (name, user_name) VALUES (:name, :user_name)"),
-                            {"name": terrain, "user_name": self.get_username()}
-                        )
-                        conn.commit()
-                    terrain_added += 1
-                except Exception as e:
-                    if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                        print(f"Failed to add terrain type '{terrain}': {e}")
-            
-            # Insert distraction types
-            distraction_types = self.get_default_distraction_types()
-            for distraction in distraction_types:
-                try:
-                    with database.get_connection() as conn:
-                        conn.execute(
-                            text("INSERT INTO distraction_types (name, user_name) VALUES (:name, :user_name)"),
-                            {"name": distraction, "user_name": self.get_username()}
-                        )
-                        conn.commit()
-                    distraction_added += 1
-                except Exception as e:
-                    if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                        print(f"Failed to add distraction type '{distraction}': {e}")
-            
-            # Restore original DB_TYPE
-            config.DB_TYPE = old_db_type
-            database.engine.dispose()
-            reload(database)
-            
-            # Refresh UI
-            self.load_terrain_from_database()
-            self.load_distraction_from_database()
-            
-            # Show summary
-            msg = f"Default types loaded successfully!\n\n"
-            msg += f"Added {terrain_added} terrain type(s)\n"
-            msg += f"Added {distraction_added} distraction type(s)"
-            
-            messagebox.showinfo("Defaults Loaded", msg)
-            
-        except Exception as e:
-            # Restore original DB_TYPE on error
-            try:
-                import config
-                import database
-                from importlib import reload
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass
-            
-            messagebox.showerror("Error", f"Failed to load default types:\n{e}")
-            print(f"Error loading default types: {e}")
-    
+
     def select_db_folder(self):
         """Select database folder"""
         folder = filedialog.askdirectory(title="Select Database Folder")
@@ -1117,10 +556,10 @@ class SetupTab:
                 )
                 
                 # Offer to restore from JSON backups
-                self.restore_from_json_backups("sqlite")
+                self.ui.misc_data_ops.restore_from_json_backups("sqlite")
                 
                 # Offer to load default terrain and distraction types
-                self.offer_load_default_types("sqlite")
+                self.ui.misc_data_ops.offer_load_default_types("sqlite")
                 
                 # Update session number and UI after database recreation
                 sv.session_number.set(str(DatabaseOperations(self.ui).get_next_session_number()))
@@ -1234,10 +673,10 @@ class SetupTab:
                 )
                 
                 # Offer to restore from JSON backups
-                self.restore_from_json_backups(db_type)
+                self.ui.misc_data_ops.restore_from_json_backups(db_type)
                 
                 # Offer to load default terrain and distraction types
-                self.offer_load_default_types(db_type)
+                self.ui.misc_data_ops.offer_load_default_types(db_type)
                 
                 # Update session number and UI after database recreation
                 sv.session_number.set(str(DatabaseOperations(self.ui).get_next_session_number()))
@@ -1587,7 +1026,7 @@ class SetupTab:
                 with database.get_connection() as conn:
                     conn.execute(
                         text("INSERT INTO training_locations (name, user_name) VALUES (:name, :user_name)"),
-                        {"name": location, "user_name": self.get_username()}
+                        {"name": location, "user_name": ui_utils.get_username()}
                     )
                     conn.commit()
                 
@@ -1877,7 +1316,7 @@ class SetupTab:
                 with database.get_connection() as conn:
                     conn.execute(
                         text("INSERT INTO dogs (name, user_name) VALUES (:name, :user_name)"),
-                        {"name": dog_name, "user_name": self.get_username()}
+                        {"name": dog_name, "user_name": ui_utils.get_username()}
                     )
                     conn.commit()
                 
@@ -2023,7 +1462,7 @@ class SetupTab:
                 with database.get_connection() as conn:
                     conn.execute(
                         text("INSERT INTO terrain_types (name, user_name) VALUES (:name, :user_name)"),
-                        {"name": terrain, "user_name": self.get_username()}
+                        {"name": terrain, "user_name": ui_utils.get_username()}
                     )
                     conn.commit()
                 
@@ -2172,7 +1611,7 @@ class SetupTab:
             "This will replace your terrain types with the default list. Continue?"
         )
         if result:
-            self.ui.config["terrain_types"] = self.get_default_terrain_types()
+            self.ui.config["terrain_types"] = ui_utils.get_default_terrain_types()
             
             # Rebuild treeview
             self.s_terrain_tree.delete(*self.s_terrain_tree.get_children())
@@ -2220,7 +1659,7 @@ class SetupTab:
                 with database.get_connection() as conn:
                     conn.execute(
                         text("INSERT INTO distraction_types (name, user_name) VALUES (:name, :user_name)"),
-                        {"name": distraction, "user_name": self.get_username()}
+                        {"name": distraction, "user_name": ui_utils.get_username()}
                     )
                     conn.commit()
                 
@@ -2373,7 +1812,7 @@ class SetupTab:
             "This will replace your distraction types with the default list. Continue?"
         )
         if result:
-            self.ui.config["distraction_types"] = self.get_default_distraction_types()
+            self.ui.config["distraction_types"] = ui_utils.get_default_distraction_types()
             
             # Rebuild treeview
             self.s_distraction_type_tree.delete(*self.s_distraction_type_tree.get_children())
@@ -2425,51 +1864,4 @@ class SetupTab:
         sv.status.set("Configuration saved successfully!")
         messagebox.showinfo("Success", "Configuration saved successfully!")
     
-    def get_form_state_string(self):
-        """Get a string representation of all form fields for comparison"""
-        parts = [
-            sv.db_type.get(),
-            sv.db_path.get(),
-            sv.trail_maps_folder.get(),
-            sv.backup_folder.get(),
-            sv.default_handler.get(),
-            # Include entry widget values (in case user typed but didn't click Add)
-            sv.new_location.get(),
-            sv.new_dog.get(),
-            sv.new_terrain.get(),
-            sv.new_distraction.get(),
-            # Include lists (dogs are now in database, not config)
-            ", ".join(sorted(self.ui.config.get("training_locations", []))),
-            ", ".join(self.ui.config.get("terrain_types", [])),
-            ", ".join(self.ui.config.get("distraction_types", []))
-        ]
-        return "|".join(parts)
-    
-    def take_form_snapshot(self):
-        """Take a snapshot of the current form state"""
-        self.ui.form_snapshot = self.get_form_state_string()
-    
-    def has_unsaved_changes(self):
-        """Check if the form has unsaved changes"""
-        current_state = self.get_form_state_string()
-        return current_state != self.ui.form_snapshot
-    
-    def check_unsaved_changes(self, action_name="proceed"):
-        """Check for unsaved changes and prompt user. Returns True if OK to proceed."""
-        if not self.has_unsaved_changes():
-            return True
-        
-        # Prompt user
-        result = messagebox.askyesno(
-            "Unsaved Changes",
-            f"You have unsaved changes.\n\nDo you want to save before you {action_name}?",
-            icon='warning'
-        )
-        
-        if result is None:  # Cancel
-            return False
-        elif result:  # Yes - save first
-            self.save_configuration_settings()
-            return True
-        else:  # No - discard changes
-            return True
+

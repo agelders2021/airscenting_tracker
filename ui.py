@@ -956,14 +956,7 @@ class AirScentingUI:
         except:
             pass
     
-    def on_db_type_changed(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.on_db_type_changed()
-    
-    def toggle_password_visibility(self):
-        """Delegate to SetupTab module"""
-        return self.setup_tab_mgr.toggle_password_visibility()
-    
+
     def set_db_password(self):
         """Set database password in config at runtime and optionally save encrypted"""
         import config
@@ -1350,6 +1343,190 @@ class AirScentingUI:
             
             messagebox.showwarning("Setup Required", error_msg)
             return False
+        
+        return True
+    
+    def add_entry_context_menu(self, entry_widget):
+        """Add right-click context menu to Entry widget with Cut/Copy/Paste/Select All"""
+        context_menu = tk.Menu(entry_widget, tearoff=0)
+        
+        context_menu.add_command(label="Cut", command=lambda: self.entry_cut(entry_widget))
+        context_menu.add_command(label="Copy", command=lambda: self.entry_copy(entry_widget))
+        context_menu.add_command(label="Paste", command=lambda: self.entry_paste(entry_widget))
+        context_menu.add_separator()
+        context_menu.add_command(label="Select All", command=lambda: self.entry_select_all(entry_widget))
+        
+        def show_context_menu(event):
+            try:
+                context_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                context_menu.grab_release()
+        
+        # Bind right-click (Button-3 on Linux/Windows, Button-2 on Mac)
+        entry_widget.bind("<Button-3>", show_context_menu)
+        # Also bind Control-Button-1 for Mac users
+        entry_widget.bind("<Control-Button-1>", show_context_menu)
+    
+    def entry_cut(self, entry_widget):
+        """Cut selected text from Entry widget"""
+        try:
+            entry_widget.event_generate("<<Cut>>")
+        except:
+            pass
+    
+    def entry_copy(self, entry_widget):
+        """Copy selected text from Entry widget"""
+        try:
+            entry_widget.event_generate("<<Copy>>")
+        except:
+            pass
+    
+    def entry_paste(self, entry_widget):
+        """Paste text into Entry widget"""
+        try:
+            entry_widget.event_generate("<<Paste>>")
+        except:
+            pass
+    
+    def entry_select_all(self, entry_widget):
+        """Select all text in Entry widget"""
+        try:
+            entry_widget.select_range(0, tk.END)
+            entry_widget.icursor(tk.END)
+        except:
+            pass
+    
+    def on_db_type_changed(self):
+        """Show/hide password field based on database type and load saved password"""
+        import sv
+        db_type = sv.db_type.get()
+        
+        # Show password field for postgres, supabase, mysql
+        # Hide for sqlite
+        if db_type in ["postgres", "supabase", "mysql"]:
+            if hasattr(self.setup_tab_mgr, 's_db_password_frame'):
+                self.setup_tab_mgr.s_db_password_frame.pack(pady=5)
+            
+            # Try to load saved encrypted password for this database type
+            from password_manager import get_decrypted_password, check_crypto_available
+            
+            if check_crypto_available():
+                saved_password = get_decrypted_password(self.config, db_type)
+                if saved_password:
+                    sv.db_password.set(saved_password)
+                    # CRITICAL FIX: Actually set the password in the database configuration
+                    # Without this, the password shows in the field but isn't used for connection
+                    self.set_db_password()
+                    # Only update status if status_var exists (may not during initialization)
+                    if hasattr(sv, 'status'):
+                        sv.status.set(f"Loaded saved password for {db_type}")
+                else:
+                    sv.db_password.set("")
+            else:
+                sv.db_password.set("")
+        else:
+            if hasattr(self.setup_tab_mgr, 's_db_password_frame'):
+                self.setup_tab_mgr.s_db_password_frame.pack_forget()
+        
+        # Force UI update to keep splash countdown animating
+        if hasattr(self, 'root'):
+            try:
+                self.root.update_idletasks()
+            except:
+                pass
+    
+    def toggle_password_visibility(self):
+        """Toggle password visibility in entry field"""
+        import sv
+        if sv.show_password.get():
+            if hasattr(self.setup_tab, 's_db_password_entry'):
+                self.setup_tab.s_db_password_entry.config(show="")
+        else:
+            if hasattr(self.setup_tab, 's_db_password_entry'):
+                self.setup_tab.s_db_password_entry.config(show="*")
+    
+    def set_db_password(self):
+        """Set database password in config at runtime and optionally save encrypted"""
+        import config
+        import sv
+        
+        db_type = sv.db_type.get()
+        password = sv.db_password.get()
+        
+        if db_type in ["postgres", "supabase", "mysql"] and password:
+            # Set the password in config
+            config.DB_PASSWORD = password
+            
+            # Build the connection URL with password
+            url_template = config.DB_CONFIG[db_type].get("url_template", "")
+            if url_template:
+                config.DB_CONFIG[db_type]["url"] = url_template.format(password=password)
+            
+            # CRITICAL: Dispose any existing database engines to force reconnection
+            # This ensures the new password is used
+            try:
+                from ui_database import dispose_all_engines
+                dispose_all_engines()
+            except:
+                pass  # If ui_database doesn't have this function, skip
+            
+            # Save encrypted password if "Remember" is checked
+            if sv.remember_password.get():
+                from password_manager import save_encrypted_password, check_crypto_available
+                
+                if check_crypto_available():
+                    if save_encrypted_password(self.config, db_type, password):
+                        self.save_config()
+                        # Only update status if status_var exists (may not during initialization)
+                        if hasattr(sv, 'status'):
+                            sv.status.set(f"Password saved (encrypted) for {db_type}")
+                    else:
+                        messagebox.showwarning(
+                            "Encryption Failed",
+                            "Could not encrypt password. It will not be saved."
+                        )
+                else:
+                    messagebox.showwarning(
+                        "Cryptography Not Available",
+                        "Password encryption requires the 'cryptography' library.\n\n"
+                        "Install with: pip install cryptography\n\n"
+                        "Password will not be saved."
+                    )
+    
+    def forget_password(self):
+        """Clear saved encrypted password for current database type"""
+        import sv
+        db_type = sv.db_type.get()
+        
+        if db_type not in ["postgres", "supabase", "mysql"]:
+            return
+        
+        from password_manager import clear_saved_password
+        
+        # Clear from config
+        clear_saved_password(self.config, db_type)
+        self.save_config()
+        
+        # Clear from UI
+        sv.db_password.set("")
+        
+        sv.status.set(f"Forgot saved password for {db_type}")
+        messagebox.showinfo("Password Cleared", f"Saved password for {db_type} has been cleared.")
+    
+    def prepare_db_connection(self, db_type):
+        """Prepare database connection by setting password if needed"""
+        import sv
+        if db_type in ["postgres", "supabase", "mysql"]:
+            password = sv.db_password.get().strip()
+            if not password:
+                messagebox.showerror(
+                    "Password Required",
+                    f"Please enter the database password for {db_type} in the Setup tab."
+                )
+                return False
+            
+            # Set the password before any database operations
+            self.set_db_password()
         
         return True
     
