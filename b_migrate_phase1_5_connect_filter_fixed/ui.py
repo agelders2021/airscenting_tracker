@@ -420,26 +420,13 @@ class AirScentingUI:
         
         tk.Label(status_filter_frame, text="Show Sessions:").pack(side="left", padx=(0, 10))
         tk.Radiobutton(status_filter_frame, text="Active", variable=sv.session_status_filter, 
-                      value="active", command=self.navigation.on_status_filter_changed).pack(side="left", padx=5)
+                      value="active").pack(side="left", padx=5)
         tk.Radiobutton(status_filter_frame, text="Deleted", variable=sv.session_status_filter, 
-                      value="deleted", command=self.navigation.on_status_filter_changed).pack(side="left", padx=5)
+                      value="deleted").pack(side="left", padx=5)
         tk.Radiobutton(status_filter_frame, text="Both", variable=sv.session_status_filter, 
-                      value="both", command=self.navigation.on_status_filter_changed).pack(side="left", padx=5)
+                      value="both").pack(side="left", padx=5)
         
-        # Row 2: Delete/Undelete buttons (for editing existing sessions)
-        self.a_delete_undelete_frame = tk.Frame(session_frame)
-        self.a_delete_undelete_frame.grid(row=2, column=6, columnspan=4, sticky="w", padx=5, pady=5)
-        
-        tk.Button(self.a_delete_undelete_frame, text="Undelete", bg="#28a745", fg="white",
-                 command=self.navigation.undelete_current_session, width=12).pack(side="left", padx=5)
-        tk.Button(self.a_delete_undelete_frame, text="Delete", bg="#dc3545", fg="white",
-                 command=self.navigation.delete_current_session, width=12).pack(side="left", padx=5)
-        
-        # Initially disable the frame (enabled only when editing existing session)
-        for child in self.a_delete_undelete_frame.winfo_children():
-            child.config(state="disabled")
-        
-        # Row 3: Handler, Session Purpose
+        # Row 2: Handler, Session Purpose
         tk.Label(session_frame, text="Handler:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         # If handler_name is set, use it; otherwise use last_handler_name
         default_handler = self.config.get("handler_name", "") or self.config.get("last_handler_name", "")

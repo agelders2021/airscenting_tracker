@@ -42,47 +42,22 @@ class Navigation:
             else:
                 self.ui.a_next_session_btn.config(state="disabled")
         else:
-            # Normal mode - check filtered session list
+            # Normal mode - use session number
             try:
                 current_session = int(sv.session_number.get())
-                dog_name = sv.dog.get()
-                
-                if not dog_name:
-                    self.ui.a_prev_session_btn.config(state="disabled")
-                    self.ui.a_next_session_btn.config(state="disabled")
-                    return
-                
-                # Get filtered sessions for current dog
                 db_ops = DatabaseOperations(self.ui)
-                status_filter = sv.session_status_filter.get()
-                sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
+                max_session = db_ops.get_next_session_number() - 1
                 
-                if not sessions:
-                    self.ui.a_prev_session_btn.config(state="disabled")
-                    self.ui.a_next_session_btn.config(state="disabled")
-                    return
-                
-                # Extract session numbers
-                session_numbers = [s[0] for s in sessions]
-                
-                # Check if current session is in filtered list
-                if current_session in session_numbers:
-                    current_index = session_numbers.index(current_session)
-                    
-                    # Enable Previous if not at first filtered session
-                    if current_index > 0:
-                        self.ui.a_prev_session_btn.config(state="normal")
-                    else:
-                        self.ui.a_prev_session_btn.config(state="disabled")
-                    
-                    # Enable Next if not at last filtered session
-                    if current_index < len(session_numbers) - 1:
-                        self.ui.a_next_session_btn.config(state="normal")
-                    else:
-                        self.ui.a_next_session_btn.config(state="disabled")
+                # Enable Previous if session > 1
+                if current_session > 1:
+                    self.ui.a_prev_session_btn.config(state="normal")
                 else:
-                    # Current session not in filtered list - disable both
                     self.ui.a_prev_session_btn.config(state="disabled")
+                
+                # Enable Next if session < max + 1
+                if current_session < max_session + 1:
+                    self.ui.a_next_session_btn.config(state="normal")
+                else:
                     self.ui.a_next_session_btn.config(state="disabled")
                     
             except ValueError:
@@ -104,34 +79,13 @@ class Navigation:
                 f"Session {self.ui.selected_sessions_index + 1} of {len(self.ui.selected_sessions)} selected"
             )
         else:
-            # Normal navigation - navigate through filtered sessions
+            # Normal navigation - just decrement
             try:
                 current = int(sv.session_number.get())
-                dog_name = sv.dog.get()
-                
-                if not dog_name:
-                    return
-                
-                # Get filtered sessions for current dog
-                db_ops = DatabaseOperations(self.ui)
-                status_filter = sv.session_status_filter.get()
-                sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
-                
-                if not sessions:
-                    return
-                
-                # Extract session numbers from the list of tuples
-                session_numbers = [s[0] for s in sessions]
-                
-                # Find current session in the list
-                if current in session_numbers:
-                    current_index = session_numbers.index(current)
-                    if current_index > 0:  # Can go previous
-                        prev_session = session_numbers[current_index - 1]
-                        sv.session_number.set(str(prev_session))
-                        self.load_session_by_number(prev_session)
-                        self.update_navigation_buttons()
-                
+                if current > 1:
+                    sv.session_number.set(str(current - 1))
+                    self.load_session_by_number(current - 1)
+                    self.update_navigation_buttons()
             except ValueError:
                 pass
     
@@ -151,34 +105,15 @@ class Navigation:
                 f"Session {self.ui.selected_sessions_index + 1} of {len(self.ui.selected_sessions)} selected"
             )
         else:
-            # Normal navigation - navigate through filtered sessions
+            # Normal navigation - just increment
             try:
                 current = int(sv.session_number.get())
-                dog_name = sv.dog.get()
-                
-                if not dog_name:
-                    return
-                
-                # Get filtered sessions for current dog
                 db_ops = DatabaseOperations(self.ui)
-                status_filter = sv.session_status_filter.get()
-                sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
-                
-                if not sessions:
-                    return
-                
-                # Extract session numbers from the list of tuples
-                session_numbers = [s[0] for s in sessions]
-                
-                # Find current session in the list
-                if current in session_numbers:
-                    current_index = session_numbers.index(current)
-                    if current_index < len(session_numbers) - 1:  # Can go next
-                        next_session = session_numbers[current_index + 1]
-                        sv.session_number.set(str(next_session))
-                        self.load_session_by_number(next_session)
-                        self.update_navigation_buttons()
-                
+                max_session = db_ops.get_next_session_number() - 1
+                if current < max_session + 1:
+                    sv.session_number.set(str(current + 1))
+                    self.load_session_by_number(current + 1)
+                    self.update_navigation_buttons()
             except ValueError:
                 pass
     
@@ -337,9 +272,6 @@ class Navigation:
             form_mgmt = FormManagement(self.ui)
             form_mgmt.update_subjects_found()
             
-            # Enable delete/undelete buttons (editing existing session)
-            self.enable_delete_undelete_buttons()
-            
             sv.status.set(f"Loaded session #{session_number}")
             
         else:
@@ -405,8 +337,7 @@ class Navigation:
             return
         
         db_ops = DatabaseOperations(self.ui)
-        status_filter = sv.session_status_filter.get()
-        sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
+        sessions = db_ops.get_all_sessions_for_dog(dog_name)
         
         if not sessions:
             messagebox.showinfo("No Sessions", f"No training sessions found for {dog_name}.")
@@ -512,108 +443,6 @@ class Navigation:
                  bg="#DC143C", fg="white", width=15).pack(side="left", padx=5)
         tk.Button(button_frame, text="Cancel", command=dialog.destroy,
                  width=10).pack(side="left", padx=5)
-    
-    def enable_delete_undelete_buttons(self):
-        """Enable the delete/undelete buttons (when editing existing session)"""
-        if hasattr(self.ui, 'a_delete_undelete_frame'):
-            for child in self.ui.a_delete_undelete_frame.winfo_children():
-                child.config(state="normal")
-    
-    def disable_delete_undelete_buttons(self):
-        """Disable the delete/undelete buttons (when creating new session)"""
-        if hasattr(self.ui, 'a_delete_undelete_frame'):
-            for child in self.ui.a_delete_undelete_frame.winfo_children():
-                child.config(state="disabled")
-    
-    def delete_current_session(self):
-        """Mark the current session as deleted"""
-        from sv import sv
-        from ui_database import DatabaseOperations
-        from tkinter import messagebox
-        
-        session_number = sv.session_number.get()
-        dog_name = sv.dog.get()
-        
-        if not dog_name or not session_number:
-            return
-        
-        try:
-            session_num = int(session_number)
-        except ValueError:
-            return
-        
-        # Confirm
-        result = messagebox.askyesno(
-            "Mark as Deleted",
-            f"Mark session #{session_num} for {dog_name} as deleted?\n\n"
-            "This can be undone with the Undelete button.",
-            icon='warning'
-        )
-        
-        if result:
-            db_ops = DatabaseOperations(self.ui)
-            success = db_ops.update_session_status(session_num, dog_name, 'deleted')
-            
-            if success:
-                sv.status.set(f"Session #{session_num} marked as deleted")
-                messagebox.showinfo("Success", f"Session #{session_num} marked as deleted")
-                
-                # Refresh navigation to reflect filter
-                self.update_navigation_buttons()
-            else:
-                messagebox.showerror("Error", "Failed to mark session as deleted")
-    
-    def undelete_current_session(self):
-        """Mark the current session as active (undelete)"""
-        from sv import sv
-        from ui_database import DatabaseOperations
-        from tkinter import messagebox
-        
-        session_number = sv.session_number.get()
-        dog_name = sv.dog.get()
-        
-        if not dog_name or not session_number:
-            return
-        
-        try:
-            session_num = int(session_number)
-        except ValueError:
-            return
-        
-        # Confirm
-        result = messagebox.askyesno(
-            "Undelete Session",
-            f"Mark session #{session_num} for {dog_name} as active?",
-            icon='question'
-        )
-        
-        if result:
-            db_ops = DatabaseOperations(self.ui)
-            success = db_ops.update_session_status(session_num, dog_name, 'active')
-            
-            if success:
-                sv.status.set(f"Session #{session_num} restored to active")
-                messagebox.showinfo("Success", f"Session #{session_num} restored to active")
-                
-                # Refresh navigation to reflect filter
-                self.update_navigation_buttons()
-            else:
-                messagebox.showerror("Error", "Failed to restore session")
-    
-    def on_status_filter_changed(self):
-        """Handle status filter radio button change - update status bar"""
-        from sv import sv
-        
-        # Get current filter
-        status_filter = sv.session_status_filter.get()
-        
-        # Update status bar
-        filter_label = {"active": "Active", "deleted": "Deleted", "both": "All"}[status_filter]
-        dog_name = sv.dog.get()
-        if dog_name:
-            sv.status.set(f"Filter: {filter_label} sessions for {dog_name}")
-        else:
-            sv.status.set(f"Filter: {filter_label}")
     
     def delete_sessions(self, session_numbers):
         """Delete multiple sessions from database for current dog"""

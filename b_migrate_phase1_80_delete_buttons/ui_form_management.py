@@ -362,11 +362,8 @@ class FormManagement:
         
         sv.status.set(f"New session #{next_session}")
         
-        # Disable delete/undelete buttons (creating new session)
-        nav = Navigation(self.ui)
-        nav.disable_delete_undelete_buttons()
-        
         # Update navigation buttons
+        nav = Navigation(self.ui)
         nav.update_navigation_buttons()
     
     # ========================================

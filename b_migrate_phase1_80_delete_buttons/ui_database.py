@@ -320,45 +320,6 @@ class DatabaseManager:
             print(f"Error deleting sessions: {e}")
             return False, f"Database error: {e}"
     
-    def update_session_status(self, session_number, dog_name, new_status):
-        """Update the status of a session (for delete/undelete)
-        
-        Args:
-            session_number: Session number to update
-            dog_name: Dog name
-            new_status: 'active' or 'deleted'
-        
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        if not dog_name or not dog_name.strip():
-            return False
-        
-        dog_name = dog_name.strip()
-        
-        try:
-            old_db_type = self._switch_db_context()
-            
-            with get_connection() as conn:
-                conn.execute(
-                    text("""
-                        UPDATE training_sessions 
-                        SET status = :status, updated_at = CURRENT_TIMESTAMP
-                        WHERE session_number = :session_number AND dog_name = :dog_name
-                    """),
-                    {"status": new_status, "session_number": session_number, "dog_name": dog_name}
-                )
-                conn.commit()
-            
-            self._restore_db_context(old_db_type)
-            
-            return True
-            
-        except Exception as e:
-            self._restore_db_context(old_db_type)
-            print(f"Error updating session status: {e}")
-            return False
-    
     def get_sessions_for_dog(self, dog_name, status_filter='active'):
         """Get sessions for a specific dog filtered by status
         
@@ -408,40 +369,6 @@ class DatabaseManager:
             else:
                 print(f"Error getting sessions: {e}")
                 return []
-    
-    def update_session_status(self, session_number, dog_name, new_status):
-        """Update the status of a session (for delete/undelete)
-        
-        Args:
-            session_number: Session number to update
-            dog_name: Dog name
-            new_status: 'active' or 'deleted'
-        
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        if not dog_name or not dog_name.strip():
-            return False
-        
-        dog_name = dog_name.strip()
-        
-        try:
-            with get_connection() as conn:
-                conn.execute(
-                    text("""
-                        UPDATE training_sessions 
-                        SET status = :status, updated_at = CURRENT_TIMESTAMP
-                        WHERE session_number = :session_number AND dog_name = :dog_name
-                    """),
-                    {"status": new_status, "session_number": session_number, "dog_name": dog_name}
-                )
-                conn.commit()
-            
-            return True
-            
-        except Exception as e:
-            print(f"Error updating session status: {e}")
-            return False
     
     def compute_session_number(self, dog_name, session_date, status_filter='active'):
         """Compute the ordinal session number for a session based on filtered list
@@ -1294,19 +1221,6 @@ class DatabaseOperations:
     def get_all_sessions_for_dog(self, dog_name, status_filter='active'):
         """Get all sessions for a dog filtered by status (returns list of tuples)"""
         return self.db_manager.get_sessions_for_dog(dog_name, status_filter)
-    
-    def update_session_status(self, session_number, dog_name, new_status):
-        """Update the status of a session (for delete/undelete)
-        
-        Args:
-            session_number: Session number to update
-            dog_name: Dog name
-            new_status: 'active' or 'deleted'
-        
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        return self.db_manager.update_session_status(session_number, dog_name, new_status)
     
     def delete_sessions(self, session_numbers, dog_name):
         """Delete multiple sessions"""
