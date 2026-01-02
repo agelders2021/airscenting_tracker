@@ -93,6 +93,7 @@ class Stringvars:
         
         # ===== VIEW FILTERS =====
         self.view_filter = tk.StringVar(master=master, value="undeleted")  # For soft delete feature
+        self.session_status_filter = tk.StringVar(master=master, value="active")  # Filter for session status
         
         # ===== STATUS BAR =====
         self.status = tk.StringVar(master=master, value="Ready")

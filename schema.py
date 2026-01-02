@@ -105,6 +105,7 @@ def create_tables():
         subjects_found TEXT,
         comments TEXT,
         image_files TEXT,
+        status TEXT DEFAULT 'active',
         user_name TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -414,7 +414,19 @@ class AirScentingUI:
         self.selected_sessions = []  # List of session numbers to navigate through
         self.selected_sessions_index = -1  # Current position in selected sessions
         
-        # Row 1: Handler, Session Purpose, Field Support, Dog
+        # Row 1: Status filter radio buttons (under Edit/Delete button)
+        status_filter_frame = tk.Frame(session_frame)
+        status_filter_frame.grid(row=1, column=6, columnspan=4, sticky="w", padx=5, pady=5)
+        
+        tk.Label(status_filter_frame, text="Show Sessions:").pack(side="left", padx=(0, 10))
+        tk.Radiobutton(status_filter_frame, text="Active", variable=sv.session_status_filter, 
+                      value="active").pack(side="left", padx=5)
+        tk.Radiobutton(status_filter_frame, text="Deleted", variable=sv.session_status_filter, 
+                      value="deleted").pack(side="left", padx=5)
+        tk.Radiobutton(status_filter_frame, text="Both", variable=sv.session_status_filter, 
+                      value="both").pack(side="left", padx=5)
+        
+        # Row 2: Handler, Session Purpose
         tk.Label(session_frame, text="Handler:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         # If handler_name is set, use it; otherwise use last_handler_name
         default_handler = self.config.get("handler_name", "") or self.config.get("last_handler_name", "")
@@ -426,18 +438,19 @@ class AirScentingUI:
                                      values=['Area Search Training', 'Refind Training', 
                                             'Motivational Training', 
                                             'Obedience', 'Mock Certification Test', 'Mission'])
-        purpose_combo.grid(row=1, column=3, sticky="w", padx=5, pady=2)
+        purpose_combo.grid(row=1, column=3, columnspan=3, sticky="w", padx=5, pady=2)
         
-        tk.Label(session_frame, text="Field Support:").grid(row=1, column=4, sticky="w", padx=5, pady=2)
-        tk.Entry(session_frame, textvariable=sv.field_support, width=25).grid(row=1, column=5, sticky="w", padx=5, pady=2)
+        # Row 3: Field Support, Dog
+        tk.Label(session_frame, text="Field Support:").grid(row=2, column=0, sticky="e", padx=5, pady=2)
+        tk.Entry(session_frame, textvariable=sv.field_support, width=15).grid(row=2, column=1, sticky="w", padx=5, pady=2)
         
-        tk.Label(session_frame, text="Dog:").grid(row=1, column=6, sticky="e", padx=5, pady=2)
+        tk.Label(session_frame, text="Dog:").grid(row=2, column=2, sticky="e", padx=5, pady=2)
         # Load last dog from database (deferred until password is loaded)
         # NOTE: Commented out - will be loaded in load_initial_database_data()
-        self.a_dog_combo = ttk.Combobox(session_frame, textvariable=sv.dog, width=15, state="readonly")
+        self.a_dog_combo = ttk.Combobox(session_frame, textvariable=sv.dog, width=22, state="readonly")
         # Load dogs from database (deferred)
         # NOTE: Commented out - will be loaded in load_initial_database_data()
-        self.a_dog_combo.grid(row=1, column=7, sticky="w", padx=5, pady=2)
+        self.a_dog_combo.grid(row=2, column=3, sticky="w", padx=5, pady=2)
         # Bind dog change to update session number
         self.a_dog_combo.bind('<<ComboboxSelected>>', self.on_dog_changed)
         

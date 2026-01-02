@@ -186,6 +186,7 @@ class DatabaseManager:
                                 subjects_found = :subjects_found,
                                 comments = :comments,
                                 image_files = :image_files,
+                                status = 'active',
                                 user_name = :user_name,
                                 updated_at = CURRENT_TIMESTAMP
                             WHERE session_number = :session_number AND dog_name = :old_dog_name
@@ -206,10 +207,10 @@ class DatabaseManager:
                             INSERT INTO training_sessions 
                             (date, session_number, handler, session_purpose, field_support, dog_name, location,
                              search_area_size, num_subjects, handler_knowledge, weather, temperature, 
-                             wind_direction, wind_speed, search_type, drive_level, subjects_found, comments, image_files, user_name)
+                             wind_direction, wind_speed, search_type, drive_level, subjects_found, comments, image_files, status, user_name)
                             VALUES (:date, :session_number, :handler, :session_purpose, :field_support, :dog_name, :location,
                                     :search_area_size, :num_subjects, :handler_knowledge, :weather, :temperature, 
-                                    :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, :comments, :image_files, :user_name)
+                                    :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, :comments, :image_files, 'active', :user_name)
                         """),
                         {**session_data, "user_name": get_username()}
                     )
