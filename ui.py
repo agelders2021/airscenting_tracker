@@ -275,6 +275,11 @@ class AirScentingUI:
     def save_session(self):
         """Delegate to Misc2Operations"""
         return self.misc2_ops.save_session()
+    
+    def set_save_button_text(self, text):
+        """Change Save Session button text (Save Session vs Update Session)"""
+        if hasattr(self, 'a_save_session_btn'):
+            self.a_save_session_btn.config(text=text)
     def load_bootstrap(self):
         """Load machine-specific paths from bootstrap file"""
         if self.bootstrap_file.exists():
@@ -716,9 +721,10 @@ class AirScentingUI:
         button_frame = tk.Frame(frame)
         button_frame.grid(row=10, column=0, columnspan=2, pady=20)
         
-        tk.Button(button_frame, text="Save Session", command=self.save_session,
-                 bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold"),
-                 width=25, height=2).pack(side="left", padx=10)
+        self.a_save_session_btn = self.a_save_session_btn = tk.Button(button_frame, text="Save Session", command=self.save_session,
+          bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold"),
+          width=25, height=2)
+        self.a_save_session_btn.pack(side="left", padx=10)
         
         tk.Button(button_frame, text="Clear Form", command=self.form_mgmt.clear_form,
                  width=15).pack(side="left", padx=10)

@@ -25,6 +25,12 @@ class Navigation:
     
     def update_navigation_buttons(self):
         """Enable/disable Previous and Next buttons based on current session number"""
+        # Only enable navigation buttons when in view mode (selected_sessions exists)
+        # Otherwise, disable both buttons
+        if not self.ui.selected_sessions:
+            self.ui.a_prev_session_btn.config(state="disabled")
+            self.ui.a_next_session_btn.config(state="disabled")
+            return
         from sv import sv
         from ui_database import DatabaseOperations
         
@@ -527,9 +533,15 @@ class Navigation:
             # Load the first selected session
             sv.session_number.set(str(self.ui.selected_sessions[0]))
             self.load_session_by_number(self.ui.selected_sessions[0])
+            # Switch to Update Session mode
+            self.set_update_mode()  # <-- ADD THIS LINE
             self.update_navigation_buttons()
             
             dialog.destroy()
+            
+            # Switch to Update Session mode
+            self.set_update_mode()
+            
             sv.status.set(f"Viewing {len(self.ui.selected_sessions)} selected sessions")
         
         def on_delete_selected():
@@ -777,6 +789,18 @@ class Navigation:
                 else:
                     messagebox.showerror("Error", "Failed to restore session")
     
+    def set_update_mode(self):
+        """Switch to Update Session mode (when viewing existing sessions)"""
+        self.ui.set_save_button_text("Update Session")
+    
+    def set_save_mode(self):
+        """Switch to Save Session mode (when creating new session)"""
+        self.ui.set_save_button_text("Save Session")
+    
+    def get_current_db_session_number(self):
+        """Get the database session number of currently loaded session"""
+        return getattr(self, 'current_db_session_number', None)
+    
     def on_status_filter_changed(self):
         """Handle status filter radio button change - update status bar"""
         from sv import sv
@@ -858,6 +882,18 @@ class Navigation:
             self.ui.selected_sessions_index = -1
             form_mgmt = FormManagement(self.ui)
             form_mgmt.new_session()
+    
+    def set_update_mode(self):
+        """Switch to Update Session mode (when viewing existing sessions)"""
+        self.ui.set_save_button_text("Update Session")
+    
+    def set_save_mode(self):
+        """Switch to Save Session mode (when creating new session)"""
+        self.ui.set_save_button_text("Save Session")
+    
+    def get_current_db_session_number(self):
+        """Get the database session number of currently loaded session"""
+        return getattr(self, 'current_db_session_number', None)
     
     def on_status_filter_changed(self):
         """Called when status filter radio button changes"""

@@ -331,6 +331,10 @@ class FormManagement:
         self.ui.selected_sessions = []
         self.ui.selected_sessions_index = -1
         
+        # Reset to Save Session mode (not Update Session)
+        nav = Navigation(self.ui)
+        nav.set_save_mode()
+        
         # Clear form fields for new entry (KEEP handler name and dog name)
         self.ui.set_date(datetime.now().strftime("%Y-%m-%d"))
         # handler is NOT cleared - keep current handler name

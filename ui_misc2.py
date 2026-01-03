@@ -139,6 +139,15 @@ class Misc2Operations:
             messagebox.showwarning("Invalid Data", "Session number must be a number")
             return
 
+        # If in Update mode, use the database session number
+        # Otherwise use the displayed session number
+        if self.ui.selected_sessions:
+            from ui_navigation import Navigation
+            nav = Navigation(self.ui)
+            db_session_num = nav.get_current_db_session_number()
+            if db_session_num:
+                session_number = db_session_num  # Use DB number for update
+        
         # Prepare session data dict
         session_data = {
             "date": date,
@@ -237,6 +246,19 @@ class Misc2Operations:
 
 
         nav.load_session_by_number(session_data["session_number"])
+
+
+        # CRITICAL: If in Update mode, stay on current session and return
+        # Prevents data corruption from advancing to wrong session
+        if self.ui.selected_sessions:
+            self.ui.navigation.update_navigation_buttons()
+            return
+
+        # If in Update mode (viewing selected sessions), just update nav and return
+        # Don\'t clear form or advance to next session
+        if self.ui.selected_sessions:
+            self.ui.navigation.update_navigation_buttons()
+            return
 
         # Auto-prepare for next entry
         # Set to computed next number based on filter
