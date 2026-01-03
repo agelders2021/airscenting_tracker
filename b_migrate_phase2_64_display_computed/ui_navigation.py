@@ -348,16 +348,7 @@ class Navigation:
             status_filter = sv.session_status_filter.get()
             
             # Compute ordinal session number based on current filter
-            # Get filtered list and find position of current session
-            filtered_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
-            session_numbers = [s[0] for s in filtered_sessions]
-            
-            # Find position (1-indexed)
-            if session_number in session_numbers:
-                computed_number = session_numbers.index(session_number) + 1
-            else:
-                # Session not in filtered list (shouldn't happen), use DB number
-                computed_number = session_number
+            computed_number = db_ops.compute_session_number(dog_name, session_dict["date"], status_filter)
             
             # Display computed number (not database session_number)
             sv.session_number.set(str(computed_number))

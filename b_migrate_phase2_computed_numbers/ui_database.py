@@ -443,42 +443,6 @@ class DatabaseManager:
             print(f"Error updating session status: {e}")
             return False
     
-    def get_session_status(self, session_number, dog_name):
-        """Get the status of a specific session
-        
-        Args:
-            session_number: Session number (database value)
-            dog_name: Dog name
-        
-        Returns:
-            str: 'active', 'deleted', or None if not found
-        """
-        if not dog_name or not dog_name.strip():
-            return None
-        
-        dog_name = dog_name.strip()
-        
-        try:
-            with get_connection() as conn:
-                result = conn.execute(
-                    text("""
-                        SELECT status 
-                        FROM training_sessions 
-                        WHERE session_number = :session_number AND dog_name = :dog_name
-                    """),
-                    {"session_number": session_number, "dog_name": dog_name}
-                )
-                row = result.fetchone()
-            
-            if row:
-                # Return status, defaulting to 'active' if NULL
-                return row[0] if row[0] else 'active'
-            return None
-            
-        except Exception as e:
-            print(f"Error getting session status: {e}")
-            return None
-    
     def compute_session_number(self, dog_name, session_date, status_filter='active'):
         """Compute the ordinal session number for a session based on filtered list
         
@@ -1343,31 +1307,6 @@ class DatabaseOperations:
             bool: True if successful, False otherwise
         """
         return self.db_manager.update_session_status(session_number, dog_name, new_status)
-    
-    def get_session_status(self, session_number, dog_name):
-        """Get the status of a specific session
-        
-        Args:
-            session_number: Session number (database value)
-            dog_name: Dog name
-        
-        Returns:
-            str: 'active', 'deleted', or None if not found
-        """
-        return self.db_manager.get_session_status(session_number, dog_name)
-    
-    def compute_session_number(self, dog_name, session_date, status_filter='active'):
-        """Compute ordinal session number based on filter
-        
-        Args:
-            dog_name: Dog name
-            session_date: Session date
-            status_filter: 'active', 'deleted', or 'both'
-        
-        Returns:
-            int: Ordinal position in filtered list
-        """
-        return self.db_manager.compute_session_number(dog_name, session_date, status_filter)
     
     def delete_sessions(self, session_numbers, dog_name):
         """Delete multiple sessions"""

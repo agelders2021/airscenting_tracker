@@ -367,18 +367,7 @@ class FormManagement:
         nav.disable_delete_undelete_buttons()
         
         # Update navigation buttons
-        # Reset UI to active state
-        sv.session_status_filter.set('active')  # Reset filter to active
-        
-        # Reset LabelFrame title to normal (not deleted)
-        if hasattr(self.ui, 'a_session_frame'):
-            self.ui.a_session_frame.config(
-                text="Session Information",
-                foreground="black",
-                font=("TkDefaultFont", 9)
-            )
-        
-            nav.update_navigation_buttons()
+        nav.update_navigation_buttons()
     
     # ========================================
     # FORM FIELD UPDATES

@@ -231,9 +231,6 @@ class Navigation:
         import json
         import tkinter as tk
         
-        # Store database session number for delete/undelete operations
-        self.current_db_session_number = session_number
-        
         dog_name = sv.dog.get().strip() if sv.dog.get() else ""
         
         # If no dog selected, can't load session
@@ -343,49 +340,7 @@ class Navigation:
             # Enable delete/undelete buttons (editing existing session)
             self.enable_delete_undelete_buttons()
             
-            # Get session status and compute ordinal position
-            session_status = db_ops.get_session_status(session_number, dog_name)
-            status_filter = sv.session_status_filter.get()
-            
-            # Compute ordinal session number based on current filter
-            # Get filtered list and find position of current session
-            filtered_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
-            session_numbers = [s[0] for s in filtered_sessions]
-            
-            # Find position (1-indexed)
-            if session_number in session_numbers:
-                computed_number = session_numbers.index(session_number) + 1
-            else:
-                # Session not in filtered list (shouldn't happen), use DB number
-                computed_number = session_number
-            
-            # Display computed number (not database session_number)
-            sv.session_number.set(str(computed_number))
-            
-            # Update session frame title based on status
-            self.update_session_frame_title(session_status)
-            
-            # Enable/disable delete/undelete buttons based on status
-            if session_status == 'deleted':
-                # Deleted session - disable Delete, enable Undelete
-                if hasattr(self.ui, 'a_delete_undelete_frame'):
-                    for child in self.ui.a_delete_undelete_frame.winfo_children():
-                        button_text = child.cget('text')
-                        if button_text == 'Delete':
-                            child.config(state="disabled")
-                        elif button_text == 'Undelete':
-                            child.config(state="normal")
-            else:
-                # Active session - enable Delete, disable Undelete
-                if hasattr(self.ui, 'a_delete_undelete_frame'):
-                    for child in self.ui.a_delete_undelete_frame.winfo_children():
-                        button_text = child.cget('text')
-                        if button_text == 'Delete':
-                            child.config(state="normal")
-                        elif button_text == 'Undelete':
-                            child.config(state="disabled")
-            
-            sv.status.set(f"Loaded session (computed #{computed_number})")
+            sv.status.set(f"Loaded session #{session_number}")
             
         else:
             # Session doesn't exist - clear form for new entry
@@ -533,78 +488,30 @@ class Navigation:
             sv.status.set(f"Viewing {len(self.ui.selected_sessions)} selected sessions")
         
         def on_delete_selected():
-            """Handle delete/restore based on current filter"""
             selected_indices = listbox.curselection()
             if not selected_indices:
-                messagebox.showwarning("No Selection", "Please select at least one session")
+                messagebox.showwarning("No Selection", "Please select at least one session to delete")
                 return
             
             selected_nums = [session_numbers[i] for i in selected_indices]
-            status_filter = sv.session_status_filter.get()
+            result = messagebox.askyesno(
+                "Confirm Delete",
+                f"Are you sure you want to delete {len(selected_nums)} session(s)?\n\n"
+                f"Sessions: {', '.join(map(str, selected_nums))}\n\n"
+                "This action cannot be undone!",
+                icon='warning'
+            )
             
-            if status_filter == 'deleted':
-                # Restore sessions (undelete)
-                result = messagebox.askyesno(
-                    "Confirm Restore",
-                    f"Restore {len(selected_nums)} session(s) to active?\n\n"
-                    f"Sessions: {', '.join(map(str, selected_nums))}",
-                    icon='question'
-                )
-                
-                if result:
-                    self.restore_sessions(selected_nums)
-                    dialog.destroy()
-            else:
-                # Delete sessions (mark as deleted)
-                result = messagebox.askyesno(
-                    "Confirm Delete",
-                    f"Mark {len(selected_nums)} session(s) as deleted?\n\n"
-                    f"Sessions: {', '.join(map(str, selected_nums))}\n\n"
-                    "This can be undone by restoring the sessions.",
-                    icon='warning'
-                )
-                
-                if result:
-                    self.mark_sessions_deleted(selected_nums)
-                    dialog.destroy()
+            if result:
+                self.delete_sessions(selected_nums)
+                dialog.destroy()
         
         tk.Button(button_frame, text="View Selected", command=on_view_selected,
                  bg="#4169E1", fg="white", width=15).pack(side="left", padx=5)
-        
-        # Context-aware button text based on filter
-        status_filter = sv.session_status_filter.get()
-        if status_filter == 'deleted':
-            button_text = "Restore Selected"
-            button_color = "#28a745"  # Green
-        else:
-            button_text = "Delete Selected"
-            button_color = "#DC143C"  # Red
-        
-        tk.Button(button_frame, text=button_text, command=on_delete_selected,
-                 bg=button_color, fg="white", width=15).pack(side="left", padx=5)
+        tk.Button(button_frame, text="Delete Selected", command=on_delete_selected,
+                 bg="#DC143C", fg="white", width=15).pack(side="left", padx=5)
         tk.Button(button_frame, text="Cancel", command=dialog.destroy,
                  width=10).pack(side="left", padx=5)
-    
-    def update_session_frame_title(self, status):
-        """Update the Session Information LabelFrame title based on status
-        
-        Args:
-            status: 'active', 'deleted', or None
-        """
-        if hasattr(self.ui, 'a_session_frame'):
-            if status == 'deleted':
-                self.ui.a_session_frame.config(
-                    text="Session Information *** MARKED DELETED ***",
-                    foreground="red",
-                    font=("TkDefaultFont", 9, "bold")
-                )
-            else:
-                # Active or None (treat NULL as active)
-                self.ui.a_session_frame.config(
-                    text="Session Information",
-                    foreground="black",
-                    font=("TkDefaultFont", 9)
-                )
     
     def enable_delete_undelete_buttons(self):
         """Enable the delete/undelete buttons (when editing existing session)"""
@@ -777,7 +684,7 @@ class Navigation:
                 else:
                     messagebox.showerror("Error", "Failed to restore session")
     
-    def on_status_filter_changed(self):
+        def on_status_filter_changed(self):
         """Handle status filter radio button change - update status bar"""
         from sv import sv
         
@@ -812,61 +719,3 @@ class Navigation:
             
             form_mgmt = FormManagement(self.ui)
             form_mgmt.new_session()
-    
-    def restore_sessions(self, session_numbers):
-        """Restore (undelete) multiple sessions"""
-        from sv import sv
-        from ui_database import DatabaseOperations
-        from ui_form_management import FormManagement
-        
-        dog_name = sv.dog.get()
-        db_ops = DatabaseOperations(self.ui)
-        
-        success_count = 0
-        for session_num in session_numbers:
-            if db_ops.update_session_status(session_num, dog_name, 'active'):
-                success_count += 1
-        
-        if success_count > 0:
-            messagebox.showinfo("Success", f"Restored {success_count} session(s) to active")
-            
-            # Reset to new session
-            self.ui.selected_sessions = []
-            self.ui.selected_sessions_index = -1
-            form_mgmt = FormManagement(self.ui)
-            form_mgmt.new_session()
-    
-    def mark_sessions_deleted(self, session_numbers):
-        """Mark multiple sessions as deleted (soft delete)"""
-        from sv import sv
-        from ui_database import DatabaseOperations
-        from ui_form_management import FormManagement
-        
-        dog_name = sv.dog.get()
-        db_ops = DatabaseOperations(self.ui)
-        
-        success_count = 0
-        for session_num in session_numbers:
-            if db_ops.update_session_status(session_num, dog_name, 'deleted'):
-                success_count += 1
-        
-        if success_count > 0:
-            messagebox.showinfo("Success", f"Marked {success_count} session(s) as deleted")
-            
-            # Reset to new session
-            self.ui.selected_sessions = []
-            self.ui.selected_sessions_index = -1
-            form_mgmt = FormManagement(self.ui)
-            form_mgmt.new_session()
-    
-    def on_status_filter_changed(self):
-        """Called when status filter radio button changes"""
-        from sv import sv
-        status_filter = sv.session_status_filter.get()
-        
-        # If a session is currently loaded, reload it to recompute number
-        if hasattr(self, 'current_db_session_number') and self.current_db_session_number:
-            self.load_session_by_number(self.current_db_session_number)
-        else:
-            sv.status.set(f"Filter: {status_filter}")
-            self.update_navigation_buttons()

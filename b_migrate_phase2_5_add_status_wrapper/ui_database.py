@@ -1344,31 +1344,6 @@ class DatabaseOperations:
         """
         return self.db_manager.update_session_status(session_number, dog_name, new_status)
     
-    def get_session_status(self, session_number, dog_name):
-        """Get the status of a specific session
-        
-        Args:
-            session_number: Session number (database value)
-            dog_name: Dog name
-        
-        Returns:
-            str: 'active', 'deleted', or None if not found
-        """
-        return self.db_manager.get_session_status(session_number, dog_name)
-    
-    def compute_session_number(self, dog_name, session_date, status_filter='active'):
-        """Compute ordinal session number based on filter
-        
-        Args:
-            dog_name: Dog name
-            session_date: Session date
-            status_filter: 'active', 'deleted', or 'both'
-        
-        Returns:
-            int: Ordinal position in filtered list
-        """
-        return self.db_manager.compute_session_number(dog_name, session_date, status_filter)
-    
     def delete_sessions(self, session_numbers, dog_name):
         """Delete multiple sessions"""
         return self.db_manager.delete_sessions(session_numbers, dog_name)

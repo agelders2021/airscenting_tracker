@@ -365,9 +365,8 @@ class AirScentingUI:
         frame.pack(fill="both", expand=True)
         
         # Session Information
-        self.a_session_frame = tk.LabelFrame(frame, text="Session Information", padx=10, pady=5)
-        self.a_session_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=5)
-        session_frame = self.a_session_frame  # Alias for compatibility
+        session_frame = tk.LabelFrame(frame, text="Session Information", padx=10, pady=5)
+        session_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=5)
         
         # Row 0: Date, Session #, and action buttons
         tk.Label(session_frame, text="Date:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
