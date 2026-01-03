@@ -36,7 +36,6 @@ class AirScentingUI:
     
     def __init__(self):
         """Initialize the UI"""
-        print(f"DEBUG: UI init starting")  # ADD THIS
         # Load configuration
         self.config_file = CONFIG_FILE
         self.bootstrap_file = BOOTSTRAP_FILE
@@ -213,14 +212,12 @@ class AirScentingUI:
                 next_computed = len(filtered_sessions) + 1
                 
                 sv.session_number.set(str(next_computed))
-                print(f"DEBUG update_initial_session: set to computed {next_computed}")
                 sv.status.set(f"Ready - {loaded_dog} - Next session: #{next_computed}")
                 # Update navigation button states
                 self.navigation.update_navigation_buttons() 
 
         # Delay until after password AND database data are loaded
         # Password: 100ms, Database data: 500ms, Session update: 600ms
-        print(f"DEBUG: About to schedule update_initial_session, current dog={sv.dog.get()}, session={sv.session_number.get()}")  # ADD THIS
         self.root.after(600, update_initial_session)
         
         # Track form state for unsaved changes detection

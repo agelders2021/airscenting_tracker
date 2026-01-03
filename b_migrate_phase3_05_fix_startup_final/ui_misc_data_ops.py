@@ -51,11 +51,8 @@ class MiscDataOperations:
                 if last_dog:
                     sv.dog.set(last_dog)
                     # Update session number for this dog (on_dog_changed not triggered by programmatic set)
-                    # Use computed next number based on filter
-                    status_filter = sv.session_status_filter.get()
-                    filtered_sessions = DatabaseOperations(self.ui).get_all_sessions_for_dog(last_dog, status_filter)
-                    next_computed = len(filtered_sessions) + 1
-                    sv.session_number.set(str(next_computed))
+                    next_session = DatabaseOperations(self.ui).get_next_session_number(last_dog)
+                    sv.session_number.set(str(next_session))
             except Exception as e:
                 print(f"Could not load last dog: {e}")
             self.ui.root.after(50, step6)

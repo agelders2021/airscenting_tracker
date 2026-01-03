@@ -42,12 +42,10 @@ class Misc2Operations:
                 # Save dog to database for persistence across sessions
                 DatabaseOperations(self.ui).save_db_setting("last_dog_name", dog_name)
                 
-                # Update session number to next computed number for this dog
-                status_filter = sv.session_status_filter.get()
-                filtered_sessions = DatabaseOperations(self.ui).get_all_sessions_for_dog(dog_name, status_filter)
-                next_computed = len(filtered_sessions) + 1
-                sv.session_number.set(str(next_computed))
-                print(f"DEBUG on_dog_changed: set to computed {next_computed}")  # DEBUG
+                # Update session number to next available for this dog
+                next_session = DatabaseOperations(self.ui).get_next_session_number(dog_name)
+                # print(f"DEBUG on_dog_changed: next_session = {next_session}")  # DEBUG
+                sv.session_number.set(str(next_session))
                 
                 # Clear form fields for new dog (like "New" button but keep handler and dog)
                 self.ui.set_date(datetime.now().strftime("%Y-%m-%d"))
@@ -87,7 +85,7 @@ class Misc2Operations:
                 # Update navigation buttons
                 self.ui.navigation.update_navigation_buttons()
                 
-                sv.status.set(f"Switched to {dog_name} - Next session: #{next_computed}")
+                sv.status.set(f"Switched to {dog_name} - Next session: #{next_session}")
                 
             finally:
                 if working_dialog:
@@ -219,31 +217,10 @@ class Misc2Operations:
         self.ui.misc_data_ops.save_session_to_json(session_backup_data)
 
         sv.status.set(message)
-
-
         messagebox.showinfo("Success", message)
 
-
-        
-
-
-        # Reload session to display computed number
-
-
-        from ui_navigation import Navigation
-
-
-        nav = Navigation(self.ui)
-
-
-        nav.load_session_by_number(session_data["session_number"])
-
         # Auto-prepare for next entry
-        # Set to computed next number based on filter
-        status_filter = sv.session_status_filter.get()
-        filtered_sessions = DatabaseOperations(self.ui).get_all_sessions_for_dog(dog_name, status_filter)
-        next_computed = len(filtered_sessions) + 1
-        sv.session_number.set(str(next_computed))
+        sv.session_number.set(str(DatabaseOperations(self).get_next_session_number()))
         self.ui.selected_sessions = []
         self.ui.selected_sessions_index = -1
 
