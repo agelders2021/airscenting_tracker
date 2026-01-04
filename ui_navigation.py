@@ -97,6 +97,10 @@ class Navigation:
     
     def navigate_previous_session(self):
         """Navigate to previous session"""
+        # Check for unsaved changes first
+        if not self.ui.form_mgmt.check_entry_tab_changes():
+            return  # User cancelled
+        
         from sv import sv
         
         # If we have selected sessions, navigate through those
@@ -143,6 +147,10 @@ class Navigation:
     
     def navigate_next_session(self):
         """Navigate to next session"""
+        # Check for unsaved changes first
+        if not self.ui.form_mgmt.check_entry_tab_changes():
+            return  # User cancelled
+        
         from sv import sv
         from ui_database import DatabaseOperations
         
@@ -238,7 +246,7 @@ class Navigation:
         import tkinter as tk
         
         # Store database session number for delete/undelete operations
-        self.current_db_session_number = session_number
+        self.ui.current_db_session_number = session_number
         
         dog_name = sv.dog.get().strip() if sv.dog.get() else ""
         
@@ -251,6 +259,18 @@ class Navigation:
         
         # Get complete session data including related data
         session_dict = db_ops.get_session_with_related_data(session_number, dog_name)
+
+        # Store database session number for get_current_db_session_number()
+        if session_dict:
+            self.ui.current_db_session_number = session_number
+            print(f"DEBUG: Stored current_db_session_number = {self.ui.current_db_session_number}")  # ADD THIS
+        else:
+            print(f"DEBUG: session_dict was None, not storing")  # ADD THIS
+
+
+        # Store database session number for get_current_db_session_number()
+        if session_dict:
+            self.ui.current_db_session_number = session_number
         
         if session_dict:
             # Load basic session data into form fields
@@ -353,17 +373,23 @@ class Navigation:
             session_status = db_ops.get_session_status(session_number, dog_name)
             status_filter = sv.session_status_filter.get()
             
-            # Compute ordinal session number based on current filter
-            # Get filtered list and find position of current session
-            filtered_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
-            session_numbers = [s[0] for s in filtered_sessions]
-            
-            # Find position (1-indexed)
-            if session_number in session_numbers:
-                computed_number = session_numbers.index(session_number) + 1
+            # Compute ordinal session number
+            # If in view mode (selected_sessions), use position in selected list
+            # Otherwise use position in filtered database list
+            if self.ui.selected_sessions and session_number in self.ui.selected_sessions:
+                # In view mode - use position in selected list (1, 2, 3...)
+                computed_number = self.ui.selected_sessions.index(session_number) + 1
             else:
-                # Session not in filtered list (shouldn't happen), use DB number
-                computed_number = session_number
+                # Normal mode - use position in filtered database list
+                filtered_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
+                session_numbers = [s[0] for s in filtered_sessions]
+                
+                # Find position (1-indexed)
+                if session_number in session_numbers:
+                    computed_number = session_numbers.index(session_number) + 1
+                else:
+                    # Session not in filtered list (shouldn't happen), use DB number
+                    computed_number = session_number
             
             # Display computed number (not database session_number)
             sv.session_number.set(str(computed_number))
@@ -392,6 +418,11 @@ class Navigation:
                             child.config(state="disabled")
             
             sv.status.set(f"Loaded session (computed #{computed_number})")
+            
+            # Take form snapshot after delay to ensure all widgets updated
+            # Some form elements populate asynchronously, delay ensures accuracy
+            self.ui.root.after(150, self.ui.form_mgmt.take_form_snapshot)
+
             
         else:
             # Session doesn't exist - clear form for new entry
@@ -632,6 +663,9 @@ class Navigation:
     
     def delete_current_session(self):
         """Mark the current session as deleted"""
+        # Check for unsaved changes first
+        if not self.ui.form_mgmt.check_entry_tab_changes():
+            return  # User cancelled or wants to save first
         from sv import sv
         from ui_database import DatabaseOperations
         from tkinter import messagebox
@@ -670,6 +704,9 @@ class Navigation:
     
     def undelete_current_session(self):
         """Mark the current session as active (undelete)"""
+        # Check for unsaved changes first
+        if not self.ui.form_mgmt.check_entry_tab_changes():
+            return  # User cancelled or wants to save first
         from sv import sv
         from ui_database import DatabaseOperations
         from tkinter import messagebox
@@ -707,6 +744,9 @@ class Navigation:
     
     def delete_current_session(self):
         """Mark the current session as deleted"""
+        # Check for unsaved changes first
+        if not self.ui.form_mgmt.check_entry_tab_changes():
+            return  # User cancelled or wants to save first
         from sv import sv
         from ui_database import DatabaseOperations
         from tkinter import messagebox
@@ -738,20 +778,23 @@ class Navigation:
         if result:
             db_ops = DatabaseOperations(self.ui)
             # Use the database session number stored when session was loaded
-            if hasattr(self, 'current_db_session_number'):
-                success = db_ops.update_session_status(self.current_db_session_number, dog_name, 'deleted')
+            if hasattr(self.ui, 'current_db_session_number'):
+                success = db_ops.update_session_status(self.ui.current_db_session_number, dog_name, 'deleted')
                 
                 if success:
                     sv.status.set(f"Session marked as deleted")
                     messagebox.showinfo("Success", "Session marked as deleted")
                     
                     # Reload session to update display
-                    self.load_session_by_number(self.current_db_session_number)
+                    self.load_session_by_number(self.ui.current_db_session_number)
                 else:
                     messagebox.showerror("Error", "Failed to mark session as deleted")
     
     def undelete_current_session(self):
         """Mark the current session as active (undelete)"""
+        # Check for unsaved changes first
+        if not self.ui.form_mgmt.check_entry_tab_changes():
+            return  # User cancelled or wants to save first
         from sv import sv
         from ui_database import DatabaseOperations
         from tkinter import messagebox
@@ -777,15 +820,15 @@ class Navigation:
         if result:
             db_ops = DatabaseOperations(self.ui)
             # Use the database session number stored when session was loaded
-            if hasattr(self, 'current_db_session_number'):
-                success = db_ops.update_session_status(self.current_db_session_number, dog_name, 'active')
+            if hasattr(self.ui, 'current_db_session_number'):
+                success = db_ops.update_session_status(self.ui.current_db_session_number, dog_name, 'active')
                 
                 if success:
                     sv.status.set(f"Session restored to active")
                     messagebox.showinfo("Success", "Session restored to active")
                     
                     # Reload session to update display
-                    self.load_session_by_number(self.current_db_session_number)
+                    self.load_session_by_number(self.ui.current_db_session_number)
                 else:
                     messagebox.showerror("Error", "Failed to restore session")
     
@@ -799,7 +842,28 @@ class Navigation:
     
     def get_current_db_session_number(self):
         """Get the database session number of currently loaded session"""
-        return getattr(self, 'current_db_session_number', None)
+        return getattr(self.ui, 'current_db_session_number', None)
+    
+    def _update_displayed_session_number(self):
+        """Update the displayed session number based on current session"""
+        from sv import sv
+        from ui_database import DatabaseOperations
+        
+        dog_name = sv.dog.get()
+        if not dog_name or not hasattr(self.ui, 'current_db_session_number'):
+            return
+        
+        db_session = self.ui.current_db_session_number
+        status_filter = sv.session_status_filter.get()
+        
+        # Get filtered list and find position
+        db_ops = DatabaseOperations(self.ui)
+        filtered_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
+        session_numbers = [s[0] for s in filtered_sessions]
+        
+        if db_session in session_numbers:
+            computed_number = session_numbers.index(db_session) + 1
+            sv.session_number.set(str(computed_number))
     
     def on_status_filter_changed(self):
         """Handle status filter radio button change - update status bar"""
@@ -887,13 +951,34 @@ class Navigation:
         """Switch to Update Session mode (when viewing existing sessions)"""
         self.ui.set_save_button_text("Update Session")
     
-    def set_save_mode(self):
-        """Switch to Save Session mode (when creating new session)"""
-        self.ui.set_save_button_text("Save Session")
+    # def set_save_mode(self):
+    #     """Switch to Save Session mode (when creating new session)"""
+    #     self.ui.set_save_button_text("Save Session")
     
     def get_current_db_session_number(self):
         """Get the database session number of currently loaded session"""
-        return getattr(self, 'current_db_session_number', None)
+        return getattr(self.ui, 'current_db_session_number', None)
+    
+    def _update_displayed_session_number(self):
+        """Update the displayed session number based on current session"""
+        from sv import sv
+        from ui_database import DatabaseOperations
+        
+        dog_name = sv.dog.get()
+        if not dog_name or not hasattr(self.ui, 'current_db_session_number'):
+            return
+        
+        db_session = self.ui.current_db_session_number
+        status_filter = sv.session_status_filter.get()
+        
+        # Get filtered list and find position
+        db_ops = DatabaseOperations(self.ui)
+        filtered_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
+        session_numbers = [s[0] for s in filtered_sessions]
+        
+        if db_session in session_numbers:
+            computed_number = session_numbers.index(db_session) + 1
+            sv.session_number.set(str(computed_number))
     
     def on_status_filter_changed(self):
         """Called when status filter radio button changes"""
@@ -901,8 +986,8 @@ class Navigation:
         status_filter = sv.session_status_filter.get()
         
         # If a session is currently loaded, reload it to recompute number
-        if hasattr(self, 'current_db_session_number') and self.current_db_session_number:
-            self.load_session_by_number(self.current_db_session_number)
+        if hasattr(self.ui, 'current_db_session_number') and self.ui.current_db_session_number:
+            self.load_session_by_number(self.ui.current_db_session_number)
         else:
             sv.status.set(f"Filter: {status_filter}")
             self.update_navigation_buttons()

@@ -260,6 +260,14 @@ class DatabaseManager:
                     {"session_number": session_number, "dog_name": dog_name}
                 )
                 row = result.fetchone()
+
+                # DEBUG - see what the query actually returned
+                if row:
+                    print(f"DEBUG: Query returned {len(row)} columns")
+                    print(f"DEBUG: row[3] (session_purpose) = '{row[3]}'")
+                    print(f"DEBUG: row[6] (location) = '{row[6]}'")
+                    print(f"DEBUG: Full row = {row}")
+                
             
             self._restore_db_context(old_db_type)
             
@@ -1251,6 +1259,14 @@ class DatabaseOperations:
             dog_name = sv_module.sv.dog.get()
         return self.db_manager.get_next_session_number(dog_name)
     
+    def get_session_status(self, session_number, dog_name):
+        """Get the status of a specific session"""
+        db_mgr = get_db_manager(self.db_type)
+        session = db_mgr.get_session_by_number(dog_name, session_number)
+        if session:
+            return session.get('status', 'active')
+        return None
+
     def save_db_setting(self, key, value):
         """Save a setting to database"""
         return self.db_manager.save_setting(key, value)

@@ -251,7 +251,18 @@ class Misc2Operations:
         # CRITICAL: If in Update mode, stay on current session and return
         # Prevents data corruption from advancing to wrong session
         if self.ui.selected_sessions:
+            # Get the session we just saved to check its status
+            db_ops = DatabaseOperations(self.ui)
+            # saved_status = db_ops.get_session_status(session_data["session_number"])  ahg
+            saved_status = db_ops.get_session_status(session_data["session_number"], dog_name)
+            
+            # Update LabelFrame title based on status
+            from ui_navigation import Navigation
+            nav = Navigation(self.ui)
+            nav.update_session_frame_title(saved_status)
+            
             self.ui.navigation.update_navigation_buttons()
+            sv.status.set(f"Updated session (Status: {saved_status})")
             return
 
         # If in Update mode (viewing selected sessions), just update nav and return

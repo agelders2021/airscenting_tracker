@@ -84,17 +84,40 @@ class FormManagement:
             return True
         else:  # No - discard changes
             return True
-    
-    def check_entry_tab_changes(self):
+
+
+    def check_entry_tab_changes(self): # ahg
         """Check for unsaved changes in Entry tab. Returns True if OK to proceed."""
         from sv import sv
         from ui_database import DatabaseOperations
         import tkinter as tk
         import json
         
+        print("DEBUG: entering check_entry_tab_changes")
         # Get current form state
         current_date = sv.date.get()
         current_session = sv.session_number.get()
+        # When in view mode, use the actual database session number being viewed
+        if hasattr(self.ui, 'selected_sessions') and self.ui.selected_sessions:
+            from ui_navigation import Navigation
+            nav = Navigation(self.ui)
+            db_num = nav.get_current_db_session_number()
+            current_session = str(db_num) if db_num else sv.session_number.get()
+        else:
+            current_session = sv.session_number.get()
+        # When in view mode, use the actual database session number being viewed
+        if hasattr(self.ui, 'selected_sessions') and self.ui.selected_sessions:
+            from ui_navigation import Navigation
+            nav = Navigation(self.ui)
+            db_num = nav.get_current_db_session_number()
+            print(f"DEBUG: get_current_db_session_number() returned {db_num}")  # ADD THIS
+            print(f"DEBUG: sv.session_number.get() = {sv.session_number.get()}")  # ADD THIS
+            current_session = str(db_num) if db_num else sv.session_number.get()
+            print(f"DEBUG: Using current_session = {current_session}")  # ADD THIS
+        else:
+            current_session = sv.session_number.get()
+            print(f"DEBUG: Not in view mode, current_session = {current_session}")  # ADD THIS
+        
         current_handler = sv.handler.get()
         current_purpose = sv.session_purpose.get()
         current_field_support = sv.field_support.get()
@@ -129,8 +152,11 @@ class FormManagement:
                 # Compare basic fields (handle empty strings vs None)
                 def safe_str(val):
                     """Convert to string, treating None and empty string as equivalent"""
+                    print(f"DEBUG: Test Convert to string:{val}")
                     return str(val) if val is not None else ""
                 
+                print(f"DEBUG: current_location")
+                print(len(current_purpose),'==',len(session_dict.get('session_purpose')))
                 # Compare basic fields
                 if (safe_str(current_date) != safe_str(session_dict.get("date")) or
                     safe_str(current_handler) != safe_str(session_dict.get("handler")) or
@@ -161,9 +187,7 @@ class FormManagement:
                     if result is None:  # Cancel
                         return False
                     elif result:  # Yes - save first
-                        from ui_entry_tab import EntryTab
-                        entry = EntryTab(self.ui)
-                        entry.save_session()
+                        self.ui.save_session()
                         return True
                     else:  # No - discard changes
                         return True
@@ -183,9 +207,7 @@ class FormManagement:
                     if result is None:
                         return False
                     elif result:
-                        from ui_entry_tab import EntryTab
-                        entry = EntryTab(self.ui)
-                        entry.save_session()
+                        self.ui.save_session()
                         return True
                     else:
                         return True
@@ -215,9 +237,7 @@ class FormManagement:
                     if result is None:
                         return False
                     elif result:
-                        from ui_entry_tab import EntryTab
-                        entry = EntryTab(self.ui)
-                        entry.save_session()
+                        self.ui.save_session()
                         return True
                     else:
                         return True
@@ -302,8 +322,10 @@ class FormManagement:
         import tkinter as tk
         
         # Check for unsaved changes first
+        print("DEBUG: before check_entry_tab_changes")
         if not self.check_entry_tab_changes():
             return
+        print("DEBUG: after check_entry_tab_changes")
         
         # db_ops = DatabaseOperations(self.ui)
         # next_session = db_ops.get_next_session_number()
@@ -334,7 +356,8 @@ class FormManagement:
         # Reset to Save Session mode (not Update Session)
         nav = Navigation(self.ui)
         nav.set_save_mode()
-        
+        # Take snapshot of cleared form after delay (widgets need time to update)
+        self.ui.root.after(150, self.take_form_snapshot)
         # Clear form fields for new entry (KEEP handler name and dog name)
         self.ui.set_date(datetime.now().strftime("%Y-%m-%d"))
         # handler is NOT cleared - keep current handler name
