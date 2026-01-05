@@ -3,6 +3,7 @@ MIGRATION SCRIPT GUIDELINES
 
 User Preferences for Script Creation
 -------------------------------------
+0. This is a windows machine.  Don't user /mnt/... when referencing file names.
 
 1. SCRIPT NUMBERING
    - Use .01 increments, NOT .1 increments
@@ -51,6 +52,7 @@ User Preferences for Script Creation
 
 8. SCRIPT STRUCTURE
    - Include dry-run mode (default)
+   - Outline what the script is to do.
    - Require --execute flag to actually make changes
    - Show what will be changed in dry-run
    - Confirm with user before executing
