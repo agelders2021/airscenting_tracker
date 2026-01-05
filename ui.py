@@ -436,19 +436,6 @@ class AirScentingUI:
         # Track selected sessions for navigation
         self.selected_sessions = []  # List of session numbers to navigate through
         self.selected_sessions_index = -1  # Current position in selected sessions
-        
-        # Row 1: Status filter radio buttons (under Edit/Delete button)
-        status_filter_frame = tk.Frame(session_frame)
-        status_filter_frame.grid(row=1, column=6, columnspan=4, sticky="w", padx=5, pady=5)
-        
-        tk.Label(status_filter_frame, text="Show Sessions:").pack(side="left", padx=(0, 10))
-        tk.Radiobutton(status_filter_frame, text="Active", variable=sv.session_status_filter, 
-                      value="active", command=self.navigation.on_status_filter_changed).pack(side="left", padx=5)
-        tk.Radiobutton(status_filter_frame, text="Deleted", variable=sv.session_status_filter, 
-                      value="deleted", command=self.navigation.on_status_filter_changed).pack(side="left", padx=5)
-        tk.Radiobutton(status_filter_frame, text="Both", variable=sv.session_status_filter, 
-                      value="both", command=self.navigation.on_status_filter_changed).pack(side="left", padx=5)
-        
         # Row 2: Delete/Undelete buttons (for editing existing sessions)
         self.a_delete_undelete_frame = tk.Frame(session_frame)
         self.a_delete_undelete_frame.grid(row=2, column=6, columnspan=4, sticky="w", padx=5, pady=5)

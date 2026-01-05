@@ -519,8 +519,7 @@ class Navigation:
             pady=10
         )
         instructions.pack()
-        
-        # Listbox with scrollbar
+# Listbox with scrollbar
         frame = tk.Frame(dialog)
         frame.pack(fill="both", expand=True, padx=10, pady=10)
         
@@ -547,6 +546,50 @@ class Navigation:
         # Store session numbers for reference
         session_numbers = [s[0] for s in sessions]
         
+        # Refresh function to update listbox when filter changes
+        def refresh_sessions():
+            """Refresh the session list based on current filter"""
+            from ui_database import DatabaseOperations
+            
+            dog_name = sv.dog.get()
+            status_filter = sv.session_status_filter.get()
+            
+            # Get filtered sessions from database
+            db_ops = DatabaseOperations(self.ui)
+            new_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
+            
+            # Clear and repopulate listbox
+            listbox.delete(0, "end")
+            session_numbers.clear()
+            
+            for session in new_sessions:
+                session_num, date, handler, dog = session
+                handler = handler or ""
+                dog = dog or ""
+                text = f"Session #{session_num:3d}  |  {date}  |  {handler:20s}  |  {dog}"
+                listbox.insert("end", text)
+                session_numbers.append(session_num)
+            
+            # Update button text based on new filter
+            status_filter = sv.session_status_filter.get()
+            if status_filter == 'deleted':
+                delete_button.config(text="Restore Selected", bg="#28a745")
+            else:
+                delete_button.config(text="Delete Selected", bg="#DC143C")
+
+        
+
+        # Filter radiobuttons in dialog
+        filter_frame = tk.Frame(dialog)
+        filter_frame.pack(pady=(5, 0))
+        
+        tk.Label(filter_frame, text="Show Sessions:").pack(side="left", padx=(0, 10))
+        tk.Radiobutton(filter_frame, text="Active", variable=sv.session_status_filter,
+                      value="active", command=refresh_sessions).pack(side="left", padx=5)
+        tk.Radiobutton(filter_frame, text="Deleted", variable=sv.session_status_filter,
+                      value="deleted", command=refresh_sessions).pack(side="left", padx=5)
+        tk.Radiobutton(filter_frame, text="Both", variable=sv.session_status_filter,
+                      value="both", command=refresh_sessions).pack(side="left", padx=5)
         # Buttons
         button_frame = tk.Frame(dialog)
         button_frame.pack(pady=10)
@@ -623,8 +666,9 @@ class Navigation:
             button_text = "Delete Selected"
             button_color = "#DC143C"  # Red
         
-        tk.Button(button_frame, text=button_text, command=on_delete_selected,
-                 bg=button_color, fg="white", width=15).pack(side="left", padx=5)
+        delete_button = tk.Button(button_frame, text=button_text, command=on_delete_selected,
+                 bg=button_color, fg="white", width=15)
+        delete_button.pack(side="left", padx=5)
         tk.Button(button_frame, text="Cancel", command=dialog.destroy,
                  width=10).pack(side="left", padx=5)
     
