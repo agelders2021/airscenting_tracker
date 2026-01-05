@@ -314,18 +314,32 @@ class FormManagement:
             nav = Navigation(self.ui)
             nav.update_navigation_buttons()
     
-    def new_session(self):
-        """Advance to first available new session (MAX + 1)"""
+    def new_session(self, skip_change_check=False):
+        """Advance to first available new session (MAX + 1)
+        
+        Args:
+            skip_change_check: If True, skip the unsaved changes check.
+                              Use when calling from delete/restore operations
+                              where the check would give false positives.
+        """
         from sv import sv
         from ui_database import DatabaseOperations
         from ui_navigation import Navigation
         import tkinter as tk
         
-        # Check for unsaved changes first
+        # Check for unsaved changes first (unless skip requested)
         print("DEBUG: before check_entry_tab_changes")
-        if not self.check_entry_tab_changes():
+        if not skip_change_check and not self.check_entry_tab_changes():
             return
         print("DEBUG: after check_entry_tab_changes")
+        
+        # Reset filter to active FIRST, before computing session numbers
+        # This ensures we count active sessions, not deleted ones
+        sv.session_status_filter.set('active')
+        
+        # Clear current_db_session_number so we're not referencing old session
+        if hasattr(self.ui, 'current_db_session_number'):
+            self.ui.current_db_session_number = None
         
         # db_ops = DatabaseOperations(self.ui)
         # next_session = db_ops.get_next_session_number()
@@ -412,8 +426,7 @@ class FormManagement:
         nav.disable_delete_undelete_buttons()
         
         # Update navigation buttons
-        # Reset UI to active state
-        sv.session_status_filter.set('active')  # Reset filter to active
+        # Filter already reset to active at start of new_session()
         
         # Reset LabelFrame title to normal (not deleted)
         if hasattr(self.ui, 'a_session_frame'):
