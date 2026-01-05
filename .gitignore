@@ -24,6 +24,8 @@ dist/
 *.spec
 build.bat
 
+# Temp directories
+temp/
 # Images directory (if not needed in version control)
 Images/
 
