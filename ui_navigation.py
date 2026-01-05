@@ -899,7 +899,7 @@ class Navigation:
             self.ui.selected_sessions_index = -1
             
             form_mgmt = FormManagement(self.ui)
-            form_mgmt.new_session()
+            form_mgmt.new_session(skip_change_check=True)
     
     def restore_sessions(self, session_numbers):
         """Restore (undelete) multiple sessions"""
@@ -922,7 +922,7 @@ class Navigation:
             self.ui.selected_sessions = []
             self.ui.selected_sessions_index = -1
             form_mgmt = FormManagement(self.ui)
-            form_mgmt.new_session()
+            form_mgmt.new_session(skip_change_check=True)
     
     def mark_sessions_deleted(self, session_numbers):
         """Mark multiple sessions as deleted (soft delete)"""
@@ -945,7 +945,7 @@ class Navigation:
             self.ui.selected_sessions = []
             self.ui.selected_sessions_index = -1
             form_mgmt = FormManagement(self.ui)
-            form_mgmt.new_session()
+            form_mgmt.new_session(skip_change_check=True)
     
     def set_update_mode(self):
         """Switch to Update Session mode (when viewing existing sessions)"""
