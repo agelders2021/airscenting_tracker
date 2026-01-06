@@ -97,7 +97,7 @@ class Misc2Operations:
         """Save the current training session"""
         # Get all form values
         date = self.ui.a_date_picker.get_date().strftime("%Y-%m-%d")
-        session_number = sv.session_number.get()
+        displayed_session_number = sv.session_number.get()
         handler = sv.handler.get()
         session_purpose = sv.session_purpose.get()
         field_support = sv.field_support.get()
@@ -126,7 +126,7 @@ class Misc2Operations:
         if not date:
             messagebox.showwarning("Missing Data", "Please enter a date")
             return
-        if not session_number:
+        if not displayed_session_number:
             messagebox.showwarning("Missing Data", "Please enter a session number")
             return
         if not dog_name:
@@ -134,19 +134,47 @@ class Misc2Operations:
             return
 
         try:
-            session_number = int(session_number)
+            displayed_session_number = int(displayed_session_number)
         except ValueError:
             messagebox.showwarning("Invalid Data", "Session number must be a number")
             return
 
-        # If in Update mode, use the database session number
-        # Otherwise use the displayed session number
+        # Determine if we're in UPDATE mode or NEW mode
+        # UPDATE mode: We're editing an existing session (selected_sessions is set, or current_db_session_number is set)
+        # NEW mode: We're creating a brand new session
+        
+        is_update_mode = False
+        db_session_number = None
+        
+        # Check if we're viewing/editing a selected session
         if self.ui.selected_sessions:
+            is_update_mode = True
             from ui_navigation import Navigation
             nav = Navigation(self.ui)
-            db_session_num = nav.get_current_db_session_number()
-            if db_session_num:
-                session_number = db_session_num  # Use DB number for update
+            db_session_number = nav.get_current_db_session_number()
+            print(f"DEBUG save_session: Update mode (selected_sessions), db_session_number={db_session_number}")
+        
+        # Also check current_db_session_number - if it's set, we might be in update mode
+        elif hasattr(self.ui, 'current_db_session_number') and self.ui.current_db_session_number is not None:
+            # We have a current session loaded - check if it actually exists in DB
+            db_ops = DatabaseOperations(self.ui)
+            existing_session = db_ops.get_session_with_related_data(self.ui.current_db_session_number, dog_name)
+            if existing_session:
+                is_update_mode = True
+                db_session_number = self.ui.current_db_session_number
+                print(f"DEBUG save_session: Update mode (current_db_session_number), db_session_number={db_session_number}")
+        
+        # Determine the actual session_number to save to database
+        if is_update_mode and db_session_number:
+            # UPDATE MODE: Use the database session number
+            session_number = db_session_number
+            print(f"DEBUG save_session: Using db_session_number={session_number} for UPDATE")
+        else:
+            # NEW MODE: Get the actual next session number from database (MAX + 1)
+            # This prevents collision with deleted sessions
+            db_ops = DatabaseOperations(self.ui)
+            session_number = db_ops.get_next_session_number(dog_name)
+            print(f"DEBUG save_session: NEW mode - using next DB session number={session_number} (displayed was {displayed_session_number})")
         
         # Prepare session data dict
         session_data = {
@@ -227,58 +255,42 @@ class Misc2Operations:
         }
         self.ui.misc_data_ops.save_session_to_json(session_backup_data)
 
-        sv.status.set(message)
-
-
+        # Show success message
+        self.ui.show_status_message(message, "info")
         messagebox.showinfo("Success", message)
 
-
-        
-
-
-        # Reload session to display computed number
-
-
+        # Handle post-save behavior based on mode
         from ui_navigation import Navigation
-
-
         nav = Navigation(self.ui)
-
-
-        nav.load_session_by_number(session_data["session_number"])
-
-
-        # CRITICAL: If in Update mode, stay on current session and return
-        # Prevents data corruption from advancing to wrong session
-        if self.ui.selected_sessions:
-            # Get the session we just saved to check its status
+        
+        if is_update_mode:
+            # UPDATE MODE: Stay on current session, reload to refresh display
+            nav.load_session_by_number(session_data["session_number"])
+            
+            # Get the session status for display
             db_ops = DatabaseOperations(self.ui)
-            # saved_status = db_ops.get_session_status(session_data["session_number"])  ahg
             saved_status = db_ops.get_session_status(session_data["session_number"], dog_name)
             
             # Update LabelFrame title based on status
-            from ui_navigation import Navigation
-            nav = Navigation(self.ui)
             nav.update_session_frame_title(saved_status)
             
             self.ui.navigation.update_navigation_buttons()
-            sv.status.set(f"Updated session (Status: {saved_status})")
+            self.ui.show_status_message(f"Updated session (Status: {saved_status})", "info")
             return
-
-        # If in Update mode (viewing selected sessions), just update nav and return
-        # Don\'t clear form or advance to next session
-        if self.ui.selected_sessions:
-            self.ui.navigation.update_navigation_buttons()
-            return
-
-        # Auto-prepare for next entry
-        # Set to computed next number based on filter
+        
+        # NEW MODE: Clear form and prepare for next entry
+        # Clear current_db_session_number to exit any lingering update mode
+        self.ui.current_db_session_number = None
+        self.ui.selected_sessions = []
+        self.ui.selected_sessions_index = -1
+        
+        # Set to computed next number based on filter for DISPLAY purposes
+        # (The actual DB session number will be determined at next save)
         status_filter = sv.session_status_filter.get()
         filtered_sessions = DatabaseOperations(self.ui).get_all_sessions_for_dog(dog_name, status_filter)
         next_computed = len(filtered_sessions) + 1
         sv.session_number.set(str(next_computed))
-        self.ui.selected_sessions = []
-        self.ui.selected_sessions_index = -1
+        print(f"DEBUG save_session: Prepared for new session, displayed number={next_computed}")
 
         # Clear form fields (keep handler and dog)
         self.ui.set_date(datetime.now().strftime("%Y-%m-%d"))

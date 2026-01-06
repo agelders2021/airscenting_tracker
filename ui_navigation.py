@@ -910,19 +910,22 @@ class Navigation:
             sv.session_number.set(str(computed_number))
     
     def on_status_filter_changed(self):
-        """Handle status filter radio button change - update status bar"""
+        """Called when status filter radio button changes"""
         from sv import sv
-        
-        # Get current filter
         status_filter = sv.session_status_filter.get()
         
-        # Update status bar
-        filter_label = {"active": "Active", "deleted": "Deleted", "both": "All"}[status_filter]
-        dog_name = sv.dog.get()
-        if dog_name:
-            sv.status.set(f"Filter: {filter_label} sessions for {dog_name}")
+        # If a session is currently loaded, reload it to recompute number
+        if hasattr(self.ui, 'current_db_session_number') and self.ui.current_db_session_number:
+            self.load_session_by_number(self.ui.current_db_session_number)
         else:
-            sv.status.set(f"Filter: {filter_label}")
+            # Update status bar with filter info
+            filter_label = {"active": "Active", "deleted": "Deleted", "both": "All"}[status_filter]
+            dog_name = sv.dog.get()
+            if dog_name:
+                self.ui.show_status_message(f"Filter: {filter_label} sessions for {dog_name}", "info")
+            else:
+                self.ui.show_status_message(f"Filter: {filter_label}", "info")
+            self.update_navigation_buttons()
     
     def delete_sessions(self, session_numbers):
         """Delete multiple sessions from database for current dog"""
@@ -936,6 +939,8 @@ class Navigation:
         success = db_ops.delete_sessions(session_numbers, dog_name)
         
         if success:
+            # Add to status bar message history
+            self.ui.show_status_message(f"Deleted {len(session_numbers)} session(s)", "info")
             messagebox.showinfo("Success", f"Deleted {len(session_numbers)} session(s)")
             
             # Clear selected sessions and reset to new session
@@ -960,6 +965,8 @@ class Navigation:
                 success_count += 1
         
         if success_count > 0:
+            # Add to status bar message history
+            self.ui.show_status_message(f"Restored {success_count} session(s) to active", "info")
             messagebox.showinfo("Success", f"Restored {success_count} session(s) to active")
             
             # Reset to new session
@@ -983,6 +990,8 @@ class Navigation:
                 success_count += 1
         
         if success_count > 0:
+            # Add to status bar message history
+            self.ui.show_status_message(f"Marked {success_count} session(s) as deleted", "info")
             messagebox.showinfo("Success", f"Marked {success_count} session(s) as deleted")
             
             # Reset to new session
@@ -990,48 +999,3 @@ class Navigation:
             self.ui.selected_sessions_index = -1
             form_mgmt = FormManagement(self.ui)
             form_mgmt.new_session(skip_change_check=True)
-    
-    def set_update_mode(self):
-        """Switch to Update Session mode (when viewing existing sessions)"""
-        self.ui.set_save_button_text("Update Session")
-    
-    # def set_save_mode(self):
-    #     """Switch to Save Session mode (when creating new session)"""
-    #     self.ui.set_save_button_text("Save Session")
-    
-    def get_current_db_session_number(self):
-        """Get the database session number of currently loaded session"""
-        return getattr(self.ui, 'current_db_session_number', None)
-    
-    def _update_displayed_session_number(self):
-        """Update the displayed session number based on current session"""
-        from sv import sv
-        from ui_database import DatabaseOperations
-        
-        dog_name = sv.dog.get()
-        if not dog_name or not hasattr(self.ui, 'current_db_session_number'):
-            return
-        
-        db_session = self.ui.current_db_session_number
-        status_filter = sv.session_status_filter.get()
-        
-        # Get filtered list and find position
-        db_ops = DatabaseOperations(self.ui)
-        filtered_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
-        session_numbers = [s[0] for s in filtered_sessions]
-        
-        if db_session in session_numbers:
-            computed_number = session_numbers.index(db_session) + 1
-            sv.session_number.set(str(computed_number))
-    
-    def on_status_filter_changed(self):
-        """Called when status filter radio button changes"""
-        from sv import sv
-        status_filter = sv.session_status_filter.get()
-        
-        # If a session is currently loaded, reload it to recompute number
-        if hasattr(self.ui, 'current_db_session_number') and self.ui.current_db_session_number:
-            self.load_session_by_number(self.ui.current_db_session_number)
-        else:
-            sv.status.set(f"Filter: {status_filter}")
-            self.update_navigation_buttons()

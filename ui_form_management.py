@@ -419,7 +419,8 @@ class FormManagement:
         # Update subjects_found combo state (will disable since num_subjects is blank)
         self.update_subjects_found()
         
-        sv.status.set(f"New session #{next_session}")
+        # Use show_status_message with the computed (displayed) session number
+        self.ui.show_status_message(f"New Session #{next_computed}", "info")
         
         # Disable delete/undelete buttons (creating new session)
         nav = Navigation(self.ui)
