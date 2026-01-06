@@ -103,6 +103,8 @@ def create_tables():
         search_type TEXT,
         drive_level TEXT,
         subjects_found TEXT,
+        start_time TEXT,
+        finish_time TEXT,
         comments TEXT,
         image_files TEXT,
         status TEXT DEFAULT 'active',

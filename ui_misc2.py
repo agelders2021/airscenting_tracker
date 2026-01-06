@@ -66,6 +66,8 @@ class Misc2Operations:
                 sv.search_type.set("")
                 sv.drive_level.set("")
                 sv.subjects_found.set("")
+                sv.start_time.set("")
+                sv.finish_time.set("")
                 self.ui.a_comments_text.delete("1.0", tk.END)
                 # Clear terrain accumulator
                 self.ui.accumulated_terrains = []
@@ -117,6 +119,8 @@ class Misc2Operations:
         # Search results
         drive_level = sv.drive_level.get()
         subjects_found = sv.subjects_found.get()
+        start_time = sv.start_time.get()
+        finish_time = sv.finish_time.get()
         comments = self.ui.a_comments_text.get("1.0", tk.END).strip()
 
         # Map/image files - store as JSON string
@@ -195,6 +199,8 @@ class Misc2Operations:
             "search_type": search_type,
             "drive_level": drive_level,
             "subjects_found": subjects_found,
+            "start_time": start_time,
+            "finish_time": finish_time,
             "comments": comments,
             "image_files": image_files_json
         }
@@ -307,6 +313,8 @@ class Misc2Operations:
         sv.search_type.set("")
         sv.drive_level.set("")
         sv.subjects_found.set("")
+        sv.start_time.set("")
+        sv.finish_time.set("")
         self.ui.a_comments_text.delete("1.0", tk.END)
         self.ui.accumulated_terrains = []
         self.ui.a_accumulated_terrain_combo['values'] = []

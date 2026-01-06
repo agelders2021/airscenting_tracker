@@ -945,6 +945,17 @@ class AirScentingUI:
         self.a_comments_text.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=5, pady=(0, 5))
         ToolTip(self.a_comments_text, "Enter comments about search here")
         
+        # Start Time and Finish Time (row 2, columns 0-3)
+        tk.Label(results_frame, text="Start Time:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
+        self.a_start_time_entry = tk.Entry(results_frame, textvariable=sv.start_time, width=15)
+        self.a_start_time_entry.grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        ToolTip(self.a_start_time_entry, "Enter search start time (e.g., 09:30 AM)")
+        
+        tk.Label(results_frame, text="Finish Time:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
+        self.a_finish_time_entry = tk.Entry(results_frame, textvariable=sv.finish_time, width=15)
+        self.a_finish_time_entry.grid(row=2, column=3, sticky="w", padx=5, pady=2)
+        ToolTip(self.a_finish_time_entry, "Enter search finish time (e.g., 11:45 AM)")
+        
         # Maps and Images
         map_frame = tk.LabelFrame(frame, text="Maps and Images", padx=10, pady=5)
         map_frame.grid(row=4, column=0, columnspan=2, sticky="ew", pady=5)

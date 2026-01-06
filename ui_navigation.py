@@ -292,6 +292,8 @@ class Navigation:
             sv.search_type.set(session_dict["search_type"])
             sv.drive_level.set(session_dict["drive_level"])
             sv.subjects_found.set(session_dict["subjects_found"])
+            sv.start_time.set(session_dict.get("start_time", ""))
+            sv.finish_time.set(session_dict.get("finish_time", ""))
             
             # Load comments into text widget
             comments = session_dict.get("comments", "")
@@ -443,6 +445,8 @@ class Navigation:
             sv.search_type.set("")
             sv.drive_level.set("")
             sv.subjects_found.set("")
+            sv.start_time.set("")
+            sv.finish_time.set("")
             
             # Clear comments
             self.ui.a_comments_text.delete("1.0", tk.END)

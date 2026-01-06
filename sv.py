@@ -61,6 +61,8 @@ class Stringvars:
         # ===== SEARCH RESULTS =====
         self.drive_level = tk.StringVar(master=master)
         self.subjects_found = tk.StringVar(master=master)
+        self.start_time = tk.StringVar(master=master)
+        self.finish_time = tk.StringVar(master=master)
         
         # ===== TERRAIN (List of selected terrains) =====
         # Note: This is a list, not StringVar, to hold multiple selections
@@ -141,6 +143,8 @@ class Stringvars:
         # Results
         self.drive_level.set("")
         self.subjects_found.set("")
+        self.start_time.set("")
+        self.finish_time.set("")
         
         # Terrain and subject responses
         self.terrain_list.clear()
@@ -193,6 +197,8 @@ class Stringvars:
             # Results
             'drive_level': self.drive_level.get(),
             'subjects_found': self.subjects_found.get(),
+            'start_time': self.start_time.get(),
+            'finish_time': self.finish_time.get(),
             
             # Terrain (list)
             'terrain_list': self.terrain_list.copy(),
@@ -236,6 +242,8 @@ class Stringvars:
         # Results
         self.drive_level.set(data.get('drive_level', ''))
         self.subjects_found.set(data.get('subjects_found', ''))
+        self.start_time.set(data.get('start_time', ''))
+        self.finish_time.set(data.get('finish_time', ''))
         
         # Terrain (list)
         self.terrain_list = data.get('terrain_list', []).copy()

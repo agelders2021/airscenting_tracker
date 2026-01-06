@@ -184,6 +184,8 @@ class DatabaseManager:
                                 search_type = :search_type,
                                 drive_level = :drive_level,
                                 subjects_found = :subjects_found,
+                                start_time = :start_time,
+                                finish_time = :finish_time,
                                 comments = :comments,
                                 image_files = :image_files,
                                 status = 'active',
@@ -207,10 +209,12 @@ class DatabaseManager:
                             INSERT INTO training_sessions 
                             (date, session_number, handler, session_purpose, field_support, dog_name, location,
                              search_area_size, num_subjects, handler_knowledge, weather, temperature, 
-                             wind_direction, wind_speed, search_type, drive_level, subjects_found, comments, image_files, status, user_name)
+                             wind_direction, wind_speed, search_type, drive_level, subjects_found, 
+                             start_time, finish_time, comments, image_files, status, user_name)
                             VALUES (:date, :session_number, :handler, :session_purpose, :field_support, :dog_name, :location,
                                     :search_area_size, :num_subjects, :handler_knowledge, :weather, :temperature, 
-                                    :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, :comments, :image_files, 'active', :user_name)
+                                    :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, 
+                                    :start_time, :finish_time, :comments, :image_files, 'active', :user_name)
                         """),
                         {**session_data, "user_name": get_username()}
                     )
@@ -253,7 +257,8 @@ class DatabaseManager:
                     text("""
                         SELECT id, date, handler, session_purpose, field_support, dog_name, location,
                                search_area_size, num_subjects, handler_knowledge, weather, temperature,
-                               wind_direction, wind_speed, search_type, drive_level, subjects_found, comments, image_files
+                               wind_direction, wind_speed, search_type, drive_level, subjects_found, 
+                               start_time, finish_time, comments, image_files
                         FROM training_sessions 
                         WHERE session_number = :session_number AND dog_name = :dog_name
                     """),
@@ -290,8 +295,10 @@ class DatabaseManager:
                     "search_type": row[14] or "",
                     "drive_level": row[15] or "",
                     "subjects_found": row[16] or "",
-                    "comments": row[17] or "",
-                    "image_files": row[18] or ""
+                    "start_time": row[17] or "",
+                    "finish_time": row[18] or "",
+                    "comments": row[19] or "",
+                    "image_files": row[20] or ""
                 }
             
             return None

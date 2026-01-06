@@ -133,6 +133,8 @@ class FormManagement:
         current_search_type = sv.search_type.get()
         current_drive_level = sv.drive_level.get()
         current_subjects_found = sv.subjects_found.get()
+        current_start_time = sv.start_time.get()
+        current_finish_time = sv.finish_time.get()
         current_comments = self.ui.a_comments_text.get("1.0", tk.END).strip()
         
         # Check if this session exists in database and compare
@@ -174,6 +176,8 @@ class FormManagement:
                     safe_str(current_search_type) != safe_str(session_dict.get("search_type")) or
                     safe_str(current_drive_level) != safe_str(session_dict.get("drive_level")) or
                     safe_str(current_subjects_found) != safe_str(session_dict.get("subjects_found")) or
+                    safe_str(current_start_time) != safe_str(session_dict.get("start_time")) or
+                    safe_str(current_finish_time) != safe_str(session_dict.get("finish_time")) or
                     safe_str(current_comments) != safe_str(session_dict.get("comments"))):
                     
                     # Changes detected in basic fields
@@ -279,6 +283,8 @@ class FormManagement:
             sv.search_type.set("")
             sv.drive_level.set("")
             sv.subjects_found.set("")
+            sv.start_time.set("")
+            sv.finish_time.set("")
             
             # Clear comments textbox
             self.ui.a_comments_text.delete("1.0", tk.END)
@@ -389,6 +395,8 @@ class FormManagement:
         sv.search_type.set("")
         sv.drive_level.set("")
         sv.subjects_found.set("")
+        sv.start_time.set("")
+        sv.finish_time.set("")
         
         # Clear map files list
         self.ui.map_files_list = []
