@@ -11,6 +11,7 @@ Backups/
 # Database files
 *.db
 air_scenting.db
+Data
 
 # Python cache
 __pycache__/
@@ -28,6 +29,9 @@ build.bat
 temp/
 # Images directory (if not needed in version control)
 Images/
+
+# Intermediate documentation
+documentation
 
 # Executables
 *.exe

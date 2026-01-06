@@ -263,7 +263,6 @@ class Misc2Operations:
 
         # Show success message
         self.ui.show_status_message(message, "info")
-        messagebox.showinfo("Success", message)
 
         # Handle post-save behavior based on mode
         from ui_navigation import Navigation

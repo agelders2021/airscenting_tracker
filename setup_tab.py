@@ -16,12 +16,14 @@ from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
 import json
 import os
+import shutil
 from datetime import datetime
 from getpass import getuser
 from sqlalchemy import text
 import sv  # Import centralized StringVars module
 from ui_database import DatabaseOperations
 from ui_misc_data_ops import MiscDataOperations
+from tips import ToolTip
 import ui_utils
 
 
@@ -88,66 +90,40 @@ class SetupTab:
         frame = tk.Frame(scrollable_frame, padx=20, pady=20)
         frame.pack(fill="both", expand=True)
         
-        # Database Type Selection
-        db_type_frame = tk.LabelFrame(frame, text="Database Type", padx=10, pady=5)
-        db_type_frame.pack(fill="x", pady=5)
+        # =====================================================================
+        # DATABASE TYPE SELECTION - HIDDEN FOR NOW
+        # SQLite is used by default. Multi-database support may be re-enabled
+        # in a future version once networking issues are resolved.
+        # =====================================================================
+        # Ensure SQLite is set as default
+        sv.db_type.set("sqlite")
         
-        # REMOVED: sv.db_type = tk.StringVar(value=self.ui.config.get("db_type", "sqlite"))  # StringVar already in sv module
+        # Hidden: Database Type Selection
+        # db_type_frame = tk.LabelFrame(frame, text="Database Type", padx=10, pady=5)
+        # db_type_frame.pack(fill="x", pady=5)
+        # ... (Database type radio buttons and password fields hidden)
+        # =====================================================================
         
-        radio_container = tk.Frame(db_type_frame)
-        radio_container.pack(pady=5)
-        
-        tk.Radiobutton(radio_container, text="SQLite", variable=sv.db_type, 
-                      value="sqlite", command=self.ui.on_db_type_changed).pack(side="left", padx=20)
-        tk.Radiobutton(radio_container, text="PostgreSQL", variable=sv.db_type, 
-                      value="postgres", command=self.ui.on_db_type_changed).pack(side="left", padx=20)
-        tk.Radiobutton(radio_container, text="Supabase", variable=sv.db_type, 
-                      value="supabase", command=self.ui.on_db_type_changed).pack(side="left", padx=20)
-        tk.Radiobutton(radio_container, text="MySQL", variable=sv.db_type, 
-                      value="mysql", command=self.ui.on_db_type_changed).pack(side="left", padx=20)
-        
-        # Database Password (for postgres, supabase, mysql)
-        self.s_db_password_frame = tk.Frame(db_type_frame)
-        self.s_db_password_frame.pack(pady=5)
-        
-        tk.Label(self.s_db_password_frame, text="Database Password:").pack(side="left", padx=5)
-        self.s_db_password_entry = tk.Entry(self.s_db_password_frame, textvariable=sv.db_password, 
-                                          width=30, show="*")
-        self.s_db_password_entry.pack(side="left", padx=5)
-        
-        # Add right-click context menu for password entry (Cut/Copy/Paste)
-        self.ui.add_entry_context_menu(self.s_db_password_entry)
-        
-        # Show/Hide password checkbox
-        tk.Checkbutton(self.s_db_password_frame, text="Show", variable=sv.show_password,
-                      command=self.ui.toggle_password_visibility).pack(side="left", padx=5)
-        
-        # Remember Password checkbox
-        tk.Checkbutton(self.s_db_password_frame, text="Remember", variable=sv.remember_password).pack(side="left", padx=5)
-        
-        # Forget Password button
-        tk.Button(self.s_db_password_frame, text="Forget Saved Password", 
-                 command=self.ui.forget_password, width=18).pack(side="left", padx=5)
-        
-        # Add trace to update Create Database button when database type changes
-        sv.db_type.trace_add('write', self.update_create_db_button_state)
-        
-        # Initialize button state and password field visibility
-        self.ui.root.after(100, self.update_create_db_button_state)
-        self.ui.root.after(100, self.ui.on_db_type_changed)
-        
-        # Database folder selection
-        db_frame = tk.LabelFrame(frame, text="Database Folder", padx=10, pady=5)
+        # Primary Storage Folder (renamed from "Database Folder")
+        db_frame = tk.LabelFrame(frame, text="Primary Storage Folder", padx=10, pady=5)
         db_frame.pack(fill="x", pady=5)
         
-        tk.Entry(db_frame, textvariable=sv.db_path, width=70).pack(side="left", padx=5)
+        primary_entry = tk.Entry(db_frame, textvariable=sv.db_path, width=70)
+        primary_entry.pack(side="left", padx=5)
+        ToolTip(primary_entry, 
+                "This folder contains the database as well as needed folders\n"
+                "for ancillary data such as images and primary backup for\n"
+                "error recovery.")
         tk.Button(db_frame, text="Browse", command=self.ui.file_ops.select_db_folder).pack(side="left", padx=5)
-        self.s_create_db_btn = tk.Button(db_frame, text="Create Database", 
-                                       command=self.create_database, state="disabled")
+        self.s_create_db_btn = tk.Button(db_frame, text="Initialize Data Structures", 
+                                       command=self.initialize_data_structures, state="disabled")
         self.s_create_db_btn.pack(side="left", padx=5)
         
-        # Add trace to db_path_var to enable/disable Create Database button
+        # Add trace to db_path to enable/disable Initialize button
         sv.db_path.trace_add('write', self.update_create_db_button_state)
+        
+        # Initialize button state
+        self.ui.root.after(100, self.update_create_db_button_state)
         
         # Trail maps folder
         folder_frame = tk.LabelFrame(frame, text="Trail Maps Storage Folder", padx=10, pady=5)
@@ -426,15 +402,220 @@ class SetupTab:
             self.ui.machine_backup_folder = folder
 
     def update_create_db_button_state(self, *args):
-        """Enable/disable Create Database button based on folder selection and database type"""
-        db_type = sv.db_type.get()
+        """Enable/disable Initialize Data Structures button based on folder selection"""
         has_folder = bool(sv.db_path.get().strip())
-        
-        # For SQLite, require folder. For postgres/supabase, always enable
-        if db_type == "sqlite":
+        if self.s_create_db_btn:
             self.s_create_db_btn.config(state="normal" if has_folder else "disabled")
-        else:  # postgres or supabase
-            self.s_create_db_btn.config(state="normal")
+
+    def initialize_data_structures(self):
+        """Initialize primary storage folder with database and required subfolders.
+        
+        Creates:
+        - air_scenting.db (SQLite database)
+        - Images/ folder (for trail maps and images)
+        - JSON/ folder (for backup data)
+        
+        If folder contains existing data, offers to move it to a Recover subfolder.
+        """
+        folder = sv.db_path.get().strip()
+        if not folder:
+            messagebox.showwarning("No Folder", "Please select a Primary Storage Folder first")
+            return
+        
+        folder_path = Path(folder)
+        if not folder_path.exists():
+            messagebox.showerror("Invalid Folder", f"Folder does not exist:\n{folder}")
+            return
+        
+        # Define paths for data structures
+        db_path = folder_path / "air_scenting.db"
+        images_path = folder_path / "Images"
+        json_path = folder_path / "JSON"
+        
+        # Check what already exists
+        db_exists = db_path.exists()
+        images_exists = images_path.exists()
+        json_exists = json_path.exists()
+        
+        # Check for any other files in the folder (excluding our structures)
+        existing_files = []
+        for item in folder_path.iterdir():
+            if item.name not in ["air_scenting.db", "air_scenting.db-wal", "air_scenting.db-shm", 
+                                 "Images", "JSON", "Recover"]:
+                existing_files.append(item.name)
+        
+        has_existing_data = db_exists or images_exists or json_exists or existing_files
+        
+        if has_existing_data:
+            # Build message about what exists
+            exists_list = []
+            if db_exists:
+                exists_list.append("Database (air_scenting.db)")
+            if images_exists:
+                exists_list.append("Images folder")
+            if json_exists:
+                exists_list.append("JSON folder")
+            if existing_files:
+                exists_list.append(f"Other files: {', '.join(existing_files[:5])}")
+                if len(existing_files) > 5:
+                    exists_list.append(f"  ...and {len(existing_files) - 5} more")
+            
+            result = messagebox.askyesno(
+                "Folder Not Empty",
+                f"Folder {folder} is not empty.\n\n"
+                f"Existing data found:\n" + "\n".join(f"  - {item}" for item in exists_list) + "\n\n"
+                "Really continue?\n\n"
+                "If you select 'Yes', existing data will be moved to a 'Recover' subfolder.",
+                icon='warning'
+            )
+            
+            if not result:
+                return
+            
+            # Move existing data to Recover folder
+            recover_path = folder_path / "Recover"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            recover_subfolder = recover_path / timestamp
+            
+            try:
+                recover_subfolder.mkdir(parents=True, exist_ok=True)
+                
+                moved_items = []
+                
+                # Close any existing database connections first
+                try:
+                    from database import engine
+                    engine.dispose()
+                    import gc
+                    gc.collect()
+                    import time
+                    time.sleep(0.5)
+                except:
+                    pass
+                
+                # Move database files
+                if db_exists:
+                    shutil.move(str(db_path), str(recover_subfolder / "air_scenting.db"))
+                    moved_items.append("air_scenting.db")
+                # Move WAL files if they exist
+                wal_file = folder_path / "air_scenting.db-wal"
+                shm_file = folder_path / "air_scenting.db-shm"
+                if wal_file.exists():
+                    shutil.move(str(wal_file), str(recover_subfolder / "air_scenting.db-wal"))
+                if shm_file.exists():
+                    shutil.move(str(shm_file), str(recover_subfolder / "air_scenting.db-shm"))
+                
+                # Move Images folder
+                if images_exists:
+                    shutil.move(str(images_path), str(recover_subfolder / "Images"))
+                    moved_items.append("Images/")
+                
+                # Move JSON folder
+                if json_exists:
+                    shutil.move(str(json_path), str(recover_subfolder / "JSON"))
+                    moved_items.append("JSON/")
+                
+                # Move other files
+                for filename in existing_files:
+                    src = folder_path / filename
+                    if src.exists():
+                        shutil.move(str(src), str(recover_subfolder / filename))
+                        moved_items.append(filename)
+                
+                sv.status.set(f"Moved {len(moved_items)} item(s) to Recover folder")
+                
+                # Notify user
+                messagebox.showinfo(
+                    "Data Moved to Recover",
+                    f"Existing data has been moved to:\n\n"
+                    f"{recover_subfolder}\n\n"
+                    f"Items moved: {', '.join(moved_items)}"
+                )
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to move existing data:\n{e}")
+                return
+        
+        # Now create the data structures
+        try:
+            # Create Images folder
+            images_path.mkdir(exist_ok=True)
+            
+            # Create JSON folder
+            json_path.mkdir(exist_ok=True)
+            
+            # Auto-set the folder paths to the newly created subfolders
+            sv.trail_maps_folder.set(str(images_path))
+            sv.backup_folder.set(str(json_path))
+            
+            # Also update machine-specific paths for bootstrap saving
+            self.ui.machine_db_path = folder
+            self.ui.machine_trail_maps_folder = str(images_path)
+            self.ui.machine_backup_folder = str(json_path)
+            
+            # Create the database
+            import sqlite3
+            conn = sqlite3.connect(str(db_path))
+            conn.close()
+            
+            # Update config to point to the new database
+            import config
+            config.DB_TYPE = "sqlite"
+            config.DB_CONFIG["sqlite"]["url"] = f"sqlite:///{db_path}"
+            
+            # Recreate engine with new database
+            from database import engine
+            engine.dispose()
+            from importlib import reload
+            import database
+            reload(database)
+            
+            # Create schema
+            from schema import create_tables
+            create_tables()
+            
+            sv.status.set(f"Initialized: database, Images/, JSON/ in {folder}")
+            
+            # Offer to restore from JSON backups if they exist in JSON folder
+            self.ui.misc_data_ops.restore_from_json_backups("sqlite")
+            
+            # Offer to load default terrain and distraction types
+            self.ui.misc_data_ops.offer_load_default_types("sqlite")
+            
+            # Update session number and UI
+            sv.session_number.set(str(DatabaseOperations(self.ui).get_next_session_number()))
+            self.ui.selected_sessions = []
+            self.ui.selected_sessions_index = -1
+            self.ui.navigation.update_navigation_buttons()
+            
+            # Clear form to new entry state
+            self.ui.set_date(datetime.now().strftime("%Y-%m-%d"))
+            sv.session_purpose.set("")
+            sv.field_support.set("")
+            sv.dog.set("")
+            sv.search_area_size.set("")
+            sv.num_subjects.set("")
+            sv.handler_knowledge.set("")
+            sv.weather.set("")
+            sv.temperature.set("")
+            sv.wind_direction.set("")
+            sv.wind_speed.set("")
+            sv.search_type.set("")
+            sv.drive_level.set("")
+            sv.subjects_found.set("")
+            self.ui.form_mgmt.update_subjects_found()
+            
+            # Refresh dog list on Setup tab
+            self.refresh_dog_list()
+            
+            # Save configuration and bootstrap to persist the new paths
+            self.ui.save_config()
+            self.ui.save_bootstrap()
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to initialize data structures:\n{e}\n\n{type(e).__name__}")
+            import traceback
+            traceback.print_exc()
 
     def create_database(self):
         """Create or rebuild database schema"""
@@ -1297,6 +1478,7 @@ class SetupTab:
             # Check database type and selected type
             db_type = sv.db_type.get()
             
+            old_db_type = None
             try:
                 # Temporarily switch to selected database type
                 import config
@@ -1337,15 +1519,16 @@ class SetupTab:
                 
             except Exception as e:
                 # Restore original DB_TYPE on error
-                try:
-                    import config
-                    import database
-                    from importlib import reload
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except:
-                    pass
+                if old_db_type is not None:
+                    try:
+                        import config
+                        import database
+                        from importlib import reload
+                        config.DB_TYPE = old_db_type
+                        database.engine.dispose()
+                        reload(database)
+                    except:
+                        pass
                 
                 if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
                     messagebox.showinfo("Duplicate", f"Dog '{dog_name}' already exists")
@@ -1823,7 +2006,7 @@ class SetupTab:
     
 
     def save_configuration_settings(self):
-        """Save all configuration settings"""
+        """Save all configuration settings including data from database"""
         # Check for text in entry fields that hasn't been added
         unadded_items = []
         if sv.new_location.get().strip():
@@ -1846,14 +2029,38 @@ class SetupTab:
         self.ui.config["handler_name"] = sv.default_handler.get()
         self.ui.config["db_type"] = sv.db_type.get()
         
-        # Save config file
-        self.ui.save_config()
+        # Get current data from database and store in config for backup/rebuild
+        try:
+            from ui_database import get_db_manager
+            db_mgr = get_db_manager(self.ui)
+            
+            # Get dog names from database
+            dog_names = db_mgr.load_dogs()
+            self.ui.config["dog_names"] = dog_names if dog_names else []
+            
+            # Get terrain types from database
+            terrain_types = db_mgr.load_terrain_types()
+            self.ui.config["terrain_types"] = terrain_types if terrain_types else []
+            
+            # Get distraction types from database
+            distraction_types = db_mgr.load_distraction_types()
+            self.ui.config["distraction_types"] = distraction_types if distraction_types else []
+            
+            # Get training locations from database
+            locations = db_mgr.load_locations()
+            self.ui.config["training_locations"] = locations if locations else []
+            
+        except Exception as e:
+            print(f"Warning: Could not load data from database for config: {e}")
         
-        # Save machine-specific paths
+        # Save machine-specific paths first (so JSON folder path is known)
         self.ui.machine_db_path = sv.db_path.get()
         self.ui.machine_trail_maps_folder = sv.trail_maps_folder.get()
         self.ui.machine_backup_folder = sv.backup_folder.get()
         self.ui.save_bootstrap()
+        
+        # Save config file (will use JSON folder if available)
+        self.ui.save_config()
         
         # Save settings backup JSON file
         self.ui.misc_data_ops.save_settings_backup()
@@ -1862,6 +2069,5 @@ class SetupTab:
         self.ui.form_mgmt.take_form_snapshot()
         
         sv.status.set("Configuration saved successfully!")
-        messagebox.showinfo("Success", "Configuration saved successfully!")
     
 

@@ -22,10 +22,412 @@ class MiscDataOperations:
         """Initialize with reference to main UI"""
         self.ui = ui
     
+    def validate_database_at_startup(self):
+        """
+        Check if database exists and is valid at startup.
+        If database is missing or corrupted, offer to rebuild from JSON backups.
+        
+        Returns:
+            bool: True if database is valid or was successfully rebuilt, False otherwise
+        """
+        import config
+        
+        # Get the primary storage folder path
+        db_folder = sv.db_path.get().strip()
+        if not db_folder:
+            # No folder configured - user needs to run setup
+            return False
+        
+        folder_path = Path(db_folder)
+        if not folder_path.exists():
+            return False
+        
+        db_path = folder_path / "air_scenting.db"
+        json_path = folder_path / "JSON"
+        
+        # Check if database exists
+        if not db_path.exists():
+            # Database missing - check for JSON backups
+            return self._offer_rebuild_from_json(db_path, json_path, "Database file not found.")
+        
+        # Database file exists - check if it's valid using PRAGMA integrity_check
+        try:
+            import sqlite3
+            
+            # Use sqlite3 directly for integrity check (more reliable than SQLAlchemy for this)
+            conn = sqlite3.connect(str(db_path))
+            cursor = conn.cursor()
+            
+            # Run integrity check
+            cursor.execute("PRAGMA integrity_check")
+            result = cursor.fetchone()
+            
+            if result[0] != "ok":
+                # Database is corrupted
+                conn.close()
+                return self._offer_rebuild_from_json(db_path, json_path, 
+                    f"Database integrity check failed: {result[0]}")
+            
+            # Also verify the schema exists (tables created)
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='training_sessions'")
+            table_exists = cursor.fetchone()
+            conn.close()
+            
+            if not table_exists:
+                return self._offer_rebuild_from_json(db_path, json_path, 
+                    "Database is missing required tables.")
+            
+            # Database is valid - now set up SQLAlchemy to use it
+            config.DB_TYPE = "sqlite"
+            config.DB_CONFIG["sqlite"]["url"] = f"sqlite:///{db_path}"
+            
+            # Reload database engine
+            from database import engine
+            engine.dispose()
+            from importlib import reload
+            import database
+            reload(database)
+            
+            return True
+            
+        except Exception as e:
+            error_msg = str(e)
+            print(f"Database validation error: {error_msg}")
+            
+            # Database exists but is corrupted or inaccessible
+            return self._offer_rebuild_from_json(db_path, json_path, f"Database error: {error_msg}")
+    
+    def _offer_rebuild_from_json(self, db_path, json_path, reason):
+        """
+        Offer to rebuild database from JSON backup files.
+        
+        Args:
+            db_path: Path to database file
+            json_path: Path to JSON backup folder
+            reason: Reason why rebuild is needed
+            
+        Returns:
+            bool: True if database was rebuilt successfully, False otherwise
+        """
+        # Check if JSON backup folder exists and has files
+        if not json_path.exists():
+            messagebox.showwarning(
+                "No Database",
+                f"{reason}\n\n"
+                f"No JSON backup folder found at:\n{json_path}\n\n"
+                "Please use Setup tab to initialize data structures."
+            )
+            return False
+        
+        json_files = list(json_path.glob("*session_*.json"))
+        config_file = json_path / ".airscenting_config.json"
+        has_config = config_file.exists()
+        
+        if not json_files and not has_config:
+            messagebox.showwarning(
+                "No Database",
+                f"{reason}\n\n"
+                f"No backup files found in:\n{json_path}\n\n"
+                "Please use Setup tab to initialize data structures."
+            )
+            return False
+        
+        # Build message about what can be restored
+        restore_items = []
+        if json_files:
+            restore_items.append(f"{len(json_files)} session backup file(s)")
+        if has_config:
+            restore_items.append("configuration data (dogs, terrains, locations)")
+        
+        # Offer to rebuild
+        result = messagebox.askyesno(
+            "Rebuild Database?",
+            f"{reason}\n\n"
+            f"Found in {json_path}:\n" + "\n".join(f"  • {item}" for item in restore_items) + "\n\n"
+            "Would you like to rebuild the database from these backups?",
+            icon='question'
+        )
+        
+        if not result:
+            return False
+        
+        # Rebuild the database
+        try:
+            # Delete corrupted database if it exists
+            if db_path.exists():
+                try:
+                    from database import engine
+                    engine.dispose()
+                    import gc
+                    gc.collect()
+                    import time
+                    time.sleep(0.5)
+                    db_path.unlink()
+                    # Also delete WAL files
+                    wal_file = Path(str(db_path) + "-wal")
+                    shm_file = Path(str(db_path) + "-shm")
+                    if wal_file.exists():
+                        wal_file.unlink()
+                    if shm_file.exists():
+                        shm_file.unlink()
+                except Exception as e:
+                    messagebox.showerror("Error", f"Could not remove corrupted database:\n{e}")
+                    return False
+            
+            # Create new database
+            import sqlite3
+            conn = sqlite3.connect(str(db_path))
+            conn.close()
+            
+            # Update config
+            import config
+            config.DB_TYPE = "sqlite"
+            config.DB_CONFIG["sqlite"]["url"] = f"sqlite:///{db_path}"
+            
+            # Reload database engine
+            from database import engine
+            engine.dispose()
+            from importlib import reload
+            import database
+            reload(database)
+            
+            # Create schema
+            from schema import create_tables
+            create_tables()
+            
+            sv.status.set("Database recreated, restoring from backups...")
+            
+            # Now restore from JSON backups (reuse existing logic but without asking)
+            self._restore_sessions_from_json(json_path)
+            
+            return True
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to rebuild database:\n{e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def _restore_sessions_from_json(self, json_path):
+        """
+        Restore sessions from JSON backup files (internal helper, no prompts).
+        Also restores config data if available.
+        
+        Args:
+            json_path: Path to JSON backup folder
+        """
+        import database
+        
+        json_files = list(json_path.glob("*session_*.json"))
+        
+        restored_count = 0
+        failed_count = 0
+        dog_names = set()
+        location_names = set()
+        
+        # Restore sessions if any exist
+        for json_file in sorted(json_files):
+            try:
+                with open(json_file, 'r') as f:
+                    session_data = json.load(f)
+                
+                # Collect dog name
+                dog_name = session_data.get('dog_name')
+                if dog_name:
+                    dog_names.add(dog_name)
+                
+                # Collect location name
+                location = session_data.get('location')
+                if location:
+                    location_names.add(location)
+                
+                # Insert into database
+                with database.get_connection() as conn:
+                    image_files = session_data.get('image_files', [])
+                    image_files_json = json.dumps(image_files) if isinstance(image_files, list) else (image_files or "")
+                    
+                    conn.execute(
+                        text("""
+                            INSERT INTO training_sessions 
+                            (date, session_number, handler, session_purpose, field_support, dog_name, location,
+                             search_area_size, num_subjects, handler_knowledge, weather, temperature, 
+                             wind_direction, wind_speed, search_type, drive_level, subjects_found, 
+                             start_time, finish_time, comments, image_files, user_name)
+                            VALUES (:date, :session_number, :handler, :session_purpose, :field_support, :dog_name, :location,
+                                    :search_area_size, :num_subjects, :handler_knowledge, :weather, :temperature, 
+                                    :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found,
+                                    :start_time, :finish_time, :comments, :image_files, :user_name)
+                        """),
+                        {
+                            "date": session_data.get('date'),
+                            "session_number": session_data.get('session_number'),
+                            "handler": session_data.get('handler'),
+                            "session_purpose": session_data.get('session_purpose'),
+                            "field_support": session_data.get('field_support'),
+                            "dog_name": session_data.get('dog_name'),
+                            "location": session_data.get('location'),
+                            "search_area_size": session_data.get('search_area_size'),
+                            "num_subjects": session_data.get('num_subjects'),
+                            "handler_knowledge": session_data.get('handler_knowledge'),
+                            "weather": session_data.get('weather'),
+                            "temperature": session_data.get('temperature'),
+                            "wind_direction": session_data.get('wind_direction'),
+                            "wind_speed": session_data.get('wind_speed'),
+                            "search_type": session_data.get('search_type'),
+                            "drive_level": session_data.get('drive_level'),
+                            "subjects_found": session_data.get('subjects_found'),
+                            "start_time": session_data.get('start_time', ''),
+                            "finish_time": session_data.get('finish_time', ''),
+                            "comments": session_data.get('comments'),
+                            "image_files": image_files_json,
+                            "user_name": session_data.get('user_name', get_username())
+                        }
+                    )
+                    conn.commit()
+                
+                restored_count += 1
+                
+            except Exception as e:
+                print(f"Failed to restore {json_file}: {e}")
+                failed_count += 1
+        
+        # Add dog names to database
+        for dog_name in sorted(dog_names):
+            try:
+                with database.get_connection() as conn:
+                    conn.execute(
+                        text("INSERT INTO dogs (name, user_name) VALUES (:name, :user_name)"),
+                        {"name": dog_name, "user_name": get_username()}
+                    )
+                    conn.commit()
+            except:
+                pass  # Duplicate OK
+        
+        # Add location names to database
+        for location in sorted(location_names):
+            try:
+                with database.get_connection() as conn:
+                    conn.execute(
+                        text("INSERT INTO training_locations (name, user_name) VALUES (:name, :user_name)"),
+                        {"name": location, "user_name": get_username()}
+                    )
+                    conn.commit()
+            except:
+                pass  # Duplicate OK
+        
+        # Also restore from config file if it exists
+        config_restored = self._restore_config_data_to_db(json_path)
+        
+        sv.status.set(f"Restored {restored_count} session(s) from backup")
+        if restored_count > 0 or config_restored:
+            msg = f"Successfully restored {restored_count} session(s) from JSON backups."
+            if config_restored:
+                msg += "\n\nAlso restored configuration data (dogs, terrains, locations, distractions)."
+            if failed_count > 0:
+                msg += f"\n\n{failed_count} file(s) failed to restore."
+            messagebox.showinfo("Database Rebuilt", msg)
+    
+    def _restore_config_data_to_db(self, json_path):
+        """
+        Restore configuration data (dogs, terrains, locations, distractions) from config file.
+        
+        Args:
+            json_path: Path to JSON folder containing .airscenting_config.json
+            
+        Returns:
+            bool: True if config was restored, False otherwise
+        """
+        import database
+        
+        config_file = json_path / ".airscenting_config.json"
+        if not config_file.exists():
+            return False
+        
+        try:
+            with open(config_file, 'r') as f:
+                config_data = json.load(f)
+        except Exception as e:
+            print(f"Could not load config file: {e}")
+            return False
+        
+        restored_something = False
+        
+        # Restore dog names
+        dog_names = config_data.get("dog_names", [])
+        for dog_name in dog_names:
+            if dog_name:
+                try:
+                    with database.get_connection() as conn:
+                        conn.execute(
+                            text("INSERT INTO dogs (name, user_name) VALUES (:name, :user_name)"),
+                            {"name": dog_name, "user_name": get_username()}
+                        )
+                        conn.commit()
+                    restored_something = True
+                except:
+                    pass  # Duplicate OK
+        
+        # Restore terrain types
+        terrain_types = config_data.get("terrain_types", [])
+        for i, terrain in enumerate(terrain_types):
+            if terrain:
+                try:
+                    with database.get_connection() as conn:
+                        conn.execute(
+                            text("INSERT INTO terrain_types (name, sort_order, user_name) VALUES (:name, :sort_order, :user_name)"),
+                            {"name": terrain, "sort_order": i, "user_name": get_username()}
+                        )
+                        conn.commit()
+                    restored_something = True
+                except:
+                    pass  # Duplicate OK
+        
+        # Restore distraction types
+        distraction_types = config_data.get("distraction_types", [])
+        for i, distraction in enumerate(distraction_types):
+            if distraction:
+                try:
+                    with database.get_connection() as conn:
+                        conn.execute(
+                            text("INSERT INTO distraction_types (name, sort_order, user_name) VALUES (:name, :sort_order, :user_name)"),
+                            {"name": distraction, "sort_order": i, "user_name": get_username()}
+                        )
+                        conn.commit()
+                    restored_something = True
+                except:
+                    pass  # Duplicate OK
+        
+        # Restore training locations
+        locations = config_data.get("training_locations", [])
+        for location in locations:
+            if location:
+                try:
+                    with database.get_connection() as conn:
+                        conn.execute(
+                            text("INSERT INTO training_locations (name, user_name) VALUES (:name, :user_name)"),
+                            {"name": location, "user_name": get_username()}
+                        )
+                        conn.commit()
+                    restored_something = True
+                except:
+                    pass  # Duplicate OK
+        
+        return restored_something
+
     def load_initial_database_data(self):
         """Load all initial database data after splash screen starts"""
         # Use chained after() calls to let event loop run between operations
         # This keeps splash countdown and progress bars animating
+        
+        def step0():
+            # First validate the database exists and is valid
+            # This will offer to rebuild from JSON if needed
+            if not self.validate_database_at_startup():
+                # Database not valid and couldn't be rebuilt
+                # Skip loading data, user needs to set up
+                sv.status.set("Database not configured - please complete Setup")
+                return
+            self.ui.root.after(50, step1)
         
         def step1():
             self.ensure_db_ready()
@@ -81,8 +483,8 @@ class MiscDataOperations:
             if hasattr(self.ui, 'a_prev_session_btn'):
                 self.ui.navigation.update_navigation_buttons()
         
-        # Start the chain
-        step1()
+        # Start the chain with database validation
+        step0()
     
     def select_initial_tab(self):
         """Select initial tab based on database existence"""
@@ -927,8 +1329,7 @@ class MiscDataOperations:
         
         # Show summary
         if terrain_success and distraction_success:
-            messagebox.showinfo("Success", 
-                f"{terrain_msg}\n{distraction_msg}")
+            sv.status.set(f"{terrain_msg}; {distraction_msg}")
         else:
             errors = []
             if not terrain_success:

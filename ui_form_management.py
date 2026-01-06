@@ -245,8 +245,57 @@ class FormManagement:
                         return True
                     else:
                         return True
+            else:
+                # Session doesn't exist in database - check if form has data entered
+                # (This handles the case of a NEW session with unsaved data)
+                form_has_data = (
+                    current_purpose or
+                    current_field_support or
+                    current_location or
+                    current_search_area or
+                    current_num_subjects or
+                    current_handler_knowledge or
+                    current_weather or
+                    current_temperature or
+                    current_wind_direction or
+                    current_wind_speed or
+                    current_search_type or
+                    current_drive_level or
+                    current_subjects_found or
+                    current_start_time or
+                    current_finish_time or
+                    current_comments or
+                    self.ui.accumulated_terrains or
+                    self.ui.map_files_list
+                )
+                
+                # Also check if any subject responses have been entered
+                if not form_has_data:
+                    for i in range(1, 11):
+                        item_id = f'subject_{i}'
+                        tags = self.ui.a_subject_responses_tree.item(item_id, 'tags')
+                        if 'enabled' in tags:
+                            values = self.ui.a_subject_responses_tree.item(item_id, 'values')
+                            if (len(values) > 1 and values[1]) or (len(values) > 2 and values[2]):
+                                form_has_data = True
+                                break
+                
+                if form_has_data:
+                    result = messagebox.askyesnocancel(
+                        "Unsaved Session",
+                        "Session info not saved. Save current session?",
+                        icon='warning'
+                    )
+                    
+                    if result is None:  # Cancel
+                        return False
+                    elif result:  # Yes - save first
+                        self.ui.save_session()
+                        return True
+                    else:  # No - discard changes
+                        return True
             
-            # No changes or new session
+            # No changes or empty new session
             return True
             
         except Exception as e:

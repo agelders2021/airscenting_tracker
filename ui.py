@@ -632,20 +632,42 @@ class AirScentingUI:
         """Show the About dialog"""
         show_about(self.root, version="1.0.0-alpha")
     
+    def get_json_config_path(self):
+        """Get the path to config file in JSON folder (primary location)"""
+        if self.machine_db_path:
+            json_folder = Path(self.machine_db_path) / "JSON"
+            if json_folder.exists():
+                return json_folder / ".airscenting_config.json"
+        return None
+    
     def load_config(self):
-        """Load configuration from file"""
+        """Load configuration from file
+        
+        Checks JSON folder first (primary), falls back to home directory (legacy)
+        """
         default_config = {
             "handler_name": "",
             "last_handler_name": "",
             "terrain_types": get_default_terrain_types(),
             "distraction_types": get_default_distraction_types(),
             "training_locations": [],
+            "dog_names": [],  # Added: store dog names in config
             "db_type": "sqlite"  # Default database type
         }
         
-        if self.config_file.exists():
+        # Try JSON folder first (primary location)
+        json_config_path = self.get_json_config_path()
+        config_path = None
+        
+        if json_config_path and json_config_path.exists():
+            config_path = json_config_path
+        elif self.config_file.exists():
+            # Fall back to home directory (legacy location)
+            config_path = self.config_file
+        
+        if config_path:
             try:
-                with open(self.config_file, 'r') as f:
+                with open(config_path, 'r') as f:
                     saved = json.load(f)
                     # Add terrain_types if not present
                     if "terrain_types" not in saved:
@@ -656,6 +678,9 @@ class AirScentingUI:
                     # Add training_locations if not present
                     if "training_locations" not in saved:
                         saved["training_locations"] = []
+                    # Add dog_names if not present
+                    if "dog_names" not in saved:
+                        saved["dog_names"] = []
                     default_config.update(saved)
             except:
                 pass
@@ -663,8 +688,18 @@ class AirScentingUI:
         return default_config
     
     def save_config(self):
-        """Save configuration to file"""
-        with open(self.config_file, 'w') as f:
+        """Save configuration to file
+        
+        Saves to JSON folder (primary) if available, otherwise to home directory
+        """
+        # Determine save path - prefer JSON folder
+        json_config_path = self.get_json_config_path()
+        if json_config_path:
+            save_path = json_config_path
+        else:
+            save_path = self.config_file
+        
+        with open(save_path, 'w') as f:
             json.dump(self.config, f, indent=2)
     
     def setup_setup_tab(self):
@@ -1062,8 +1097,7 @@ class AirScentingUI:
         if terrain_type:
             # Check for duplicates
             if terrain_type in self.accumulated_terrains:
-                self.show_status_message("Duplicate", "info")  # PHASE3A
-                messagebox.showinfo("Duplicate", f"'{terrain_type}' is already in the list")
+                self.show_status_message(f"'{terrain_type}' is already in the list", "info")
                 sv.terrain.set("")
                 return
             
@@ -1868,9 +1902,7 @@ class AirScentingUI:
         # Clear from UI
         sv.db_password.set("")
         
-        self.show_status_message(f"Forgot saved password for {db_type}", "info")
-        self.show_status_message("Password Cleared", "info")  # PHASE3A
-        messagebox.showinfo("Password Cleared", f"Saved password for {db_type} has been cleared.")
+        self.show_status_message(f"Saved password for {db_type} has been cleared", "info")
     
     def prepare_db_connection(self, db_type):
         """Prepare database connection by setting password if needed"""

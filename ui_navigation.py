@@ -743,7 +743,6 @@ class Navigation:
             
             if success:
                 sv.status.set(f"Session #{session_num} marked as deleted")
-                messagebox.showinfo("Success", f"Session #{session_num} marked as deleted")
                 
                 # Refresh navigation to reflect filter
                 self.update_navigation_buttons()
@@ -783,7 +782,6 @@ class Navigation:
             
             if success:
                 sv.status.set(f"Session #{session_num} restored to active")
-                messagebox.showinfo("Success", f"Session #{session_num} restored to active")
                 
                 # Refresh navigation to reflect filter
                 self.update_navigation_buttons()
@@ -831,7 +829,6 @@ class Navigation:
                 
                 if success:
                     sv.status.set(f"Session marked as deleted")
-                    messagebox.showinfo("Success", "Session marked as deleted")
                     
                     # Reload session to update display
                     self.load_session_by_number(self.ui.current_db_session_number)
@@ -873,7 +870,6 @@ class Navigation:
                 
                 if success:
                     sv.status.set(f"Session restored to active")
-                    messagebox.showinfo("Success", "Session restored to active")
                     
                     # Reload session to update display
                     self.load_session_by_number(self.ui.current_db_session_number)
@@ -945,7 +941,6 @@ class Navigation:
         if success:
             # Add to status bar message history
             self.ui.show_status_message(f"Deleted {len(session_numbers)} session(s)", "info")
-            messagebox.showinfo("Success", f"Deleted {len(session_numbers)} session(s)")
             
             # Clear selected sessions and reset to new session
             self.ui.selected_sessions = []
@@ -971,7 +966,6 @@ class Navigation:
         if success_count > 0:
             # Add to status bar message history
             self.ui.show_status_message(f"Restored {success_count} session(s) to active", "info")
-            messagebox.showinfo("Success", f"Restored {success_count} session(s) to active")
             
             # Reset to new session
             self.ui.selected_sessions = []
@@ -996,7 +990,6 @@ class Navigation:
         if success_count > 0:
             # Add to status bar message history
             self.ui.show_status_message(f"Marked {success_count} session(s) as deleted", "info")
-            messagebox.showinfo("Success", f"Marked {success_count} session(s) as deleted")
             
             # Reset to new session
             self.ui.selected_sessions = []

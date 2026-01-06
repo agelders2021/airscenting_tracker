@@ -40,7 +40,9 @@ class DatabaseManager:
         return old_db_type
     
     def _restore_db_context(self, old_db_type):
-        """Restore the original database type"""
+        """Restore the original database type (safe to call with None)"""
+        if old_db_type is None:
+            return  # Nothing to restore
         config.DB_TYPE = old_db_type
         engine.dispose()
         from importlib import reload
@@ -54,6 +56,7 @@ class DatabaseManager:
         if not self._db_exists():
             return
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -85,6 +88,7 @@ class DatabaseManager:
         if not self._db_exists():
             return default
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -119,6 +123,7 @@ class DatabaseManager:
         if not self._db_exists():
             return 1
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -152,6 +157,7 @@ class DatabaseManager:
         Returns:
             (success: bool, message: str, session_id: int or None)
         """
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -249,6 +255,7 @@ class DatabaseManager:
         
         dog_name = dog_name.strip()
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -315,6 +322,7 @@ class DatabaseManager:
         
         dog_name = dog_name.strip()
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -351,6 +359,7 @@ class DatabaseManager:
         
         dog_name = dog_name.strip()
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -389,6 +398,7 @@ class DatabaseManager:
         
         dog_name = dog_name.strip()
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -510,6 +520,7 @@ class DatabaseManager:
         
         dog_name = dog_name.strip()
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -552,6 +563,7 @@ class DatabaseManager:
     
     def save_selected_terrains(self, session_id, terrain_list):
         """Save selected terrains for a session"""
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -588,6 +600,7 @@ class DatabaseManager:
     
     def load_selected_terrains(self, session_id):
         """Load selected terrains for a session"""
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -610,6 +623,7 @@ class DatabaseManager:
     
     def save_subject_responses(self, session_id, responses_list):
         """Save subject responses for a session"""
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -649,6 +663,7 @@ class DatabaseManager:
     
     def load_subject_responses(self, session_id):
         """Load subject responses for a session"""
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -686,6 +701,7 @@ class DatabaseManager:
         if not self._db_exists():
             return []
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -710,6 +726,7 @@ class DatabaseManager:
         if not dog_name:
             return False, "Dog name cannot be empty"
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -733,6 +750,7 @@ class DatabaseManager:
     
     def remove_dog(self, dog_name):
         """Remove a dog from the database"""
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -758,6 +776,7 @@ class DatabaseManager:
         if not self._db_exists():
             return []
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -782,6 +801,7 @@ class DatabaseManager:
         if not location:
             return False, "Location cannot be empty"
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -805,6 +825,7 @@ class DatabaseManager:
     
     def remove_location(self, location):
         """Remove a training location"""
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -830,6 +851,7 @@ class DatabaseManager:
         if not self._db_exists():
             return []
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -854,6 +876,7 @@ class DatabaseManager:
         if not terrain:
             return False, "Terrain type cannot be empty"
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -881,6 +904,7 @@ class DatabaseManager:
     
     def remove_terrain_type(self, terrain):
         """Remove a terrain type"""
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -901,6 +925,7 @@ class DatabaseManager:
     
     def move_terrain_up(self, terrain):
         """Move terrain type up in sort order"""
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -951,6 +976,7 @@ class DatabaseManager:
     
     def move_terrain_down(self, terrain):
         """Move terrain type down in sort order"""
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1001,6 +1027,7 @@ class DatabaseManager:
     
     def restore_default_terrain_types(self):
         """Replace all terrain types with defaults"""
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1033,6 +1060,7 @@ class DatabaseManager:
         if not self._db_exists():
             return []
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1057,6 +1085,7 @@ class DatabaseManager:
         if not distraction:
             return False, "Distraction type cannot be empty"
         
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1084,6 +1113,7 @@ class DatabaseManager:
     
     def remove_distraction_type(self, distraction):
         """Remove a distraction type"""
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1104,6 +1134,7 @@ class DatabaseManager:
     
     def move_distraction_up(self, distraction):
         """Move distraction type up in sort order"""
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1154,6 +1185,7 @@ class DatabaseManager:
     
     def move_distraction_down(self, distraction):
         """Move distraction type down in sort order"""
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1204,6 +1236,7 @@ class DatabaseManager:
     
     def restore_default_distraction_types(self):
         """Replace all distraction types with defaults"""
+        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
