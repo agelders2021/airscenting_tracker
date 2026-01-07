@@ -99,6 +99,14 @@ class Stringvars:
         
         # ===== STATUS BAR =====
         self.status = tk.StringVar(master=master, value="Ready")
+        
+        # ===== BACKUP STATUS FLAGS =====
+        # Track if user has been notified about secondary backup folder being unavailable
+        # Resets on each application startup; only notify once per session
+        self.secondary_unavailable_notified = False
+        
+        # Track if background sync is in progress (blocks Edit/Delete operations)
+        self.sync_in_progress = False
     
     # ========================================
     # HELPER METHODS - SESSION OPERATIONS

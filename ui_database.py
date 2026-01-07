@@ -9,6 +9,7 @@ from datetime import datetime
 import config
 from database import engine, get_connection
 from ui_utils import get_username, get_default_terrain_types, get_default_distraction_types
+from backup_management import generate_session_uuid, get_current_update_time
 
 
 class DatabaseManager:
@@ -40,9 +41,7 @@ class DatabaseManager:
         return old_db_type
     
     def _restore_db_context(self, old_db_type):
-        """Restore the original database type (safe to call with None)"""
-        if old_db_type is None:
-            return  # Nothing to restore
+        """Restore the original database type"""
         config.DB_TYPE = old_db_type
         engine.dispose()
         from importlib import reload
@@ -56,7 +55,6 @@ class DatabaseManager:
         if not self._db_exists():
             return
         
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -88,7 +86,6 @@ class DatabaseManager:
         if not self._db_exists():
             return default
         
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -123,7 +120,6 @@ class DatabaseManager:
         if not self._db_exists():
             return 1
         
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -155,22 +151,25 @@ class DatabaseManager:
             session_data: dict with session fields
             
         Returns:
-            (success: bool, message: str, session_id: int or None)
+            (success: bool, message: str, session_id: int or None, uuid: str or None, update_time: str or None)
         """
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
+            session_uuid = None
+            update_time = None
             
             with get_connection() as conn:
                 # Check if session exists
                 result = conn.execute(
-                    text("SELECT id FROM training_sessions WHERE session_number = :session_number AND dog_name = :dog_name"),
+                    text("SELECT id, uuid FROM training_sessions WHERE session_number = :session_number AND dog_name = :dog_name"),
                     {"session_number": session_data["session_number"], "dog_name": session_data["dog_name"]}
                 )
                 existing = result.fetchone()
                 
                 if existing:
-                    # Update existing session
+                    # Update existing session - update_time changes, but UUID stays the same
+                    update_time = get_current_update_time()
+                    session_uuid = existing[1]  # Preserve existing UUID
                     conn.execute(
                         text("""
                             UPDATE training_sessions 
@@ -190,39 +189,49 @@ class DatabaseManager:
                                 search_type = :search_type,
                                 drive_level = :drive_level,
                                 subjects_found = :subjects_found,
-                                start_time = :start_time,
-                                finish_time = :finish_time,
                                 comments = :comments,
                                 image_files = :image_files,
-                                status = 'active',
                                 user_name = :user_name,
-                                updated_at = CURRENT_TIMESTAMP
+                                updated_at = CURRENT_TIMESTAMP,
+                                update_time = :update_time
                             WHERE session_number = :session_number AND dog_name = :old_dog_name
                         """),
                         {
                             **session_data,
                             "old_dog_name": session_data["dog_name"],
-                            "user_name": get_username()
+                            "user_name": get_username(),
+                            "update_time": update_time
                         }
                     )
                     conn.commit()
                     session_id = existing[0]
                     message = f"Session #{session_data['session_number']} updated successfully!"
                 else:
-                    # Insert new session
+                    # Insert new session - generate UUID and set update_time
+                    session_uuid = generate_session_uuid()
+                    update_time = get_current_update_time()
+                    # entry_type comes from session_data (set by calling code, e.g., 'Airscent')
+                    entry_type = session_data.get("entry_type", "")
+                    
                     conn.execute(
                         text("""
                             INSERT INTO training_sessions 
                             (date, session_number, handler, session_purpose, field_support, dog_name, location,
                              search_area_size, num_subjects, handler_knowledge, weather, temperature, 
-                             wind_direction, wind_speed, search_type, drive_level, subjects_found, 
-                             start_time, finish_time, comments, image_files, status, user_name)
+                             wind_direction, wind_speed, search_type, drive_level, subjects_found, comments, 
+                             image_files, user_name, entry_type, update_time, uuid)
                             VALUES (:date, :session_number, :handler, :session_purpose, :field_support, :dog_name, :location,
                                     :search_area_size, :num_subjects, :handler_knowledge, :weather, :temperature, 
-                                    :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, 
-                                    :start_time, :finish_time, :comments, :image_files, 'active', :user_name)
+                                    :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, :comments, 
+                                    :image_files, :user_name, :entry_type, :update_time, :uuid)
                         """),
-                        {**session_data, "user_name": get_username()}
+                        {
+                            **session_data, 
+                            "user_name": get_username(),
+                            "entry_type": entry_type,
+                            "update_time": update_time,
+                            "uuid": session_uuid
+                        }
                     )
                     conn.commit()
                     
@@ -236,12 +245,15 @@ class DatabaseManager:
             
             self._restore_db_context(old_db_type)
             
-            return True, message, session_id
+            # Convert update_time to ISO string for JSON serialization
+            update_time_str = update_time.isoformat() if update_time else None
+            
+            return True, message, session_id, session_uuid, update_time_str
             
         except Exception as e:
             self._restore_db_context(old_db_type)
             print(f"Error saving session: {e}")
-            return False, f"Database error: {e}", None
+            return False, f"Database error: {e}", None, None, None
     
     def load_session(self, session_number, dog_name):
         """
@@ -255,7 +267,6 @@ class DatabaseManager:
         
         dog_name = dog_name.strip()
         
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -265,21 +276,13 @@ class DatabaseManager:
                         SELECT id, date, handler, session_purpose, field_support, dog_name, location,
                                search_area_size, num_subjects, handler_knowledge, weather, temperature,
                                wind_direction, wind_speed, search_type, drive_level, subjects_found, 
-                               start_time, finish_time, comments, image_files
+                               comments, image_files, entry_type, update_time, uuid
                         FROM training_sessions 
                         WHERE session_number = :session_number AND dog_name = :dog_name
                     """),
                     {"session_number": session_number, "dog_name": dog_name}
                 )
                 row = result.fetchone()
-
-                # DEBUG - see what the query actually returned
-                if row:
-                    print(f"DEBUG: Query returned {len(row)} columns")
-                    print(f"DEBUG: row[3] (session_purpose) = '{row[3]}'")
-                    print(f"DEBUG: row[6] (location) = '{row[6]}'")
-                    print(f"DEBUG: Full row = {row}")
-                
             
             self._restore_db_context(old_db_type)
             
@@ -302,10 +305,11 @@ class DatabaseManager:
                     "search_type": row[14] or "",
                     "drive_level": row[15] or "",
                     "subjects_found": row[16] or "",
-                    "start_time": row[17] or "",
-                    "finish_time": row[18] or "",
-                    "comments": row[19] or "",
-                    "image_files": row[20] or ""
+                    "comments": row[17] or "",
+                    "image_files": row[18] or "",
+                    "entry_type": row[19] or "",
+                    "update_time": str(row[20]) if row[20] else "",
+                    "uuid": row[21] or ""
                 }
             
             return None
@@ -322,7 +326,6 @@ class DatabaseManager:
         
         dog_name = dog_name.strip()
         
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -343,83 +346,50 @@ class DatabaseManager:
             print(f"Error deleting sessions: {e}")
             return False, f"Database error: {e}"
     
-    def update_session_status(self, session_number, dog_name, new_status):
-        """Update the status of a session (for delete/undelete)
-        
-        Args:
-            session_number: Session number to update
-            dog_name: Dog name
-            new_status: 'active' or 'deleted'
-        
-        Returns:
-            bool: True if successful, False otherwise
+    def get_sessions_for_dog(self, dog_name, status_filter=None, entry_type=None):
         """
-        if not dog_name or not dog_name.strip():
-            return False
-        
-        dog_name = dog_name.strip()
-        
-        old_db_type = None
-        try:
-            old_db_type = self._switch_db_context()
-            
-            with get_connection() as conn:
-                conn.execute(
-                    text("""
-                        UPDATE training_sessions 
-                        SET status = :status, updated_at = CURRENT_TIMESTAMP
-                        WHERE session_number = :session_number AND dog_name = :dog_name
-                    """),
-                    {"status": new_status, "session_number": session_number, "dog_name": dog_name}
-                )
-                conn.commit()
-            
-            self._restore_db_context(old_db_type)
-            
-            return True
-            
-        except Exception as e:
-            self._restore_db_context(old_db_type)
-            print(f"Error updating session status: {e}")
-            return False
-    
-    def get_sessions_for_dog(self, dog_name, status_filter='active'):
-        """Get sessions for a specific dog filtered by status
+        Get all sessions for a specific dog
         
         Args:
             dog_name: Name of the dog
-            status_filter: 'active', 'deleted', or 'both'
-        
-        Returns:
-            List of tuples: (session_number, date, handler, dog_name)
+            status_filter: Optional filter for session status (e.g., 'active', 'deleted')
+                          Currently accepted but not filtered (for future soft-delete feature)
+            entry_type: Optional filter for entry type (e.g., 'Airscent', 'Trailing')
+                       When set, filters to that type plus NULL/empty for backward compatibility
         """
         if not dog_name or not dog_name.strip():
             return []
         
         dog_name = dog_name.strip()
         
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
-            # Build WHERE clause based on status filter
-            if status_filter == 'active':
-                status_where = "AND (status = 'active' OR status IS NULL)"
-            elif status_filter == 'deleted':
-                status_where = "AND status = 'deleted'"
-            else:  # 'both'
-                status_where = ""
-            
             with get_connection() as conn:
-                result = conn.execute(
-                    text(f"""
-                        SELECT session_number, date, handler, dog_name
-                        FROM training_sessions 
-                        WHERE dog_name = :dog_name {status_where}
-                        ORDER BY date, session_number
-                    """),
-                    {"dog_name": dog_name}
-                )
+                if entry_type:
+                    # Filter by entry_type with backward compatibility for existing data
+                    # (existing sessions have NULL or empty entry_type)
+                    result = conn.execute(
+                        text("""
+                            SELECT session_number, date, handler, dog_name
+                            FROM training_sessions 
+                            WHERE dog_name = :dog_name
+                              AND (entry_type = :entry_type OR entry_type IS NULL OR entry_type = '')
+                            ORDER BY session_number
+                        """),
+                        {"dog_name": dog_name, "entry_type": entry_type}
+                    )
+                else:
+                    # No entry_type filter - return all sessions
+                    result = conn.execute(
+                        text("""
+                            SELECT session_number, date, handler, dog_name
+                            FROM training_sessions 
+                            WHERE dog_name = :dog_name
+                            ORDER BY session_number
+                        """),
+                        {"dog_name": dog_name}
+                    )
                 sessions = result.fetchall()
             
             self._restore_db_context(old_db_type)
@@ -434,136 +404,10 @@ class DatabaseManager:
                 print(f"Error getting sessions: {e}")
                 return []
     
-    def update_session_status(self, session_number, dog_name, new_status):
-        """Update the status of a session (for delete/undelete)
-        
-        Args:
-            session_number: Session number to update
-            dog_name: Dog name
-            new_status: 'active' or 'deleted'
-        
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        if not dog_name or not dog_name.strip():
-            return False
-        
-        dog_name = dog_name.strip()
-        
-        try:
-            with get_connection() as conn:
-                conn.execute(
-                    text("""
-                        UPDATE training_sessions 
-                        SET status = :status, updated_at = CURRENT_TIMESTAMP
-                        WHERE session_number = :session_number AND dog_name = :dog_name
-                    """),
-                    {"status": new_status, "session_number": session_number, "dog_name": dog_name}
-                )
-                conn.commit()
-            
-            return True
-            
-        except Exception as e:
-            print(f"Error updating session status: {e}")
-            return False
-    
-    def get_session_status(self, session_number, dog_name):
-        """Get the status of a specific session
-        
-        Args:
-            session_number: Session number (database value)
-            dog_name: Dog name
-        
-        Returns:
-            str: 'active', 'deleted', or None if not found
-        """
-        if not dog_name or not dog_name.strip():
-            return None
-        
-        dog_name = dog_name.strip()
-        
-        try:
-            with get_connection() as conn:
-                result = conn.execute(
-                    text("""
-                        SELECT status 
-                        FROM training_sessions 
-                        WHERE session_number = :session_number AND dog_name = :dog_name
-                    """),
-                    {"session_number": session_number, "dog_name": dog_name}
-                )
-                row = result.fetchone()
-            
-            if row:
-                # Return status, defaulting to 'active' if NULL
-                return row[0] if row[0] else 'active'
-            return None
-            
-        except Exception as e:
-            print(f"Error getting session status: {e}")
-            return None
-    
-    def compute_session_number(self, dog_name, session_date, status_filter='active'):
-        """Compute the ordinal session number for a session based on filtered list
-        
-        Args:
-            dog_name: Name of the dog
-            session_date: Date of the session (as string 'YYYY-MM-DD')
-            status_filter: 'active', 'deleted', or 'both'
-        
-        Returns:
-            int: Ordinal position (1-based) in the filtered list
-        """
-        if not dog_name or not dog_name.strip():
-            return 1
-        
-        dog_name = dog_name.strip()
-        
-        old_db_type = None
-        try:
-            old_db_type = self._switch_db_context()
-            
-            # Build WHERE clause based on status filter
-            if status_filter == 'active':
-                status_where = "AND (status = 'active' OR status IS NULL)"
-            elif status_filter == 'deleted':
-                status_where = "AND status = 'deleted'"
-            else:  # 'both'
-                status_where = ""
-            
-            with get_connection() as conn:
-                # Count sessions with same dog, matching status, with date <= given date
-                result = conn.execute(
-                    text(f"""
-                        SELECT COUNT(*) 
-                        FROM training_sessions 
-                        WHERE dog_name = :dog_name 
-                        AND date <= :session_date
-                        {status_where}
-                    """),
-                    {"dog_name": dog_name, "session_date": session_date}
-                )
-                count = result.scalar()
-            
-            self._restore_db_context(old_db_type)
-            
-            # Return count as ordinal position (minimum 1)
-            return count if count > 0 else 1
-            
-        except Exception as e:
-            self._restore_db_context(old_db_type)
-            if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
-                return 1
-            else:
-                print(f"Error computing session number: {e}")
-                return 1
-    
     # ===== SELECTED TERRAINS =====
     
     def save_selected_terrains(self, session_id, terrain_list):
         """Save selected terrains for a session"""
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -600,7 +444,6 @@ class DatabaseManager:
     
     def load_selected_terrains(self, session_id):
         """Load selected terrains for a session"""
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -623,7 +466,6 @@ class DatabaseManager:
     
     def save_subject_responses(self, session_id, responses_list):
         """Save subject responses for a session"""
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -663,7 +505,6 @@ class DatabaseManager:
     
     def load_subject_responses(self, session_id):
         """Load subject responses for a session"""
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -701,7 +542,6 @@ class DatabaseManager:
         if not self._db_exists():
             return []
         
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -726,7 +566,6 @@ class DatabaseManager:
         if not dog_name:
             return False, "Dog name cannot be empty"
         
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -750,7 +589,6 @@ class DatabaseManager:
     
     def remove_dog(self, dog_name):
         """Remove a dog from the database"""
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -776,7 +614,6 @@ class DatabaseManager:
         if not self._db_exists():
             return []
         
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -801,7 +638,6 @@ class DatabaseManager:
         if not location:
             return False, "Location cannot be empty"
         
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -825,7 +661,6 @@ class DatabaseManager:
     
     def remove_location(self, location):
         """Remove a training location"""
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -851,7 +686,6 @@ class DatabaseManager:
         if not self._db_exists():
             return []
         
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -876,7 +710,6 @@ class DatabaseManager:
         if not terrain:
             return False, "Terrain type cannot be empty"
         
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -904,7 +737,6 @@ class DatabaseManager:
     
     def remove_terrain_type(self, terrain):
         """Remove a terrain type"""
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -925,7 +757,6 @@ class DatabaseManager:
     
     def move_terrain_up(self, terrain):
         """Move terrain type up in sort order"""
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -976,7 +807,6 @@ class DatabaseManager:
     
     def move_terrain_down(self, terrain):
         """Move terrain type down in sort order"""
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1027,7 +857,6 @@ class DatabaseManager:
     
     def restore_default_terrain_types(self):
         """Replace all terrain types with defaults"""
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1060,7 +889,6 @@ class DatabaseManager:
         if not self._db_exists():
             return []
         
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1085,7 +913,6 @@ class DatabaseManager:
         if not distraction:
             return False, "Distraction type cannot be empty"
         
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1113,7 +940,6 @@ class DatabaseManager:
     
     def remove_distraction_type(self, distraction):
         """Remove a distraction type"""
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1134,7 +960,6 @@ class DatabaseManager:
     
     def move_distraction_up(self, distraction):
         """Move distraction type up in sort order"""
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1185,7 +1010,6 @@ class DatabaseManager:
     
     def move_distraction_down(self, distraction):
         """Move distraction type down in sort order"""
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1236,7 +1060,6 @@ class DatabaseManager:
     
     def restore_default_distraction_types(self):
         """Replace all distraction types with defaults"""
-        old_db_type = None
         try:
             old_db_type = self._switch_db_context()
             
@@ -1299,14 +1122,6 @@ class DatabaseOperations:
             dog_name = sv_module.sv.dog.get()
         return self.db_manager.get_next_session_number(dog_name)
     
-    def get_session_status(self, session_number, dog_name):
-        """Get the status of a specific session"""
-        db_mgr = get_db_manager(self.db_type)
-        session = db_mgr.get_session_by_number(dog_name, session_number)
-        if session:
-            return session.get('status', 'active')
-        return None
-
     def save_db_setting(self, key, value):
         """Save a setting to database"""
         return self.db_manager.save_setting(key, value)
@@ -1353,7 +1168,7 @@ class DatabaseOperations:
             session_dict["drive_level"],    # row[14]
             session_dict["subjects_found"], # row[15]
             session_dict["image_files"],    # row[16]
-            session_dict["comments"]        # row[17] ← ADDED!
+            session_dict["comments"]        # row[17] â† ADDED!
         )
     
     def get_session_with_related_data(self, session_number, dog_name):
@@ -1383,47 +1198,22 @@ class DatabaseOperations:
         
         return session_dict
     
-    def get_all_sessions_for_dog(self, dog_name, status_filter='active'):
-        """Get all sessions for a dog filtered by status (returns list of tuples)"""
-        return self.db_manager.get_sessions_for_dog(dog_name, status_filter)
-    
-    def update_session_status(self, session_number, dog_name, new_status):
-        """Update the status of a session (for delete/undelete)
-        
-        Args:
-            session_number: Session number to update
-            dog_name: Dog name
-            new_status: 'active' or 'deleted'
-        
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        return self.db_manager.update_session_status(session_number, dog_name, new_status)
+    def get_all_sessions_for_dog(self, dog_name, status_filter=None, entry_type=None):
+        """Get all sessions for a dog (returns list of tuples)"""
+        return self.db_manager.get_sessions_for_dog(dog_name, status_filter, entry_type)
     
     def get_session_status(self, session_number, dog_name):
-        """Get the status of a specific session
+        """
+        Get the status of a session (for soft-delete feature).
         
-        Args:
-            session_number: Session number (database value)
-            dog_name: Dog name
+        Currently returns 'active' as default since status column not yet implemented.
+        This is a placeholder for future soft-delete functionality.
         
         Returns:
-            str: 'active', 'deleted', or None if not found
+            str: Session status ('active' or 'deleted')
         """
-        return self.db_manager.get_session_status(session_number, dog_name)
-    
-    def compute_session_number(self, dog_name, session_date, status_filter='active'):
-        """Compute ordinal session number based on filter
-        
-        Args:
-            dog_name: Dog name
-            session_date: Session date
-            status_filter: 'active', 'deleted', or 'both'
-        
-        Returns:
-            int: Ordinal position in filtered list
-        """
-        return self.db_manager.compute_session_number(dog_name, session_date, status_filter)
+        # TODO: Implement when status column is added to schema
+        return "active"
     
     def delete_sessions(self, session_numbers, dog_name):
         """Delete multiple sessions"""

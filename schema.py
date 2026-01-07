@@ -103,14 +103,14 @@ def create_tables():
         search_type TEXT,
         drive_level TEXT,
         subjects_found TEXT,
-        start_time TEXT,
-        finish_time TEXT,
         comments TEXT,
         image_files TEXT,
-        status TEXT DEFAULT 'active',
         user_name TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        entry_type TEXT,
+        update_time TIMESTAMP,
+        uuid TEXT,
         UNIQUE(session_number, dog_name)
     )
     """
@@ -179,3 +179,62 @@ def drop_tables():
 if __name__ == "__main__":
     # Allow running this file directly to create tables
     create_tables()
+
+
+def migrate_add_backup_columns():
+    """
+    Migration: Add entry_type, update_time, and uuid columns to training_sessions table.
+    
+    Safe to run multiple times - checks if columns exist before adding.
+    Should be called at application startup to ensure schema is up to date.
+    
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    columns_to_add = [
+        ("entry_type", "TEXT"),
+        ("update_time", "TIMESTAMP"),
+        ("uuid", "TEXT")
+    ]
+    
+    added_columns = []
+    already_exists = []
+    
+    try:
+        with get_connection() as conn:
+            # Check which columns already exist
+            if DB_TYPE == "sqlite":
+                result = conn.execute(text("PRAGMA table_info(training_sessions)"))
+                existing_columns = {row[1] for row in result.fetchall()}
+            else:
+                # PostgreSQL/MySQL - query information_schema
+                result = conn.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'training_sessions'
+                """))
+                existing_columns = {row[0] for row in result.fetchall()}
+            
+            # Add missing columns
+            for col_name, col_type in columns_to_add:
+                if col_name in existing_columns:
+                    already_exists.append(col_name)
+                else:
+                    # Add the column
+                    alter_sql = f"ALTER TABLE training_sessions ADD COLUMN {col_name} {col_type}"
+                    conn.execute(text(alter_sql))
+                    added_columns.append(col_name)
+            
+            conn.commit()
+        
+        # Build result message
+        messages = []
+        if added_columns:
+            messages.append(f"Added columns: {', '.join(added_columns)}")
+        if already_exists:
+            messages.append(f"Already existed: {', '.join(already_exists)}")
+        
+        return True, "; ".join(messages) if messages else "No changes needed"
+        
+    except Exception as e:
+        return False, f"Migration error: {e}"

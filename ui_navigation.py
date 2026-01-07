@@ -61,7 +61,7 @@ class Navigation:
                 # Get filtered sessions for current dog
                 db_ops = DatabaseOperations(self.ui)
                 status_filter = sv.session_status_filter.get()
-                sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
+                sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter, entry_type="Airscent")
                 
                 if not sessions:
                     self.ui.a_prev_session_btn.config(state="disabled")
@@ -125,7 +125,7 @@ class Navigation:
                 # Get filtered sessions for current dog
                 db_ops = DatabaseOperations(self.ui)
                 status_filter = sv.session_status_filter.get()
-                sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
+                sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter, entry_type="Airscent")
                 
                 if not sessions:
                     return
@@ -176,7 +176,7 @@ class Navigation:
                 # Get filtered sessions for current dog
                 db_ops = DatabaseOperations(self.ui)
                 status_filter = sv.session_status_filter.get()
-                sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
+                sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter, entry_type="Airscent")
                 
                 if not sessions:
                     return
@@ -383,7 +383,7 @@ class Navigation:
                 computed_number = self.ui.selected_sessions.index(session_number) + 1
             else:
                 # Normal mode - use position in filtered database list
-                filtered_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
+                filtered_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter, entry_type="Airscent")
                 session_numbers = [s[0] for s in filtered_sessions]
                 
                 # Find position (1-indexed)
@@ -483,6 +483,16 @@ class Navigation:
         from sv import sv
         from ui_database import DatabaseOperations
         
+        # Block if sync is in progress
+        if sv.sync_in_progress:
+            messagebox.showinfo(
+                "Sync In Progress",
+                "Please wait - background sync is in progress.\n\n"
+                "Edit/Delete operations are temporarily disabled to ensure data integrity.\n"
+                "This should only take a few seconds."
+            )
+            return
+        
         dog_name = sv.dog.get()
         
         # Check if dog is selected
@@ -492,7 +502,7 @@ class Navigation:
         
         db_ops = DatabaseOperations(self.ui)
         status_filter = sv.session_status_filter.get()
-        sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
+        sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter, entry_type="Airscent")
         
         if not sessions:
             messagebox.showinfo("No Sessions", f"No training sessions found for {dog_name}.")
@@ -560,7 +570,7 @@ class Navigation:
             
             # Get filtered sessions from database
             db_ops = DatabaseOperations(self.ui)
-            new_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
+            new_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter, entry_type="Airscent")
             
             # Clear and repopulate listbox
             listbox.delete(0, "end")
@@ -718,6 +728,15 @@ class Navigation:
         from ui_database import DatabaseOperations
         from tkinter import messagebox
         
+        # Block if sync is in progress
+        if sv.sync_in_progress:
+            messagebox.showinfo(
+                "Sync In Progress",
+                "Please wait - background sync is in progress.\n\n"
+                "Delete operations are temporarily disabled."
+            )
+            return
+        
         session_number = sv.session_number.get()
         dog_name = sv.dog.get()
         
@@ -796,6 +815,15 @@ class Navigation:
         from sv import sv
         from ui_database import DatabaseOperations
         from tkinter import messagebox
+        
+        # Block if sync is in progress
+        if sv.sync_in_progress:
+            messagebox.showinfo(
+                "Sync In Progress",
+                "Please wait - background sync is in progress.\n\n"
+                "Delete operations are temporarily disabled."
+            )
+            return
         
         session_number = sv.session_number.get()
         dog_name = sv.dog.get()
@@ -902,7 +930,7 @@ class Navigation:
         
         # Get filtered list and find position
         db_ops = DatabaseOperations(self.ui)
-        filtered_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter)
+        filtered_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter, entry_type="Airscent")
         session_numbers = [s[0] for s in filtered_sessions]
         
         if db_session in session_numbers:

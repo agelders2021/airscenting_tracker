@@ -162,6 +162,13 @@ class FileOperations:
             self.ui.a_delete_map_button.config(state="normal")
             
             sv.status.set(f"{len(copied_files)} file(s) copied to trail maps folder")
+            
+            # Check if secondary backup was configured but unavailable
+            # Notify user once per session via status bar
+            if not secondary_folder and sv.backup_folder.get().strip():
+                if not sv.secondary_unavailable_notified:
+                    sv.secondary_unavailable_notified = True
+                    sv.status.set("Warning: Secondary backup folder unavailable - files saved to primary only")
         else:
             messagebox.showerror("Error", "Only PDF, JPG, and PNG files supported!")
     

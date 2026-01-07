@@ -451,9 +451,11 @@ class MiscDataOperations:
                 if last_dog:
                     sv.dog.set(last_dog)
                     # Update session number for this dog (on_dog_changed not triggered by programmatic set)
-                    # Use computed next number based on filter
+                    # Use computed next number based on filter (Airscent sessions only)
                     status_filter = sv.session_status_filter.get()
-                    filtered_sessions = DatabaseOperations(self.ui).get_all_sessions_for_dog(last_dog, status_filter)
+                    filtered_sessions = DatabaseOperations(self.ui).get_all_sessions_for_dog(
+                        last_dog, status_filter, entry_type="Airscent"
+                    )
                     next_computed = len(filtered_sessions) + 1
                     sv.session_number.set(str(next_computed))
             except Exception as e:
@@ -480,9 +482,78 @@ class MiscDataOperations:
             # Update navigation buttons now that dog and session are loaded
             if hasattr(self.ui, 'a_prev_session_btn'):
                 self.ui.navigation.update_navigation_buttons()
+            self.ui.root.after(100, step10)
+        
+        def step10():
+            # Start background sync between DB and JSON folders
+            self._start_background_sync()
         
         # Start the chain with database validation
         step0()
+    
+    def _start_background_sync(self):
+        """Start background sync between database and JSON backup folders."""
+        from backup_management import get_sync_manager
+        from ui_utils import get_primary_json_folder, get_secondary_json_folder
+        
+        try:
+            db_type = sv.db_type.get()
+            primary_folder = get_primary_json_folder()
+            secondary_folder = get_secondary_json_folder()
+            
+            if not primary_folder:
+                print("Sync: No primary JSON folder configured, skipping sync")
+                return
+            
+            sync_manager = get_sync_manager()
+            
+            # Set flag to block Edit/Delete during sync
+            sv.sync_in_progress = True
+            
+            def on_sync_complete(results):
+                """Called when sync finishes (on background thread)"""
+                # Schedule UI update on main thread
+                def update_ui():
+                    sv.sync_in_progress = False
+                    
+                    # Build status message
+                    total_changes = (
+                        results.get("db_to_json", 0) +
+                        results.get("json_to_db", 0) +
+                        results.get("primary_to_secondary", 0) +
+                        results.get("secondary_to_primary", 0)
+                    )
+                    
+                    if total_changes > 0:
+                        sv.status.set(f"Sync complete: {total_changes} file(s) synchronized")
+                    else:
+                        sv.status.set("Sync complete: All backups up to date")
+                    
+                    if results.get("errors"):
+                        print(f"Sync errors: {results['errors']}")
+                
+                self.ui.root.after(0, update_ui)
+            
+            def status_callback(message):
+                """Update status bar during sync"""
+                def update():
+                    sv.status.set(message)
+                self.ui.root.after(0, update)
+            
+            # Start sync
+            sync_manager.start_background_sync(
+                db_type=db_type,
+                primary_folder=str(primary_folder) if primary_folder else None,
+                secondary_folder=str(secondary_folder) if secondary_folder else None,
+                on_complete=on_sync_complete,
+                status_callback=status_callback
+            )
+            
+            print("Sync: Background sync started")
+            
+        except Exception as e:
+            print(f"Error starting background sync: {e}")
+            sv.sync_in_progress = False
     
     def select_initial_tab(self):
         """Select initial tab based on database existence"""
@@ -578,7 +649,7 @@ class MiscDataOperations:
     def save_session_to_json(self, session_data):
         """Save session data to JSON backup file in both primary and secondary locations"""
         import re
-        from ui_utils import save_json_mirrored
+        from ui_utils import save_json_mirrored, get_secondary_json_folder
         
         # Create filename: <dogname>_session_<number>_<date>.json
         session_num = session_data.get('session_number')
@@ -600,6 +671,13 @@ class MiscDataOperations:
             print(f"Session backup saved: {primary}")
         if secondary:
             print(f"Session backup mirrored: {secondary}")
+        
+        # Check if secondary backup was configured but unavailable
+        # Notify user once per session via status bar
+        if not secondary and sv.backup_folder.get().strip():
+            if not sv.secondary_unavailable_notified:
+                sv.secondary_unavailable_notified = True
+                sv.status.set("Warning: Secondary backup folder unavailable - backup saved to primary only")
     
     def save_settings_backup(self):
         """Save settings to JSON backup file in both primary and secondary locations"""
@@ -786,151 +864,130 @@ class MiscDataOperations:
             with open(settings_path, 'r') as f:
                 settings = json.load(f)
             
+            print(f"Restore: Loaded settings from {settings_path}")
+            print(f"Restore: Found dogs: {settings.get('dogs', [])}")
+            print(f"Restore: Found locations: {settings.get('training_locations', [])}")
+            
             db_type = sv.db_type.get()
+            
+            # Set up database connection once
+            import config
+            old_db_type = config.DB_TYPE
+            config.DB_TYPE = db_type
+            
+            from database import engine
+            engine.dispose()
+            from importlib import reload
+            import database
+            reload(database)
+            
+            dogs_added = 0
+            locations_added = 0
+            terrain_added = 0
+            distraction_added = 0
             
             # Insert dogs to database
             dogs = settings.get("dogs", [])
-            dogs_added = 0
-            
             if dogs:
-                try:
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    
-                    for dog_name in dogs:
-                        try:
-                            with database.get_connection() as conn:
+                print(f"Restore: Attempting to restore {len(dogs)} dogs...")
+                for dog_name in dogs:
+                    try:
+                        with database.get_connection() as conn:
+                            # Check if dog already exists
+                            check = conn.execute(
+                                text("SELECT name FROM dogs WHERE name = :name"),
+                                {"name": dog_name}
+                            ).fetchone()
+                            
+                            if not check:
                                 conn.execute(
                                     text("INSERT INTO dogs (name, user_name) VALUES (:name, :user_name)"),
                                     {"name": dog_name, "user_name": get_username()}
                                 )
                                 conn.commit()
-                            dogs_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add dog '{dog_name}': {e}")
-                    
-                    # Restore original DB_TYPE
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except Exception as e:
-                    print(f"Error restoring dogs: {e}")
+                                dogs_added += 1
+                                print(f"Restore: Added dog '{dog_name}'")
+                            else:
+                                print(f"Restore: Dog '{dog_name}' already exists")
+                    except Exception as e:
+                        print(f"Restore: Failed to add dog '{dog_name}': {e}")
             
             # Insert locations to database
             locations = settings.get("training_locations", [])
-            locations_added = 0
-            
             if locations:
-                try:
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    
-                    for location in locations:
-                        try:
-                            with database.get_connection() as conn:
+                print(f"Restore: Attempting to restore {len(locations)} locations...")
+                for location in locations:
+                    try:
+                        with database.get_connection() as conn:
+                            # Check if location already exists
+                            check = conn.execute(
+                                text("SELECT name FROM training_locations WHERE name = :name"),
+                                {"name": location}
+                            ).fetchone()
+                            
+                            if not check:
                                 conn.execute(
                                     text("INSERT INTO training_locations (name, user_name) VALUES (:name, :user_name)"),
                                     {"name": location, "user_name": get_username()}
                                 )
                                 conn.commit()
-                            locations_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add location '{location}': {e}")
-                    
-                    # Restore original DB_TYPE
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except Exception as e:
-                    print(f"Error restoring locations: {e}")
+                                locations_added += 1
+                                print(f"Restore: Added location '{location}'")
+                            else:
+                                print(f"Restore: Location '{location}' already exists")
+                    except Exception as e:
+                        print(f"Restore: Failed to add location '{location}': {e}")
             
             # Insert terrain types to database
             terrain_types = settings.get("terrain_types", [])
-            terrain_added = 0
-            
             if terrain_types:
-                try:
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    
-                    for terrain in terrain_types:
-                        try:
-                            with database.get_connection() as conn:
+                print(f"Restore: Attempting to restore {len(terrain_types)} terrain types...")
+                for terrain in terrain_types:
+                    try:
+                        with database.get_connection() as conn:
+                            check = conn.execute(
+                                text("SELECT name FROM terrain_types WHERE name = :name"),
+                                {"name": terrain}
+                            ).fetchone()
+                            
+                            if not check:
                                 conn.execute(
                                     text("INSERT INTO terrain_types (name, user_name) VALUES (:name, :user_name)"),
                                     {"name": terrain, "user_name": get_username()}
                                 )
                                 conn.commit()
-                            terrain_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add terrain type '{terrain}': {e}")
-                    
-                    # Restore original DB_TYPE
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except Exception as e:
-                    print(f"Error restoring terrain types: {e}")
+                                terrain_added += 1
+                                print(f"Restore: Added terrain type '{terrain}'")
+                    except Exception as e:
+                        print(f"Restore: Failed to add terrain type '{terrain}': {e}")
             
             # Insert distraction types to database
             distraction_types = settings.get("distraction_types", [])
-            distraction_added = 0
-            
             if distraction_types:
-                try:
-                    import config
-                    old_db_type = config.DB_TYPE
-                    config.DB_TYPE = db_type
-                    
-                    from database import engine
-                    engine.dispose()
-                    from importlib import reload
-                    import database
-                    reload(database)
-                    
-                    for distraction in distraction_types:
-                        try:
-                            with database.get_connection() as conn:
+                print(f"Restore: Attempting to restore {len(distraction_types)} distraction types...")
+                for distraction in distraction_types:
+                    try:
+                        with database.get_connection() as conn:
+                            check = conn.execute(
+                                text("SELECT name FROM distraction_types WHERE name = :name"),
+                                {"name": distraction}
+                            ).fetchone()
+                            
+                            if not check:
                                 conn.execute(
                                     text("INSERT INTO distraction_types (name, user_name) VALUES (:name, :user_name)"),
                                     {"name": distraction, "user_name": get_username()}
                                 )
                                 conn.commit()
-                            distraction_added += 1
-                        except Exception as e:
-                            if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add distraction type '{distraction}': {e}")
-                    
-                    # Restore original DB_TYPE
-                    config.DB_TYPE = old_db_type
-                    database.engine.dispose()
-                    reload(database)
-                except Exception as e:
-                    print(f"Error restoring distraction types: {e}")
+                                distraction_added += 1
+                                print(f"Restore: Added distraction type '{distraction}'")
+                    except Exception as e:
+                        print(f"Restore: Failed to add distraction type '{distraction}': {e}")
+            
+            # Restore original DB_TYPE
+            config.DB_TYPE = old_db_type
+            database.engine.dispose()
+            reload(database)
             
             # Save handler name to config
             if "handler_name" in settings:
@@ -940,6 +997,7 @@ class MiscDataOperations:
             self.ui.save_config()
             
             # Refresh UI
+            print("Restore: Refreshing UI...")
             self.ui.load_dogs_from_database()
             if hasattr(self.ui, 'a_dog_combo'):
                 self.ui.refresh_dog_list()
@@ -954,6 +1012,8 @@ class MiscDataOperations:
             # Also refresh Entry tab terrain combobox
             if hasattr(self.ui, 'a_terrain_combo'):
                 self.ui.refresh_terrain_list()
+            
+            print(f"Restore: Complete - {dogs_added} dogs, {locations_added} locations, {terrain_added} terrains, {distraction_added} distractions added")
             
             # Now restore sessions from JSON files in secondary backup
             sessions_restored = 0

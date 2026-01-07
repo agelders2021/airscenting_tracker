@@ -42,9 +42,11 @@ class Misc2Operations:
                 # Save dog to database for persistence across sessions
                 DatabaseOperations(self.ui).save_db_setting("last_dog_name", dog_name)
                 
-                # Update session number to next computed number for this dog
+                # Update session number to next computed number for this dog (Airscent sessions only)
                 status_filter = sv.session_status_filter.get()
-                filtered_sessions = DatabaseOperations(self.ui).get_all_sessions_for_dog(dog_name, status_filter)
+                filtered_sessions = DatabaseOperations(self.ui).get_all_sessions_for_dog(
+                    dog_name, status_filter, entry_type="Airscent"
+                )
                 next_computed = len(filtered_sessions) + 1
                 sv.session_number.set(str(next_computed))
                 print(f"DEBUG on_dog_changed: set to computed {next_computed}")  # DEBUG
@@ -202,7 +204,8 @@ class Misc2Operations:
             "start_time": start_time,
             "finish_time": finish_time,
             "comments": comments,
-            "image_files": image_files_json
+            "image_files": image_files_json,
+            "entry_type": "Airscent"  # Identifies this as an air-scenting session
         }
 
         # Save to database using DatabaseManager
@@ -218,7 +221,7 @@ class Misc2Operations:
             working_dialog = None
         
         try:
-            success, message, session_id = db_mgr.save_session(session_data)
+            success, message, session_id, session_uuid, update_time = db_mgr.save_session(session_data)
 
             if not success:
                 messagebox.showerror("Database Error", message)
@@ -251,13 +254,15 @@ class Misc2Operations:
             self.ui.config["last_handler_name"] = handler
             self.ui.save_config()
 
-        # Save session to JSON backup
+        # Save session to JSON backup (include uuid and update_time for sync)
         session_backup_data = {
             **session_data,
             "subject_responses": subject_responses_list,
             "image_files": self.ui.map_files_list,
             "selected_terrains": self.ui.accumulated_terrains,
-            "user_name": get_username()
+            "user_name": get_username(),
+            "uuid": session_uuid,
+            "update_time": update_time
         }
         self.ui.misc_data_ops.save_session_to_json(session_backup_data)
 
@@ -292,7 +297,9 @@ class Misc2Operations:
         # Set to computed next number based on filter for DISPLAY purposes
         # (The actual DB session number will be determined at next save)
         status_filter = sv.session_status_filter.get()
-        filtered_sessions = DatabaseOperations(self.ui).get_all_sessions_for_dog(dog_name, status_filter)
+        filtered_sessions = DatabaseOperations(self.ui).get_all_sessions_for_dog(
+            dog_name, status_filter, entry_type="Airscent"
+        )
         next_computed = len(filtered_sessions) + 1
         sv.session_number.set(str(next_computed))
         print(f"DEBUG save_session: Prepared for new session, displayed number={next_computed}")
