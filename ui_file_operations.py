@@ -63,17 +63,19 @@ class FileOperations:
         self.ui.a_drop_label.configure(bg="#e0e0e0")
     
     def handle_drop(self, event):
-        """Handle dropped files (supports multiple) - copies to trail maps folder"""
+        """Handle dropped files (supports multiple) - copies to primary and secondary Images folders"""
         from sv import sv
+        from ui_utils import get_secondary_images_folder
         
         self.ui.a_drop_label.configure(bg="#e0e0e0")
         
-        # Check if trail maps folder is configured
+        # Check if trail maps folder is configured (primary Images folder)
         trail_maps_folder = sv.trail_maps_folder.get().strip()
         if not trail_maps_folder or not os.path.exists(trail_maps_folder):
             messagebox.showerror(
-                "Trail Maps Folder Not Set",
-                "Please configure the Trail Maps Storage Folder in the Setup tab first."
+                "Images Folder Not Set",
+                "Primary storage folder not properly initialized.\n\n"
+                "Please use 'Initialize Data Structures' in the Setup tab first."
             )
             return
         
@@ -109,6 +111,9 @@ class FileOperations:
         copied_files = []
         import re
         
+        # Get secondary images folder for mirroring
+        secondary_folder = get_secondary_images_folder()
+        
         for filepath in filepaths:
             filepath = filepath.strip()
             if os.path.exists(filepath):
@@ -121,11 +126,22 @@ class FileOperations:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     unique_name = f"{safe_dog_name}_session{session_number}_{timestamp}_{original_name}"
                     
-                    # Copy file to trail maps folder
+                    # Copy file to primary Images folder
                     dest_path = os.path.join(trail_maps_folder, unique_name)
                     try:
                         shutil.copy2(filepath, dest_path)
                         copied_files.append(unique_name)  # Store just the filename, not full path
+                        print(f"Copied to primary: {dest_path}")
+                        
+                        # Mirror to secondary Images folder if configured
+                        if secondary_folder:
+                            secondary_dest = secondary_folder / unique_name
+                            try:
+                                shutil.copy2(filepath, str(secondary_dest))
+                                print(f"Mirrored to secondary: {secondary_dest}")
+                            except Exception as e:
+                                print(f"Warning: Failed to mirror to secondary: {e}")
+                                
                     except Exception as e:
                         messagebox.showerror("Copy Error", f"Failed to copy {original_name}:\n{e}")
         
@@ -177,8 +193,9 @@ class FileOperations:
             self.open_external_file(filepath)
     
     def delete_selected_map(self):
-        """Delete the selected map/image file from trail maps folder"""
+        """Delete the selected map/image file from both primary and secondary Images folders"""
         from sv import sv
+        from ui_utils import get_secondary_images_folder
         
         selection = self.ui.a_map_listbox.curselection()
         if not selection:
@@ -194,14 +211,14 @@ class FileOperations:
         # Warning dialog
         result = messagebox.askokcancel(
             "Delete Map/Image",
-            f"Are you sure you want to delete '{filename}'?\n\nThis operation cannot be reversed.",
+            f"Are you sure you want to delete '{filename}'?\n\nThis will delete from both primary and secondary storage.\nThis operation cannot be reversed.",
             icon='warning'
         )
         
         if not result:
             return
         
-        # Delete the actual file from trail maps folder
+        # Delete the actual file from primary Images folder
         try:
             trail_maps_folder = sv.trail_maps_folder.get().strip()
             if trail_maps_folder:
@@ -211,9 +228,22 @@ class FileOperations:
             
             if os.path.exists(full_path):
                 os.remove(full_path)
+                print(f"Deleted from primary: {full_path}")
                 sv.status.set(f"Deleted file: {filename}")
             else:
                 sv.status.set(f"Removed from list (file not found): {filename}")
+            
+            # Also delete from secondary Images folder if it exists there
+            secondary_folder = get_secondary_images_folder()
+            if secondary_folder:
+                secondary_path = secondary_folder / filename
+                if secondary_path.exists():
+                    try:
+                        secondary_path.unlink()
+                        print(f"Deleted from secondary: {secondary_path}")
+                    except Exception as e:
+                        print(f"Warning: Failed to delete from secondary: {e}")
+                        
         except Exception as e:
             messagebox.showerror("Error", f"Failed to delete file:\n{str(e)}")
             return

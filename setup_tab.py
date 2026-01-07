@@ -125,20 +125,18 @@ class SetupTab:
         # Initialize button state
         self.ui.root.after(100, self.update_create_db_button_state)
         
-        # Trail maps folder
-        folder_frame = tk.LabelFrame(frame, text="Trail Maps Storage Folder", padx=10, pady=5)
-        folder_frame.pack(fill="x", pady=5)
-        
-        tk.Entry(folder_frame, textvariable=sv.trail_maps_folder, width=70).pack(side="left", padx=5)
-        tk.Button(folder_frame, text="Browse", command=self.ui.file_ops.select_folder).pack(side="left", padx=5)
-        
-        # Backup folder
-        backup_frame = tk.LabelFrame(frame, text="Backup Folder", padx=10, pady=5)
+        # Secondary Backup Folder
+        backup_frame = tk.LabelFrame(frame, text="Secondary Backup Folder", padx=10, pady=5)
         backup_frame.pack(fill="x", pady=5)
         
-        tk.Entry(backup_frame, textvariable=sv.backup_folder, width=70).pack(side="left", padx=5)
+        secondary_entry = tk.Entry(backup_frame, textvariable=sv.backup_folder, width=70)
+        secondary_entry.pack(side="left", padx=5)
+        ToolTip(secondary_entry, 
+                "Optional secondary backup location on a different drive.\n"
+                "All writes to the Primary Storage Folder's JSON and Images\n"
+                "subfolders are automatically mirrored here for redundancy.")
         tk.Button(backup_frame, text="Browse", command=self.ui.file_ops.select_backup_folder).pack(side="left", padx=5)
-        tk.Button(backup_frame, text="Restore Settings from Backup", 
+        tk.Button(backup_frame, text="Restore from Secondary Backup", 
                  command=self.ui.misc_data_ops.restore_settings_from_json).pack(side="left", padx=5)
         
         # Default values
@@ -538,20 +536,20 @@ class SetupTab:
         
         # Now create the data structures
         try:
-            # Create Images folder
+            # Create Images folder in primary
             images_path.mkdir(exist_ok=True)
             
-            # Create JSON folder
+            # Create JSON folder in primary
             json_path.mkdir(exist_ok=True)
             
-            # Auto-set the folder paths to the newly created subfolders
+            # Set trail_maps_folder to point to primary Images folder
+            # (This is used internally even though the UI field was removed)
             sv.trail_maps_folder.set(str(images_path))
-            sv.backup_folder.set(str(json_path))
             
             # Also update machine-specific paths for bootstrap saving
             self.ui.machine_db_path = folder
             self.ui.machine_trail_maps_folder = str(images_path)
-            self.ui.machine_backup_folder = str(json_path)
+            # Note: machine_backup_folder stays as the secondary backup path
             
             # Create the database
             import sqlite3
@@ -575,6 +573,11 @@ class SetupTab:
             create_tables()
             
             sv.status.set(f"Initialized: database, Images/, JSON/ in {folder}")
+            
+            # Set up secondary backup folder if specified
+            secondary_folder = sv.backup_folder.get().strip()
+            if secondary_folder:
+                self._setup_secondary_backup_folder(secondary_folder)
             
             # Offer to restore from JSON backups if they exist in JSON folder
             self.ui.misc_data_ops.restore_from_json_backups("sqlite")
@@ -616,6 +619,58 @@ class SetupTab:
             messagebox.showerror("Error", f"Failed to initialize data structures:\n{e}\n\n{type(e).__name__}")
             import traceback
             traceback.print_exc()
+    
+    def _setup_secondary_backup_folder(self, secondary_folder):
+        """Set up the secondary backup folder structure.
+        
+        Creates Images/ and JSON/ subfolders in the secondary backup location.
+        If folders already exist, warns but doesn't remove anything.
+        
+        Args:
+            secondary_folder: Path to the secondary backup folder
+        """
+        secondary_path = Path(secondary_folder)
+        
+        if not secondary_path.exists():
+            messagebox.showerror("Invalid Folder", 
+                f"Secondary backup folder does not exist:\n{secondary_folder}")
+            return
+        
+        secondary_images = secondary_path / "Images"
+        secondary_json = secondary_path / "JSON"
+        
+        # Check what already exists
+        images_exists = secondary_images.exists()
+        json_exists = secondary_json.exists()
+        
+        if images_exists or json_exists:
+            exists_list = []
+            if images_exists:
+                exists_list.append("Images/")
+            if json_exists:
+                exists_list.append("JSON/")
+            
+            messagebox.showinfo(
+                "Secondary Backup Folder",
+                f"Secondary backup folder already has data:\n\n"
+                f"Found: {', '.join(exists_list)}\n\n"
+                f"Existing files will be preserved.\n"
+                f"New backups will be added to these folders."
+            )
+        
+        # Create folders if they don't exist
+        try:
+            secondary_images.mkdir(exist_ok=True)
+            secondary_json.mkdir(exist_ok=True)
+            
+            # Update machine-specific path for bootstrap
+            self.ui.machine_backup_folder = secondary_folder
+            
+            sv.status.set(f"Secondary backup initialized at {secondary_folder}")
+            
+        except Exception as e:
+            messagebox.showerror("Error", 
+                f"Failed to create secondary backup folders:\n{e}")
 
     def create_database(self):
         """Create or rebuild database schema"""
@@ -1517,6 +1572,9 @@ class SetupTab:
                 sv.new_dog.set("")
                 sv.status.set(f"Added dog: {dog_name}")
                 
+                # Auto-backup settings after adding dog
+                self.ui.misc_data_ops.save_settings_backup()
+                
             except Exception as e:
                 # Restore original DB_TYPE on error
                 if old_db_type is not None:
@@ -2032,7 +2090,7 @@ class SetupTab:
         # Get current data from database and store in config for backup/rebuild
         try:
             from ui_database import get_db_manager
-            db_mgr = get_db_manager(self.ui)
+            db_mgr = get_db_manager(sv.db_type.get())
             
             # Get dog names from database
             dog_names = db_mgr.load_dogs()

@@ -641,9 +641,9 @@ class AirScentingUI:
         return None
     
     def load_config(self):
-        """Load configuration from file
+        """Load configuration from file in primary JSON folder only.
         
-        Checks JSON folder first (primary), falls back to home directory (legacy)
+        Returns default config if JSON folder not yet configured.
         """
         default_config = {
             "handler_name": "",
@@ -651,23 +651,16 @@ class AirScentingUI:
             "terrain_types": get_default_terrain_types(),
             "distraction_types": get_default_distraction_types(),
             "training_locations": [],
-            "dog_names": [],  # Added: store dog names in config
+            "dog_names": [],  # Store dog names in config
             "db_type": "sqlite"  # Default database type
         }
         
-        # Try JSON folder first (primary location)
+        # Only look in primary JSON folder
         json_config_path = self.get_json_config_path()
-        config_path = None
         
         if json_config_path and json_config_path.exists():
-            config_path = json_config_path
-        elif self.config_file.exists():
-            # Fall back to home directory (legacy location)
-            config_path = self.config_file
-        
-        if config_path:
             try:
-                with open(config_path, 'r') as f:
+                with open(json_config_path, 'r') as f:
                     saved = json.load(f)
                     # Add terrain_types if not present
                     if "terrain_types" not in saved:
@@ -688,19 +681,36 @@ class AirScentingUI:
         return default_config
     
     def save_config(self):
-        """Save configuration to file
+        """Save configuration to primary JSON folder only.
         
-        Saves to JSON folder (primary) if available, otherwise to home directory
+        Also mirrors to secondary JSON folder if configured.
+        Does nothing if primary JSON folder not yet configured.
         """
-        # Determine save path - prefer JSON folder
-        json_config_path = self.get_json_config_path()
-        if json_config_path:
-            save_path = json_config_path
-        else:
-            save_path = self.config_file
+        from ui_utils import get_secondary_json_folder
         
-        with open(save_path, 'w') as f:
+        # Only save to JSON folder in primary storage
+        json_config_path = self.get_json_config_path()
+        if not json_config_path:
+            # Primary storage not yet configured, skip saving
+            return
+        
+        # Ensure parent directory exists
+        json_config_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Save to primary location
+        with open(json_config_path, 'w') as f:
             json.dump(self.config, f, indent=2)
+        
+        # Mirror to secondary JSON folder if available - create folder if needed
+        secondary_folder = get_secondary_json_folder(create_if_missing=True)
+        if secondary_folder:
+            secondary_config_path = secondary_folder / ".airscenting_config.json"
+            try:
+                with open(secondary_config_path, 'w') as f:
+                    json.dump(self.config, f, indent=2)
+                print(f"Config mirrored to secondary: {secondary_config_path}")
+            except Exception as e:
+                print(f"Warning: Failed to mirror config to secondary: {e}")
     
     def setup_setup_tab(self):
         """Setup the Setup tab - delegate to SetupTab module"""

@@ -252,11 +252,11 @@ class MiscDataOperations:
                             (date, session_number, handler, session_purpose, field_support, dog_name, location,
                              search_area_size, num_subjects, handler_knowledge, weather, temperature, 
                              wind_direction, wind_speed, search_type, drive_level, subjects_found, 
-                             start_time, finish_time, comments, image_files, user_name)
+                             comments, image_files, user_name)
                             VALUES (:date, :session_number, :handler, :session_purpose, :field_support, :dog_name, :location,
                                     :search_area_size, :num_subjects, :handler_knowledge, :weather, :temperature, 
                                     :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found,
-                                    :start_time, :finish_time, :comments, :image_files, :user_name)
+                                    :comments, :image_files, :user_name)
                         """),
                         {
                             "date": session_data.get('date'),
@@ -276,8 +276,6 @@ class MiscDataOperations:
                             "search_type": session_data.get('search_type'),
                             "drive_level": session_data.get('drive_level'),
                             "subjects_found": session_data.get('subjects_found'),
-                            "start_time": session_data.get('start_time', ''),
-                            "finish_time": session_data.get('finish_time', ''),
                             "comments": session_data.get('comments'),
                             "image_files": image_files_json,
                             "user_name": session_data.get('user_name', get_username())
@@ -578,16 +576,9 @@ class MiscDataOperations:
             self.ui.previous_tab_index = 0
     
     def save_session_to_json(self, session_data):
-        """Save session data to JSON backup file"""
-        backup_folder = sv.backup_folder.get().strip()
-        if not backup_folder:
-            # No backup folder configured, skip
-            return
-        
-        backup_path = Path(backup_folder)
-        if not backup_path.exists():
-            print(f"Warning: Backup folder does not exist: {backup_folder}")
-            return
+        """Save session data to JSON backup file in both primary and secondary locations"""
+        import re
+        from ui_utils import save_json_mirrored
         
         # Create filename: <dogname>_session_<number>_<date>.json
         session_num = session_data.get('session_number')
@@ -595,35 +586,24 @@ class MiscDataOperations:
         dog_name = session_data.get('dog_name', 'unknown')
         
         # Sanitize dog name for filename (remove special characters)
-        import re
         safe_dog_name = re.sub(r'[^\w\-]', '_', dog_name)
         
         filename = f"{safe_dog_name}_session_{session_num}_{date_str}.json"
-        filepath = backup_path / filename
         
-        try:
-            # Add timestamp
-            session_data['backup_timestamp'] = datetime.now().isoformat()
-            
-            # Write JSON file
-            with open(filepath, 'w') as f:
-                json.dump(session_data, f, indent=2, default=str)
-            
-            print(f"Session backup saved: {filepath}")
-        except Exception as e:
-            print(f"Warning: Failed to save session backup: {e}")
+        # Add timestamp
+        session_data['backup_timestamp'] = datetime.now().isoformat()
+        
+        # Save to both primary and secondary
+        primary, secondary = save_json_mirrored(filename, session_data)
+        
+        if primary:
+            print(f"Session backup saved: {primary}")
+        if secondary:
+            print(f"Session backup mirrored: {secondary}")
     
     def save_settings_backup(self):
-        """Save settings to JSON backup file"""
-        backup_folder = sv.backup_folder.get().strip()
-        if not backup_folder:
-            # No backup folder configured, skip
-            return
-        
-        backup_path = Path(backup_folder)
-        if not backup_path.exists():
-            print(f"Warning: Backup folder does not exist: {backup_folder}")
-            return
+        """Save settings to JSON backup file in both primary and secondary locations"""
+        from ui_utils import save_json_mirrored
         
         try:
             db_type = sv.db_type.get()
@@ -757,32 +737,47 @@ class MiscDataOperations:
                 "backup_date": datetime.now().isoformat()
             }
             
-            # Save to file
-            settings_path = backup_path / "airscenting_settings.json"
-            with open(settings_path, 'w') as f:
-                json.dump(settings, f, indent=2)
+            # Save to both primary and secondary using mirrored write
+            primary, secondary = save_json_mirrored("airscenting_settings.json", settings)
             
-            print(f"Settings backup saved: {settings_path}")
+            if primary:
+                print(f"Settings backup saved: {primary}")
+            if secondary:
+                print(f"Settings backup mirrored: {secondary}")
             
         except Exception as e:
             print(f"Warning: Failed to save settings backup: {e}")
     
     def restore_settings_from_json(self):
-        """Restore settings from JSON backup file"""
+        """Restore settings from JSON backup file in secondary backup folder"""
         backup_folder = sv.backup_folder.get().strip()
         if not backup_folder:
-            messagebox.showwarning("No Backup Folder", "Please select a backup folder first")
+            messagebox.showwarning("No Backup Folder", "Please select a secondary backup folder first")
             return
         
         backup_path = Path(backup_folder)
         if not backup_path.exists():
-            messagebox.showwarning("Invalid Folder", f"Backup folder does not exist:\n{backup_folder}")
+            messagebox.showwarning("Invalid Folder", f"Secondary backup folder does not exist:\n{backup_folder}")
             return
         
-        settings_path = backup_path / "airscenting_settings.json"
-        if not settings_path.exists():
+        # Look for settings file in JSON subfolder first, then root (for backward compatibility)
+        json_subfolder = backup_path / "JSON"
+        settings_path = None
+        
+        if json_subfolder.exists():
+            candidate = json_subfolder / "airscenting_settings.json"
+            if candidate.exists():
+                settings_path = candidate
+        
+        # Fallback to root folder for backward compatibility
+        if not settings_path:
+            candidate = backup_path / "airscenting_settings.json"
+            if candidate.exists():
+                settings_path = candidate
+        
+        if not settings_path:
             messagebox.showinfo("No Settings Backup", 
-                               f"No settings backup file found in:\n{backup_folder}\n\n"
+                               f"No settings backup file found in:\n{backup_folder}/JSON/\n\n"
                                f"Looking for: airscenting_settings.json")
             return
         
@@ -960,6 +955,21 @@ class MiscDataOperations:
             if hasattr(self.ui, 'a_terrain_combo'):
                 self.ui.refresh_terrain_list()
             
+            # Now restore sessions from JSON files in secondary backup
+            sessions_restored = 0
+            session_files = list(json_subfolder.glob("*session_*.json")) if json_subfolder.exists() else []
+            
+            if session_files:
+                result = messagebox.askyesno(
+                    "Restore Sessions?",
+                    f"Found {len(session_files)} session backup file(s).\n\n"
+                    "Do you also want to restore these sessions?",
+                    icon='question'
+                )
+                
+                if result:
+                    sessions_restored = self._restore_sessions_from_backup_folder(json_subfolder, db_type)
+            
             # Show summary
             msg = "Settings restored successfully!\n\n"
             if dogs_added > 0:
@@ -972,6 +982,8 @@ class MiscDataOperations:
                 msg += f"Added {distraction_added} distraction type(s)\n"
             if "handler_name" in settings:
                 msg += f"Restored handler name: {settings['handler_name']}\n"
+            if sessions_restored > 0:
+                msg += f"Restored {sessions_restored} session(s)\n"
             
             messagebox.showinfo("Restore Complete", msg)
             
@@ -979,16 +991,182 @@ class MiscDataOperations:
             messagebox.showerror("Restore Error", f"Failed to restore settings:\n{e}")
             print(f"Error restoring settings: {e}")
     
-    def restore_from_json_backups(self, db_type):
-        """Restore database from JSON backup files"""
-        backup_folder = sv.backup_folder.get().strip()
-        if not backup_folder:
-            messagebox.showwarning("No Backup Folder", "No backup folder configured")
-            return False
+    def _restore_sessions_from_backup_folder(self, json_folder, db_type):
+        """
+        Restore sessions from JSON backup files in a specific folder.
         
-        backup_path = Path(backup_folder)
-        if not backup_path.exists():
-            messagebox.showwarning("Invalid Folder", f"Backup folder does not exist:\n{backup_folder}")
+        Args:
+            json_folder: Path to folder containing session JSON files
+            db_type: Database type to restore to
+            
+        Returns:
+            int: Number of sessions restored
+        """
+        import database
+        
+        json_files = list(json_folder.glob("*session_*.json"))
+        if not json_files:
+            return 0
+        
+        restored_count = 0
+        
+        old_db_type = None
+        try:
+            import config
+            old_db_type = config.DB_TYPE
+            config.DB_TYPE = db_type
+            
+            from database import engine
+            engine.dispose()
+            from importlib import reload
+            reload(database)
+            
+            for json_file in sorted(json_files):
+                try:
+                    with open(json_file, 'r') as f:
+                        session_data = json.load(f)
+                    
+                    # Check if session already exists
+                    session_num = session_data.get('session_number')
+                    date_str = session_data.get('date')
+                    dog_name = session_data.get('dog_name')
+                    
+                    # Handle image_files - convert list to JSON string if needed
+                    image_files = session_data.get('image_files', session_data.get('map_files', []))
+                    if isinstance(image_files, list):
+                        image_files_json = json.dumps(image_files)
+                    else:
+                        image_files_json = image_files or ''
+                    
+                    with database.get_connection() as conn:
+                        # Check for existing session
+                        result = conn.execute(
+                            text("SELECT id FROM training_sessions WHERE session_number = :num AND date = :date AND dog_name = :dog"),
+                            {"num": session_num, "date": date_str, "dog": dog_name}
+                        )
+                        if result.fetchone():
+                            continue  # Skip existing session
+                        
+                        # Insert session - column names must match schema.py
+                        conn.execute(
+                            text("""
+                                INSERT INTO training_sessions (
+                                    session_number, date, dog_name, location, handler,
+                                    weather, temperature, wind_direction, wind_speed,
+                                    session_purpose, field_support, search_area_size,
+                                    num_subjects, handler_knowledge, search_type,
+                                    drive_level, subjects_found, comments, image_files,
+                                    user_name
+                                ) VALUES (
+                                    :session_number, :date, :dog_name, :location, :handler,
+                                    :weather, :temperature, :wind_direction, :wind_speed,
+                                    :session_purpose, :field_support, :search_area_size,
+                                    :num_subjects, :handler_knowledge, :search_type,
+                                    :drive_level, :subjects_found, :comments, :image_files,
+                                    :user_name
+                                )
+                            """),
+                            {
+                                "session_number": session_num,
+                                "date": date_str,
+                                "dog_name": dog_name,
+                                "location": session_data.get('location', ''),
+                                "handler": session_data.get('handler_name', session_data.get('handler', '')),
+                                "weather": session_data.get('weather', ''),
+                                "temperature": session_data.get('temperature', ''),
+                                "wind_direction": session_data.get('wind_direction', ''),
+                                "wind_speed": session_data.get('wind_speed', ''),
+                                "session_purpose": session_data.get('session_purpose', ''),
+                                "field_support": session_data.get('field_support', ''),
+                                "search_area_size": session_data.get('search_area_size', ''),
+                                "num_subjects": session_data.get('num_subjects', ''),
+                                "handler_knowledge": session_data.get('handler_knowledge', ''),
+                                "search_type": session_data.get('search_type', ''),
+                                "drive_level": session_data.get('drive_level', ''),
+                                "subjects_found": session_data.get('subjects_found', ''),
+                                "comments": session_data.get('notes', session_data.get('comments', '')),
+                                "image_files": image_files_json,
+                                "user_name": session_data.get('user_name', get_username())
+                            }
+                        )
+                        conn.commit()
+                        
+                        # Get inserted session ID
+                        result = conn.execute(text("SELECT last_insert_rowid()"))
+                        session_id = result.fetchone()[0]
+                        
+                        # Restore terrain types for this session
+                        terrains = session_data.get('selected_terrains', session_data.get('terrain_types', session_data.get('terrains', [])))
+                        for terrain in terrains:
+                            try:
+                                conn.execute(
+                                    text("INSERT INTO selected_terrains (session_id, terrain_name, user_name) VALUES (:sid, :name, :user)"),
+                                    {"sid": session_id, "name": terrain, "user": get_username()}
+                                )
+                            except:
+                                pass
+                        
+                        # Restore subject responses
+                        responses = session_data.get('subject_responses', [])
+                        for resp in responses:
+                            try:
+                                conn.execute(
+                                    text("""INSERT INTO subject_responses 
+                                           (session_id, subject_number, tfr, refind, user_name)
+                                           VALUES (:sid, :num, :tfr, :refind, :user)"""),
+                                    {"sid": session_id, "num": resp.get('subject_number', 1),
+                                     "tfr": resp.get('tfr', ''), 
+                                     "refind": resp.get('refind', ''),
+                                     "user": get_username()}
+                                )
+                            except:
+                                pass
+                        
+                        conn.commit()
+                        restored_count += 1
+                        
+                except Exception as e:
+                    print(f"Failed to restore session from {json_file}: {e}")
+            
+            # Restore original DB_TYPE
+            if old_db_type:
+                config.DB_TYPE = old_db_type
+                database.engine.dispose()
+                reload(database)
+                
+        except Exception as e:
+            print(f"Error during session restore: {e}")
+            if old_db_type:
+                try:
+                    import config
+                    config.DB_TYPE = old_db_type
+                    database.engine.dispose()
+                    from importlib import reload
+                    reload(database)
+                except:
+                    pass
+        
+        return restored_count
+    
+    def restore_from_json_backups(self, db_type):
+        """Restore database from JSON backup files in the PRIMARY storage folder"""
+        from ui_utils import get_primary_json_folder
+        
+        # Get primary JSON folder (from sv.db_path/JSON)
+        backup_path = get_primary_json_folder()
+        if not backup_path:
+            # Fall back to checking sv.backup_folder for backward compatibility
+            backup_folder = sv.backup_folder.get().strip()
+            if backup_folder:
+                # Check if it's the old-style direct JSON folder or new-style with subfolder
+                test_path = Path(backup_folder)
+                if (test_path / "JSON").exists():
+                    backup_path = test_path / "JSON"
+                elif test_path.exists():
+                    backup_path = test_path
+            
+        if not backup_path or not backup_path.exists():
+            # No backup folder available, skip silently
             return False
         
         # Find all session JSON files (both old and new format)
@@ -996,8 +1174,7 @@ class MiscDataOperations:
         # New format: <dogname>_session_<number>_<date>.json
         json_files = list(backup_path.glob("*session_*.json"))
         if not json_files:
-            messagebox.showinfo("No Backups Found", 
-                               f"No session backup files found in:\n{backup_folder}")
+            # No backup files found, skip silently (this is normal for new installations)
             return False
         
         # Ask user to confirm restore
@@ -1330,6 +1507,8 @@ class MiscDataOperations:
         # Show summary
         if terrain_success and distraction_success:
             sv.status.set(f"{terrain_msg}; {distraction_msg}")
+            # Auto-backup settings after loading defaults
+            self.save_settings_backup()
         else:
             errors = []
             if not terrain_success:

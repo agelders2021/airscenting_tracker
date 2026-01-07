@@ -7,11 +7,12 @@ b_*/
 
 # Backup directory
 Backups/
+Secondary Backup/
 
 # Database files
 *.db
 air_scenting.db
-Data
+Data/
 
 # Python cache
 __pycache__/
