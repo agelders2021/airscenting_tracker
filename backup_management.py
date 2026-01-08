@@ -18,7 +18,6 @@ import shutil
 import threading
 from datetime import datetime
 from pathlib import Path
-import time # ahg
 
 
 def generate_session_uuid():
@@ -149,8 +148,8 @@ class BackupSyncManager:
             try:
                 if status_callback:
                     status_callback("Sync: Scanning JSON folders...")
-                    time.sleep(15) # ahg
                 
+                import time
                 self._run_sync(db_type, primary_folder, secondary_folder, status_callback)
                 
             except Exception as e:
@@ -475,7 +474,7 @@ def load_full_session_from_db(session_number, dog_name, db_type):
                            location, search_area_size, num_subjects, handler_knowledge, 
                            weather, temperature, wind_direction, wind_speed, search_type, 
                            drive_level, subjects_found, comments, image_files, 
-                           entry_type, update_time, uuid
+                           entry_type, update_time, uuid, status
                     FROM training_sessions 
                     WHERE session_number = :session_number AND dog_name = :dog_name
                 """),
@@ -507,7 +506,8 @@ def load_full_session_from_db(session_number, dog_name, db_type):
                     "image_files": json.loads(row[18]) if row[18] else [],
                     "entry_type": row[19] or "",
                     "update_time": _format_update_time(row[20]),
-                    "uuid": row[21] or ""
+                    "uuid": row[21] or "",
+                    "status": row[22] or "active"
                 }
                 
                 # Get terrains
@@ -686,12 +686,12 @@ def insert_session_from_json(json_data, db_type):
                          location, search_area_size, num_subjects, handler_knowledge, 
                          weather, temperature, wind_direction, wind_speed, search_type, 
                          drive_level, subjects_found, comments, image_files, 
-                         entry_type, update_time, uuid, user_name)
+                         entry_type, update_time, uuid, user_name, status)
                         VALUES (:date, :session_number, :handler, :session_purpose, :field_support, :dog_name,
                                 :location, :search_area_size, :num_subjects, :handler_knowledge,
                                 :weather, :temperature, :wind_direction, :wind_speed, :search_type,
                                 :drive_level, :subjects_found, :comments, :image_files,
-                                :entry_type, :update_time, :uuid, :user_name)
+                                :entry_type, :update_time, :uuid, :user_name, :status)
                     """),
                     {
                         "date": json_data.get("date"),
@@ -716,7 +716,8 @@ def insert_session_from_json(json_data, db_type):
                         "entry_type": json_data.get("entry_type"),
                         "update_time": json_data.get("update_time"),
                         "uuid": json_data.get("uuid"),
-                        "user_name": json_data.get("user_name", get_username())
+                        "user_name": json_data.get("user_name", get_username()),
+                        "status": json_data.get("status", "active")
                     }
                 )
             

@@ -353,7 +353,6 @@ class DatabaseManager:
         Args:
             dog_name: Name of the dog
             status_filter: Optional filter for session status (e.g., 'active', 'deleted')
-                          Currently accepted but not filtered (for future soft-delete feature)
             entry_type: Optional filter for entry type (e.g., 'Airscent', 'Trailing')
                        When set, filters to that type plus NULL/empty for backward compatibility
         """
@@ -366,30 +365,33 @@ class DatabaseManager:
             old_db_type = self._switch_db_context()
             
             with get_connection() as conn:
+                # Build query based on filters
+                base_query = """
+                    SELECT session_number, date, handler, dog_name
+                    FROM training_sessions 
+                    WHERE dog_name = :dog_name
+                """
+                params = {"dog_name": dog_name}
+                
+                # Add status filter (default to 'active' if not specified)
+                # Include NULL for backward compatibility with rows before status column
+                if status_filter:
+                    if status_filter == 'active':
+                        base_query += " AND (status = 'active' OR status IS NULL)"
+                    elif status_filter == 'deleted':
+                        base_query += " AND status = 'deleted'"
+                    else:
+                        base_query += " AND (status = :status OR status IS NULL)"
+                        params["status"] = status_filter
+                
+                # Add entry_type filter with backward compatibility
                 if entry_type:
-                    # Filter by entry_type with backward compatibility for existing data
-                    # (existing sessions have NULL or empty entry_type)
-                    result = conn.execute(
-                        text("""
-                            SELECT session_number, date, handler, dog_name
-                            FROM training_sessions 
-                            WHERE dog_name = :dog_name
-                              AND (entry_type = :entry_type OR entry_type IS NULL OR entry_type = '')
-                            ORDER BY session_number
-                        """),
-                        {"dog_name": dog_name, "entry_type": entry_type}
-                    )
-                else:
-                    # No entry_type filter - return all sessions
-                    result = conn.execute(
-                        text("""
-                            SELECT session_number, date, handler, dog_name
-                            FROM training_sessions 
-                            WHERE dog_name = :dog_name
-                            ORDER BY session_number
-                        """),
-                        {"dog_name": dog_name}
-                    )
+                    base_query += " AND (entry_type = :entry_type OR entry_type IS NULL OR entry_type = '')"
+                    params["entry_type"] = entry_type
+                
+                base_query += " ORDER BY session_number"
+                
+                result = conn.execute(text(base_query), params)
                 sessions = result.fetchall()
             
             self._restore_db_context(old_db_type)
@@ -1206,14 +1208,96 @@ class DatabaseOperations:
         """
         Get the status of a session (for soft-delete feature).
         
-        Currently returns 'active' as default since status column not yet implemented.
-        This is a placeholder for future soft-delete functionality.
-        
         Returns:
-            str: Session status ('active' or 'deleted')
+            str: Session status ('active' or 'deleted'), defaults to 'active' if not set
         """
-        # TODO: Implement when status column is added to schema
-        return "active"
+        try:
+            import sv as sv_module
+            db_type = sv_module.sv.db_type.get()
+            
+            import config
+            old_db_type = config.DB_TYPE
+            config.DB_TYPE = db_type
+            
+            from database import engine, get_connection
+            from importlib import reload
+            import database
+            
+            if old_db_type != db_type:
+                engine.dispose()
+                reload(database)
+            
+            from sqlalchemy import text
+            
+            with database.get_connection() as conn:
+                result = conn.execute(
+                    text("SELECT status FROM training_sessions WHERE session_number = :session_number AND dog_name = :dog_name"),
+                    {"session_number": session_number, "dog_name": dog_name}
+                )
+                row = result.fetchone()
+            
+            # Restore original DB_TYPE
+            if old_db_type != db_type:
+                config.DB_TYPE = old_db_type
+                database.engine.dispose()
+                reload(database)
+            
+            if row and row[0]:
+                return row[0]
+            return "active"  # Default for NULL or missing
+            
+        except Exception as e:
+            print(f"Error getting session status: {e}")
+            return "active"
+    
+    def update_session_status(self, session_number, dog_name, new_status):
+        """
+        Update the status of a session (for soft-delete feature).
+        
+        Args:
+            session_number: The session number
+            dog_name: The dog name
+            new_status: New status ('active' or 'deleted')
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            import sv as sv_module
+            db_type = sv_module.sv.db_type.get()
+            
+            import config
+            old_db_type = config.DB_TYPE
+            config.DB_TYPE = db_type
+            
+            from database import engine, get_connection
+            from importlib import reload
+            import database
+            
+            if old_db_type != db_type:
+                engine.dispose()
+                reload(database)
+            
+            from sqlalchemy import text
+            
+            with database.get_connection() as conn:
+                conn.execute(
+                    text("UPDATE training_sessions SET status = :status WHERE session_number = :session_number AND dog_name = :dog_name"),
+                    {"status": new_status, "session_number": session_number, "dog_name": dog_name}
+                )
+                conn.commit()
+            
+            # Restore original DB_TYPE
+            if old_db_type != db_type:
+                config.DB_TYPE = old_db_type
+                database.engine.dispose()
+                reload(database)
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error updating session status: {e}")
+            return False
     
     def delete_sessions(self, session_numbers, dog_name):
         """Delete multiple sessions"""

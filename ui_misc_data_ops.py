@@ -495,6 +495,7 @@ class MiscDataOperations:
         """Start background sync between database and JSON backup folders."""
         from backup_management import get_sync_manager
         from ui_utils import get_primary_json_folder, get_secondary_json_folder
+        import tkinter as tk
         
         try:
             db_type = sv.db_type.get()
@@ -510,16 +511,50 @@ class MiscDataOperations:
             # Set flag to block Edit/Delete during sync
             sv.sync_in_progress = True
             
+            # Disable buttons during sync
+            if hasattr(self.ui, 'a_save_session_btn'):
+                self.ui.a_save_session_btn.config(state=tk.DISABLED)
+            if hasattr(self.ui, 'a_edit_delete_btn'):
+                self.ui.a_edit_delete_btn.config(state=tk.DISABLED)
+            if hasattr(self.ui, 'a_export_pdf_btn'):
+                self.ui.a_export_pdf_btn.config(state=tk.DISABLED)
+            
             def on_sync_complete(results):
                 """Called when sync finishes (on background thread)"""
                 # Schedule UI update on main thread
                 def update_ui():
                     sv.sync_in_progress = False
                     
+                    # Update session number if sessions were added
+                    json_to_db_count = results.get("json_to_db", 0)
+                    if json_to_db_count > 0:
+                        # Recalculate session number for current dog
+                        dog_name = sv.dog.get()
+                        if dog_name:
+                            try:
+                                from ui_database import DatabaseOperations
+                                status_filter = sv.session_status_filter.get()
+                                filtered_sessions = DatabaseOperations(self.ui).get_all_sessions_for_dog(
+                                    dog_name, status_filter, entry_type="Airscent"
+                                )
+                                next_computed = len(filtered_sessions) + 1
+                                sv.session_number.set(str(next_computed))
+                                print(f"Sync: Updated session number to {next_computed} for {dog_name}")
+                            except Exception as e:
+                                print(f"Sync: Error updating session number: {e}")
+                    
+                    # Re-enable buttons
+                    if hasattr(self.ui, 'a_save_session_btn'):
+                        self.ui.a_save_session_btn.config(state=tk.NORMAL)
+                    if hasattr(self.ui, 'a_edit_delete_btn'):
+                        self.ui.a_edit_delete_btn.config(state=tk.NORMAL)
+                    if hasattr(self.ui, 'a_export_pdf_btn'):
+                        self.ui.a_export_pdf_btn.config(state=tk.NORMAL)
+                    
                     # Build status message
                     total_changes = (
                         results.get("db_to_json", 0) +
-                        results.get("json_to_db", 0) +
+                        json_to_db_count +
                         results.get("primary_to_secondary", 0) +
                         results.get("secondary_to_primary", 0)
                     )
@@ -554,6 +589,14 @@ class MiscDataOperations:
         except Exception as e:
             print(f"Error starting background sync: {e}")
             sv.sync_in_progress = False
+            # Re-enable buttons on error
+            import tkinter as tk
+            if hasattr(self.ui, 'a_save_session_btn'):
+                self.ui.a_save_session_btn.config(state=tk.NORMAL)
+            if hasattr(self.ui, 'a_edit_delete_btn'):
+                self.ui.a_edit_delete_btn.config(state=tk.NORMAL)
+            if hasattr(self.ui, 'a_export_pdf_btn'):
+                self.ui.a_export_pdf_btn.config(state=tk.NORMAL)
     
     def select_initial_tab(self):
         """Select initial tab based on database existence"""
@@ -828,6 +871,15 @@ class MiscDataOperations:
     
     def restore_settings_from_json(self):
         """Restore settings from JSON backup file in secondary backup folder"""
+        # Block if sync is in progress
+        if sv.sync_in_progress:
+            messagebox.showinfo(
+                "Sync In Progress",
+                "Please wait - background sync is in progress.\n\n"
+                "Restore operations are temporarily disabled to ensure data integrity."
+            )
+            return
+        
         backup_folder = sv.backup_folder.get().strip()
         if not backup_folder:
             messagebox.showwarning("No Backup Folder", "Please select a secondary backup folder first")

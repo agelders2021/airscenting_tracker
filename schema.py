@@ -111,6 +111,7 @@ def create_tables():
         entry_type TEXT,
         update_time TIMESTAMP,
         uuid TEXT,
+        status TEXT DEFAULT 'active',
         UNIQUE(session_number, dog_name)
     )
     """
@@ -183,7 +184,7 @@ if __name__ == "__main__":
 
 def migrate_add_backup_columns():
     """
-    Migration: Add entry_type, update_time, and uuid columns to training_sessions table.
+    Migration: Add entry_type, update_time, uuid, and status columns to training_sessions table.
     
     Safe to run multiple times - checks if columns exist before adding.
     Should be called at application startup to ensure schema is up to date.
@@ -194,7 +195,8 @@ def migrate_add_backup_columns():
     columns_to_add = [
         ("entry_type", "TEXT"),
         ("update_time", "TIMESTAMP"),
-        ("uuid", "TEXT")
+        ("uuid", "TEXT"),
+        ("status", "TEXT DEFAULT 'active'")
     ]
     
     added_columns = []
@@ -224,6 +226,10 @@ def migrate_add_backup_columns():
                     alter_sql = f"ALTER TABLE training_sessions ADD COLUMN {col_name} {col_type}"
                     conn.execute(text(alter_sql))
                     added_columns.append(col_name)
+            
+            # Set existing rows to 'active' status if status column was just added
+            if "status" in added_columns:
+                conn.execute(text("UPDATE training_sessions SET status = 'active' WHERE status IS NULL"))
             
             conn.commit()
         

@@ -1569,6 +1569,9 @@ class SetupTab:
                 if hasattr(self.ui, 'a_dog_combo'):
                     self.refresh_dog_list()
                 
+                # Select the newly added dog in the combobox
+                sv.dog.set(dog_name)
+                
                 sv.new_dog.set("")
                 sv.status.set(f"Added dog: {dog_name}")
                 

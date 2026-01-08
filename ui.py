@@ -769,8 +769,9 @@ class AirScentingUI:
         self.a_session_entry.bind("<Return>", self.navigation.on_session_number_changed)
         tk.Button(session_frame, text="New", command=self.form_mgmt.new_session).grid(row=0, column=4, padx=5)
         
-        tk.Button(session_frame, text="Edit/Delete Prior Session", command=self.navigation.load_prior_session, 
-                 bg="#4169E1", fg="white").grid(row=0, column=5, padx=5, pady=2)
+        self.a_edit_delete_btn = tk.Button(session_frame, text="Edit/Delete Prior Session", command=self.navigation.load_prior_session, 
+                 bg="#4169E1", fg="white")
+        self.a_edit_delete_btn.grid(row=0, column=5, padx=5, pady=2)
         
         # Previous and Next session navigation buttons
         self.a_prev_session_btn = tk.Button(session_frame, text="◀ Previous", bg="#FF8C00", fg="white",
@@ -781,8 +782,9 @@ class AirScentingUI:
         self.a_next_session_btn.grid(row=0, column=7, padx=2, pady=2)
         
         # Export PDF button
-        tk.Button(session_frame, text="Export PDF", bg="#9370DB", fg="white", width=12, 
-                 command=self.open_export_dialog).grid(row=0, column=8, padx=2, pady=2)
+        self.a_export_pdf_btn = tk.Button(session_frame, text="Export PDF", bg="#9370DB", fg="white", width=12, 
+                 command=self.open_export_dialog)
+        self.a_export_pdf_btn.grid(row=0, column=8, padx=2, pady=2)
         
         # Track selected sessions for navigation
         self.selected_sessions = []  # List of session numbers to navigate through
@@ -1734,6 +1736,35 @@ class AirScentingUI:
                 errors.append("• Trail Maps Storage folder not selected")
             else:
                 errors.append(f"• Trail Maps Storage folder does not exist: {trail_maps_folder}")
+        
+        # Check if at least one dog is defined
+        if database_exists:
+            try:
+                import config
+                from sqlalchemy import text
+                old_db_type = config.DB_TYPE
+                config.DB_TYPE = db_type
+                
+                from database import engine
+                engine.dispose()
+                from importlib import reload
+                import database
+                reload(database)
+                
+                with database.get_connection() as conn:
+                    result = conn.execute(text("SELECT COUNT(*) FROM dogs"))
+                    dog_count = result.fetchone()[0]
+                
+                # Restore original DB_TYPE
+                config.DB_TYPE = old_db_type
+                database.engine.dispose()
+                reload(database)
+                
+                if dog_count == 0:
+                    errors.append("• At least one dog must be defined")
+            except Exception as e:
+                print(f"Error checking dogs: {e}")
+                # Don't block if there's an error checking
         
         # If there are errors, show message and prevent switching
         if errors:

@@ -255,6 +255,8 @@ class Misc2Operations:
             self.ui.save_config()
 
         # Save session to JSON backup (include uuid and update_time for sync)
+        # Get status from session_data or default to 'active'
+        session_status = session_data.get("status", "active")
         session_backup_data = {
             **session_data,
             "subject_responses": subject_responses_list,
@@ -262,7 +264,8 @@ class Misc2Operations:
             "selected_terrains": self.ui.accumulated_terrains,
             "user_name": get_username(),
             "uuid": session_uuid,
-            "update_time": update_time
+            "update_time": update_time,
+            "status": session_status
         }
         self.ui.misc_data_ops.save_session_to_json(session_backup_data)
 
