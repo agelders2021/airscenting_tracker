@@ -401,22 +401,22 @@ class Navigation:
             
             # Enable/disable delete/undelete buttons based on status
             if session_status == 'deleted':
-                # Deleted session - disable Delete, enable Undelete
+                # Deleted/Hidden session - disable Hide, enable Restore
                 if hasattr(self.ui, 'a_delete_undelete_frame'):
                     for child in self.ui.a_delete_undelete_frame.winfo_children():
                         button_text = child.cget('text')
-                        if button_text == 'Delete':
+                        if button_text == 'Hide':
                             child.config(state="disabled")
-                        elif button_text == 'Undelete':
+                        elif button_text == 'Restore':
                             child.config(state="normal")
             else:
-                # Active session - enable Delete, disable Undelete
+                # Active session - enable Hide, disable Restore
                 if hasattr(self.ui, 'a_delete_undelete_frame'):
                     for child in self.ui.a_delete_undelete_frame.winfo_children():
                         button_text = child.cget('text')
-                        if button_text == 'Delete':
+                        if button_text == 'Hide':
                             child.config(state="normal")
-                        elif button_text == 'Undelete':
+                        elif button_text == 'Restore':
                             child.config(state="disabled")
             
             sv.status.set(f"Loaded session (computed #{computed_number})")
@@ -488,7 +488,7 @@ class Navigation:
             messagebox.showinfo(
                 "Sync In Progress",
                 "Please wait - background sync is in progress.\n\n"
-                "Edit/Delete operations are temporarily disabled to ensure data integrity.\n"
+                "Edit/Hide operations are temporarily disabled to ensure data integrity.\n"
                 "This should only take a few seconds."
             )
             return
@@ -516,7 +516,7 @@ class Navigation:
         from sv import sv
         
         dialog = tk.Toplevel(self.ui.root)
-        dialog.title("Select Sessions to View/Edit/Delete")
+        dialog.title("Select Sessions to View/Edit/Hide")
         dialog.geometry("600x400")
         dialog.transient(self.ui.root)
         
@@ -589,7 +589,7 @@ class Navigation:
             if status_filter == 'deleted':
                 delete_button.config(text="Restore Selected", bg="#28a745")
             else:
-                delete_button.config(text="Delete Selected", bg="#DC143C")
+                delete_button.config(text="Hide Selected", bg="#DC143C")
 
         
 
@@ -677,7 +677,7 @@ class Navigation:
             button_text = "Restore Selected"
             button_color = "#28a745"  # Green
         else:
-            button_text = "Delete Selected"
+            button_text = "Hide Selected"
             button_color = "#DC143C"  # Red
         
         delete_button = tk.Button(button_frame, text=button_text, command=on_delete_selected,
@@ -695,7 +695,7 @@ class Navigation:
         if hasattr(self.ui, 'a_session_frame'):
             if status == 'deleted':
                 self.ui.a_session_frame.config(
-                    text="Session Information *** MARKED DELETED ***",
+                    text="Session Information *** MARKED HIDDEN ***",
                     foreground="red",
                     font=("TkDefaultFont", 9, "bold")
                 )
@@ -752,7 +752,7 @@ class Navigation:
         result = messagebox.askyesno(
             "Mark as Deleted",
             f"Mark session #{session_num} for {dog_name} as deleted?\n\n"
-            "This can be undone with the Undelete button.",
+            "This can be undone with the Restore button.",
             icon='warning'
         )
         
@@ -845,7 +845,7 @@ class Navigation:
         result = messagebox.askyesno(
             "Mark as Deleted",
             f"Mark this session for {dog_name} as deleted?\n\n"
-            "This can be undone with the Undelete button.",
+            "This can be undone with the Restore button.",
             icon='warning'
         )
         

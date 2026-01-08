@@ -101,7 +101,7 @@ class BackupSyncManager:
     Handles:
     - Startup sync between DB, primary JSON, and secondary JSON
     - Background thread execution
-    - Blocking Edit/Delete operations during sync
+    - Blocking Edit/Hide operations during sync
     """
     
     def __init__(self):

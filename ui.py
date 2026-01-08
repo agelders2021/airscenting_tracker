@@ -178,7 +178,7 @@ class AirScentingUI:
         self.entry_tab = ttk.Frame(self.notebook)
         
         self.notebook.add(self.setup_tab, text="Setup")
-        self.notebook.add(self.entry_tab, text="Training Session Entry")
+        self.notebook.add(self.entry_tab, text="Air Scent Training Session Entry")
         
         # Setup the tabs
         self.setup_setup_tab()
@@ -769,7 +769,7 @@ class AirScentingUI:
         self.a_session_entry.bind("<Return>", self.navigation.on_session_number_changed)
         tk.Button(session_frame, text="New", command=self.form_mgmt.new_session).grid(row=0, column=4, padx=5)
         
-        self.a_edit_delete_btn = tk.Button(session_frame, text="Edit/Delete Prior Session", command=self.navigation.load_prior_session, 
+        self.a_edit_delete_btn = tk.Button(session_frame, text="View/Edit/Hide Prior Session(s)", command=self.navigation.load_prior_session, 
                  bg="#4169E1", fg="white")
         self.a_edit_delete_btn.grid(row=0, column=5, padx=5, pady=2)
         
@@ -793,9 +793,9 @@ class AirScentingUI:
         self.a_delete_undelete_frame = tk.Frame(session_frame)
         self.a_delete_undelete_frame.grid(row=2, column=6, columnspan=4, sticky="w", padx=5, pady=5)
         
-        tk.Button(self.a_delete_undelete_frame, text="Undelete", bg="#28a745", fg="white",
+        tk.Button(self.a_delete_undelete_frame, text="Restore", bg="#28a745", fg="white",
                  command=self.navigation.undelete_current_session, width=12).pack(side="left", padx=5)
-        tk.Button(self.a_delete_undelete_frame, text="Delete", bg="#dc3545", fg="white",
+        tk.Button(self.a_delete_undelete_frame, text="Hide", bg="#dc3545", fg="white",
                  command=self.navigation.delete_current_session, width=12).pack(side="left", padx=5)
         
         # Initially disable the frame (enabled only when editing existing session)
@@ -1062,7 +1062,7 @@ class AirScentingUI:
         self.a_view_map_button.pack(pady=(0, 2))
         
         # Delete button
-        self.a_delete_map_button = tk.Button(map_button_frame, text="Delete Selected", 
+        self.a_delete_map_button = tk.Button(map_button_frame, text="Hide Selected", 
                                          command=self.file_ops.delete_selected_map, state=tk.DISABLED, width=12)
         self.a_delete_map_button.pack(pady=(2, 0))
         
