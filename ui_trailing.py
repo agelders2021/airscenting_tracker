@@ -112,7 +112,7 @@ class TrailingEntryTab:
         self.callbacks = callbacks or {}
         
         # Status variable (can be linked to parent's status bar)
-        self.status_var = tk.StringVar(value="Ready")
+        self.t_status_var = tk.StringVar(value="Ready")
         
         # Initialize tracking variables
         self.selected_distraction_index = None
@@ -183,7 +183,7 @@ class TrailingEntryTab:
         # Row 0: Date, Session #, and action buttons
         tk.Label(session_frame, text="Date:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         # Use DateEntry for date picker
-        self.date_var = tk.StringVar(value=datetime.now().strftime("%Y-%m-%d"))
+        self.t_date_var = tk.StringVar(value=datetime.now().strftime("%Y-%m-%d"))
         self.date_picker = DateEntry(
             session_frame,
             width=12,
@@ -200,8 +200,8 @@ class TrailingEntryTab:
         self.date_picker.bind("<<DateEntrySelected>>", self._on_date_changed)
         
         tk.Label(session_frame, text="Session #:").grid(row=0, column=2, sticky="e", padx=5, pady=2)
-        self.session_var = tk.StringVar(value="1")
-        self.session_entry = tk.Entry(session_frame, textvariable=self.session_var, width=10)
+        self.t_session_var = tk.StringVar(value="1")
+        self.session_entry = tk.Entry(session_frame, textvariable=self.t_session_var, width=10)
         self.session_entry.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         tk.Button(session_frame, text="New", command=self._new_session).grid(row=0, column=4, padx=5)
         
@@ -223,12 +223,12 @@ class TrailingEntryTab:
         
         # Row 1: Handler, Add Session Purpose + accumulator
         tk.Label(session_frame, text="Handler:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        self.handler_var = tk.StringVar(value=self._get_config_value('get_handler_name', ""))
-        tk.Entry(session_frame, textvariable=self.handler_var, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        self.t_handler_var = tk.StringVar(value=self._get_config_value('get_handler_name', ""))
+        tk.Entry(session_frame, textvariable=self.t_handler_var, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(session_frame, text="Add Session Purpose:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
-        self.purpose_var = tk.StringVar()
-        self.purpose_combo = ttk.Combobox(session_frame, textvariable=self.purpose_var, width=16, state="enabled",
+        self.t_purpose_var = tk.StringVar()
+        self.purpose_combo = ttk.Combobox(session_frame, textvariable=self.t_purpose_var, width=16, state="enabled",
                                      values=['Flagged Trail', 'Unmarked Trail', 'Single Blind', 'Double Blind',
                                             'Motivational', 'Scent Discrimination', 
                                             'Obedience', 'Mock Cert Test', 'Mission'])
@@ -252,12 +252,12 @@ class TrailingEntryTab:
         
         # Row 2: Field Support, Dog, Resume/Hide buttons (aligned with Previous/Next)
         tk.Label(session_frame, text="Field Support:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
-        self.field_support_var = tk.StringVar()
-        tk.Entry(session_frame, textvariable=self.field_support_var, width=15).grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        self.t_field_support_var = tk.StringVar()
+        tk.Entry(session_frame, textvariable=self.t_field_support_var, width=15).grid(row=2, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(session_frame, text="Dog:").grid(row=2, column=2, sticky="e", padx=5, pady=2)
-        self.dog_var = tk.StringVar(value=self._get_config_value('get_last_dog_name', ""))
-        self.dog_combo = ttk.Combobox(session_frame, textvariable=self.dog_var, width=16, state="readonly")
+        self.t_dog_var = tk.StringVar(value=self._get_config_value('get_last_dog_name', ""))
+        self.dog_combo = ttk.Combobox(session_frame, textvariable=self.t_dog_var, width=16, state="readonly")
         self.dog_combo['values'] = self._get_config_list('get_dog_names', [])
         self.dog_combo.grid(row=2, column=3, sticky="w", padx=5, pady=2)
         self.dog_combo.bind('<<ComboboxSelected>>', self._on_dog_changed)
@@ -289,15 +289,15 @@ class TrailingEntryTab:
         
         # Row 0: Location, Terrain Type, Start Time
         tk.Label(trail_frame, text="Location:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        self.location_var = tk.StringVar()
-        self.location_combo = ttk.Combobox(trail_frame, textvariable=self.location_var, width=location_width,
+        self.t_location_var = tk.StringVar()
+        self.location_combo = ttk.Combobox(trail_frame, textvariable=self.t_location_var, width=location_width,
                                           values=sorted(locations))
         self.location_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
         self.location_combo.bind('<FocusOut>', self._on_location_focus_out)
         
         tk.Label(trail_frame, text="Add Terrain Type:").grid(row=0, column=2, sticky="e", padx=5, pady=2)
-        self.terrain_var = tk.StringVar()
-        self.terrain_combo = ttk.Combobox(trail_frame, textvariable=self.terrain_var, width=terrain_width, 
+        self.t_terrain_var = tk.StringVar()
+        self.terrain_combo = ttk.Combobox(trail_frame, textvariable=self.t_terrain_var, width=terrain_width, 
                                          state="readonly", values=terrain_types)
         self.terrain_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         self.terrain_combo.bind('<<ComboboxSelected>>', self._add_to_terrain_accumulator)
@@ -316,41 +316,41 @@ class TrailingEntryTab:
         # Start time
         time_location_width = 12
         tk.Label(trail_frame, text="Start Time:").grid(row=0, column=6, sticky="w", padx=5, pady=2)
-        self.start_time_var = tk.StringVar()
-        tk.Entry(trail_frame, textvariable=self.start_time_var, width=time_location_width).grid(row=0, column=7, sticky="w", padx=5, pady=2)
+        self.t_start_time_var = tk.StringVar()
+        tk.Entry(trail_frame, textvariable=self.t_start_time_var, width=time_location_width).grid(row=0, column=7, sticky="w", padx=5, pady=2)
         
         # Finish time
         tk.Label(trail_frame, text="Finish Time:").grid(row=0, column=8, sticky="w", padx=5, pady=2)
-        self.finish_time_var = tk.StringVar()
-        tk.Entry(trail_frame, textvariable=self.finish_time_var, width=time_location_width).grid(row=0, column=9, sticky="w", padx=5, pady=2)
+        self.t_finish_time_var = tk.StringVar()
+        tk.Entry(trail_frame, textvariable=self.t_finish_time_var, width=time_location_width).grid(row=0, column=9, sticky="w", padx=5, pady=2)
         
         # Row 1: Trail Age, Trail Length, Trail Difficulty
         tk.Label(trail_frame, text="Trail Age (hours):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        self.trail_age_var = tk.StringVar()
-        tk.Entry(trail_frame, textvariable=self.trail_age_var, width=entry_location_width).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        self.t_trail_age_var = tk.StringVar()
+        tk.Entry(trail_frame, textvariable=self.t_trail_age_var, width=entry_location_width).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(trail_frame, text="Trail Length (miles):").grid(row=1, column=2, sticky="w", padx=5, pady=2)
-        self.trail_length_var = tk.StringVar()
-        tk.Entry(trail_frame, textvariable=self.trail_length_var, width=entry_terrain_width).grid(row=1, column=3, sticky="w", padx=5, pady=2)
+        self.t_trail_length_var = tk.StringVar()
+        tk.Entry(trail_frame, textvariable=self.t_trail_length_var, width=entry_terrain_width).grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(trail_frame, text="Trail Difficulty:").grid(row=1, column=6, sticky="w", padx=5, pady=2)
-        self.difficulty_var = tk.StringVar()
-        difficulty_combo = ttk.Combobox(trail_frame, textvariable=self.difficulty_var, width=9, state="readonly",
+        self.t_difficulty_var = tk.StringVar()
+        difficulty_combo = ttk.Combobox(trail_frame, textvariable=self.t_difficulty_var, width=9, state="readonly",
                                         values=['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
         difficulty_combo.grid(row=1, column=7, sticky="w", padx=5, pady=2)
 
         # Row 2 Trail Layer, Cross Track Layer, Cross Track Age
         tk.Label(trail_frame,text="Trail Layer").grid(row=2,column=0,sticky="w",padx=5,pady=2)
-        self.trail_layer_var = tk.StringVar()
-        tk.Entry(trail_frame,textvariable=self.trail_layer_var,width=entry_location_width).grid(row=2,column=1,padx=4,pady=2)
+        self.t_trail_layer_var = tk.StringVar()
+        tk.Entry(trail_frame,textvariable=self.t_trail_layer_var,width=entry_location_width).grid(row=2,column=1,padx=4,pady=2)
 
         tk.Label(trail_frame,text="Cross Track Layer:").grid(row=2,column=2,sticky="e",padx=5,pady=2)
-        self.cross_track_layer_var = tk.StringVar(value="None")
-        tk.Entry(trail_frame,textvariable=self.cross_track_layer_var,width=entry_terrain_width).grid(row=2,column=3,sticky="w",padx=4,pady=2)
+        self.t_cross_track_layer_var = tk.StringVar(value="None")
+        tk.Entry(trail_frame,textvariable=self.t_cross_track_layer_var,width=entry_terrain_width).grid(row=2,column=3,sticky="w",padx=4,pady=2)
 
         tk.Label(trail_frame,text="Cross Track Age:").grid(row=2,column=4,sticky="e",padx=5,pady=2)
-        self.cross_track_age_var = tk.StringVar()
-        tk.Entry(trail_frame,textvariable=self.cross_track_age_var,width=entry_terrain_width).grid(row=2,column=5,sticky="w",padx=5,pady=(5,2))
+        self.t_cross_track_age_var = tk.StringVar()
+        tk.Entry(trail_frame,textvariable=self.t_cross_track_age_var,width=entry_terrain_width).grid(row=2,column=5,sticky="w",padx=5,pady=(5,2))
 
 
 
@@ -369,28 +369,28 @@ class TrailingEntryTab:
         weather_frame.pack(side="left", fill="both", expand=True, padx=(0, 5))
         
         tk.Label(weather_frame, text="Weather:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        self.weather_laying_var = tk.StringVar()
-        weather_combo = ttk.Combobox(weather_frame, textvariable=self.weather_laying_var, width=12,
+        self.t_weather_laying_var = tk.StringVar()
+        weather_combo = ttk.Combobox(weather_frame, textvariable=self.t_weather_laying_var, width=12,
                                      values=["Clear", "Cloudy", "Light Rain", "Heavy Rain", "Windy", "Snow", "Fog", "Hot/Sunny"])
         weather_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Wind Direction:").grid(row=0, column=2, sticky="w", padx=5, pady=2)
-        self.wind_direction_laying_var = tk.StringVar()
-        wind_dir_combo = ttk.Combobox(weather_frame, textvariable=self.wind_direction_laying_var, width=12,
+        self.t_wind_direction_laying_var = tk.StringVar()
+        wind_dir_combo = ttk.Combobox(weather_frame, textvariable=self.t_wind_direction_laying_var, width=12,
                                      values=["North", "South", "East", "West", "NE", "NW", "SE", "SW"])
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Temperature (°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        self.temp_laying_var = tk.StringVar()
-        tk.Entry(weather_frame, textvariable=self.temp_laying_var, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        self.t_temp_laying_var = tk.StringVar()
+        tk.Entry(weather_frame, textvariable=self.t_temp_laying_var, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="e", padx=5, pady=2)
-        self.humidity_laying_var = tk.StringVar()
-        tk.Entry(weather_frame, textvariable=self.humidity_laying_var, width=15).grid(row=1, column=3, sticky="w", padx=5, pady=2)
+        self.t_humidity_laying_var = tk.StringVar()
+        tk.Entry(weather_frame, textvariable=self.t_humidity_laying_var, width=15).grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Wind Speed:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
-        self.wind_laying_var = tk.StringVar()
-        tk.Entry(weather_frame, textvariable=self.wind_laying_var, width=15).grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        self.t_wind_laying_var = tk.StringVar()
+        tk.Entry(weather_frame, textvariable=self.t_wind_laying_var, width=15).grid(row=2, column=1, sticky="w", padx=5, pady=2)
     
     def _create_weather_running_section(self, frame):
         """Create Weather at Time of Running Trail section"""
@@ -398,28 +398,28 @@ class TrailingEntryTab:
         weather_frame.pack(side="left", fill="both", expand=True, padx=(5, 0))
         
         tk.Label(weather_frame, text="Weather:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        self.weather_running_var = tk.StringVar()
-        weather_combo = ttk.Combobox(weather_frame, textvariable=self.weather_running_var, width=12,
+        self.t_weather_running_var = tk.StringVar()
+        weather_combo = ttk.Combobox(weather_frame, textvariable=self.t_weather_running_var, width=12,
                                      values=["Clear", "Cloudy", "Light Rain", "Heavy Rain", "Windy", "Snow", "Fog", "Hot/Sunny"])
         weather_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Wind Direction:").grid(row=0, column=2, sticky="w", padx=5, pady=2)
-        self.wind_direction_running_var = tk.StringVar()
-        wind_dir_combo = ttk.Combobox(weather_frame, textvariable=self.wind_direction_running_var, width=12,
+        self.t_wind_direction_running_var = tk.StringVar()
+        wind_dir_combo = ttk.Combobox(weather_frame, textvariable=self.t_wind_direction_running_var, width=12,
                                      values=["North", "South", "East", "West", "NE", "NW", "SE", "SW"])
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Temperature (°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        self.temp_running_var = tk.StringVar()
-        tk.Entry(weather_frame, textvariable=self.temp_running_var, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        self.t_temp_running_var = tk.StringVar()
+        tk.Entry(weather_frame, textvariable=self.t_temp_running_var, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="e", padx=5, pady=2)
-        self.humidity_running_var = tk.StringVar()
-        tk.Entry(weather_frame, textvariable=self.humidity_running_var, width=15).grid(row=1, column=3, sticky="w", padx=5, pady=2)
+        self.t_humidity_running_var = tk.StringVar()
+        tk.Entry(weather_frame, textvariable=self.t_humidity_running_var, width=15).grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Wind Speed:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
-        self.wind_running_var = tk.StringVar()
-        tk.Entry(weather_frame, textvariable=self.wind_running_var, width=15).grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        self.t_wind_running_var = tk.StringVar()
+        tk.Entry(weather_frame, textvariable=self.t_wind_running_var, width=15).grid(row=2, column=1, sticky="w", padx=5, pady=2)
     
     def _create_behavior_section(self, frame):
         """Create Dog Behavior & Performance section"""
@@ -427,8 +427,8 @@ class TrailingEntryTab:
         behavior_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=5)
         
         tk.Label(behavior_frame, text="Start Behavior:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        self.start_behavior_var = tk.StringVar()
-        ttk.Combobox(behavior_frame, textvariable=self.start_behavior_var, width=54,
+        self.t_start_behavior_var = tk.StringVar()
+        ttk.Combobox(behavior_frame, textvariable=self.t_start_behavior_var, width=54,
                     values=["Excellent—Direction of Travel immediately identified ",
                             "Very Good—Direction of travel not imediately identified",
                             "Good—Direction of travel identified with cueing",
@@ -437,30 +437,30 @@ class TrailingEntryTab:
                             "Needs Work—Could not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(behavior_frame, text="Pace:").grid(row=0, column=2, sticky="e", padx=5, pady=2)
-        self.pace_var = tk.StringVar()
-        ttk.Combobox(behavior_frame, textvariable=self.pace_var, width=18,
+        self.t_pace_var = tk.StringVar()
+        ttk.Combobox(behavior_frame, textvariable=self.t_pace_var, width=18,
                     values=["Fast", "Moderate", "Slow", "Variable"]).grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
         # Start time and run time
         tk.Label(behavior_frame, text="Time to Complete (min):").grid(row=0, column=4, sticky="w", padx=5, pady=2)
-        self.time_var = tk.StringVar()
-        tk.Entry(behavior_frame, textvariable=self.time_var, width=15).grid(row=0, column=5, sticky="w", padx=5, pady=2)
+        self.t_time_var = tk.StringVar()
+        tk.Entry(behavior_frame, textvariable=self.t_time_var, width=15).grid(row=0, column=5, sticky="w", padx=5, pady=2)
         
         tk.Label(behavior_frame, text="Start Time:").grid(row=1, column=4, sticky="e", padx=5, pady=2)
-        self.start_time_var = tk.StringVar()
-        tk.Entry(behavior_frame, textvariable=self.start_time_var, width=15).grid(row=1, column=5, sticky="w", padx=5, pady=2)
+        self.t_start_time_var = tk.StringVar()
+        tk.Entry(behavior_frame, textvariable=self.t_start_time_var, width=15).grid(row=1, column=5, sticky="w", padx=5, pady=2)
 
         # Hidden head position var (kept for compatibility)
-        self.head_pos_var = tk.StringVar()
+        self.t_head_pos_var = tk.StringVar()
         
         tk.Label(behavior_frame, text="Tracking Consistency:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
-        self.consistency_var = tk.StringVar()
-        ttk.Combobox(behavior_frame, textvariable=self.consistency_var, width=18,
+        self.t_consistency_var = tk.StringVar()
+        ttk.Combobox(behavior_frame, textvariable=self.t_consistency_var, width=18,
                     values=["Excellent", "Good", "Fair", "Poor", "Needs Work"]).grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(behavior_frame, text="Indication at Find:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        self.indication_var = tk.StringVar()
-        ttk.Combobox(behavior_frame, textvariable=self.indication_var, width=54,
+        self.t_indication_var = tk.StringVar()
+        ttk.Combobox(behavior_frame, textvariable=self.t_indication_var, width=54,
                     values=["Immediate Trained Final Response",
                             "Strong Alert—Exhibited Trained Final Response after hesitation",
                             "Moderate Alert—Alert behavior but no TFR",
@@ -472,19 +472,19 @@ class TrailingEntryTab:
         distraction_frame = tk.LabelFrame(frame, text="Distractions", padx=10, pady=5)
         distraction_frame.grid(row=4, column=0, columnspan=2, sticky="ew", pady=5)
         
-        self.distractions_var = tk.StringVar()
-        self.distraction_response_var = tk.StringVar()
-        self.accumulated_distractions_var = tk.StringVar()
+        self.t_distractions_var = tk.StringVar()
+        self.t_distraction_response_var = tk.StringVar()
+        self.t_accumulated_distractions_var = tk.StringVar()
         
         # Input row
         tk.Label(distraction_frame, text="Distraction:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         distraction_types = self._get_config_list('get_distraction_types', self._get_default_distraction_types())
-        self.distraction_combo = ttk.Combobox(distraction_frame, textvariable=self.distractions_var, width=20,
+        self.distraction_combo = ttk.Combobox(distraction_frame, textvariable=self.t_distractions_var, width=20,
                                              values=distraction_types)
         self.distraction_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(distraction_frame, text="Response:").grid(row=0, column=1, sticky="e", padx=5, pady=2)
-        self.response_combo = ttk.Combobox(distraction_frame, textvariable=self.distraction_response_var, width=20,
+        self.response_combo = ttk.Combobox(distraction_frame, textvariable=self.t_distraction_response_var, width=20,
                     values=["Ignored", "Brief Check", "Prolonged Interest", "Lost Trail", "Recovered Quickly", "Scared", "Panicked", "Ate"],
                     state="disabled")
         self.response_combo.grid(row=0, column=2, sticky="w", padx=5, pady=2)
@@ -492,7 +492,7 @@ class TrailingEntryTab:
         self.response_combo.bind('<Return>', self._on_response_selected)
         
         # Trace for enabling/disabling response combo
-        self.distractions_var.trace_add('write', self._on_distraction_change)
+        self.t_distractions_var.trace_add('write', self._on_distraction_change)
         
         # Table and buttons
         tk.Label(distraction_frame, text="Accumulated\nDistractions:").grid(row=1, column=0, sticky="nw", padx=5, pady=(10,2))
@@ -540,7 +540,7 @@ class TrailingEntryTab:
         
         # Bind selection event and trace
         self.distraction_tree.bind('<<TreeviewSelect>>', self._on_distraction_select)
-        self.distractions_var.trace_add('write', self._update_distraction_button_states)
+        self.t_distractions_var.trace_add('write', self._update_distraction_button_states)
     
     def _create_impression_section(self, frame):
         """Create Overall Impression section"""
@@ -548,9 +548,9 @@ class TrailingEntryTab:
         results_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=5)
         
         # Hidden success var (kept for compatibility)
-        self.success_var = tk.StringVar()
+        self.t_success_var = tk.StringVar()
         
-        self.impression_var = tk.StringVar()
+        self.t_impression_var = tk.StringVar()
         impression_container = tk.Frame(results_frame)
         impression_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
@@ -677,21 +677,21 @@ class TrailingEntryTab:
     
     def _on_dog_changed(self, event=None):
         """Handle dog selection change"""
-        selected_dog = self.dog_var.get()
+        selected_dog = self.t_dog_var.get()
         if selected_dog and 'on_dog_changed' in self.callbacks:
             self.callbacks['on_dog_changed'](selected_dog)
         
         # Update session number
         if 'get_next_session_number' in self.callbacks:
             next_session = self.callbacks['get_next_session_number'](selected_dog)
-            self.session_var.set(str(next_session))
+            self.t_session_var.set(str(next_session))
     
     def _auto_increment_session(self):
         """Auto-increment session number"""
-        dog_name = self.dog_var.get()
+        dog_name = self.t_dog_var.get()
         if 'get_next_session_number' in self.callbacks:
             next_session = self.callbacks['get_next_session_number'](dog_name)
-            self.session_var.set(str(next_session))
+            self.t_session_var.set(str(next_session))
     
     def _new_session(self):
         """Start a new session - clear form and get next session number"""
@@ -709,12 +709,12 @@ class TrailingEntryTab:
         
         # Clear the form
         self.clear_form()
-        self.status_var.set("New session started")
+        self.t_status_var.set("New session started")
     
     def _on_date_changed(self, event=None):
         """Handle date picker change - update the date_var StringVar"""
         selected_date = self.date_picker.get_date()
-        self.date_var.set(selected_date.strftime("%Y-%m-%d"))
+        self.t_date_var.set(selected_date.strftime("%Y-%m-%d"))
     
     def _load_prior_session(self):
         """Load a prior session for editing"""
@@ -753,7 +753,7 @@ class TrailingEntryTab:
         if 'on_save' in self.callbacks:
             success = self.callbacks['on_save'](session_data)
             if success:
-                self.status_var.set("Session saved successfully")
+                self.t_status_var.set("Session saved successfully")
                 self.take_form_snapshot()
         else:
             messagebox.showinfo("Save", "Save callback not configured")
@@ -782,7 +782,7 @@ class TrailingEntryTab:
     
     def _on_location_focus_out(self, event):
         """Handle location field losing focus - prompt to add new location"""
-        location = self.location_var.get().strip()
+        location = self.t_location_var.get().strip()
         if not location:
             return
         
@@ -803,16 +803,16 @@ class TrailingEntryTab:
     
     def _add_to_terrain_accumulator(self, event):
         """Add selected terrain type to the listbox"""
-        terrain_type = self.terrain_var.get()
+        terrain_type = self.t_terrain_var.get()
         if terrain_type:
             current_items = self.terrain_listbox.get(0, tk.END)
             if terrain_type in current_items:
                 messagebox.showinfo("Duplicate", f"'{terrain_type}' is already in the list")
-                self.terrain_var.set("")
+                self.t_terrain_var.set("")
                 return
             
             self.terrain_listbox.insert(tk.END, terrain_type)
-            self.terrain_var.set("")
+            self.t_terrain_var.set("")
             self._update_terrain_scrollbar()
     
     def _remove_terrain_from_list(self, event):
@@ -841,16 +841,16 @@ class TrailingEntryTab:
     
     def _add_to_purpose_accumulator(self, event):
         """Add selected session purpose to the listbox"""
-        purpose = self.purpose_var.get()
+        purpose = self.t_purpose_var.get()
         if purpose:
             current_items = self.purpose_listbox.get(0, tk.END)
             if purpose in current_items:
                 messagebox.showinfo("Duplicate", f"'{purpose}' is already in the list")
-                self.purpose_var.set("")
+                self.t_purpose_var.set("")
                 return
             
             self.purpose_listbox.insert(tk.END, purpose)
-            self.purpose_var.set("")
+            self.t_purpose_var.set("")
             self._update_purpose_scrollbar()
     
     def _remove_purpose_from_list(self, event):
@@ -879,7 +879,7 @@ class TrailingEntryTab:
     
     def _on_distraction_change(self, *args):
         """Enable/disable response combobox based on distraction field content"""
-        distraction = self.distractions_var.get().strip()
+        distraction = self.t_distractions_var.get().strip()
         if distraction:
             self.response_combo.config(state="normal")
         else:
@@ -889,13 +889,13 @@ class TrailingEntryTab:
         """Handle response combobox selection"""
         if self.selected_distraction_index:
             self._update_selected_distraction()
-        elif self.distractions_var.get().strip():
+        elif self.t_distractions_var.get().strip():
             self._add_to_distraction_accumulator()
     
     def _add_to_distraction_accumulator(self, event=None):
         """Add distraction to table"""
-        distraction = self.distractions_var.get().strip()
-        response = self.distraction_response_var.get().strip()
+        distraction = self.t_distractions_var.get().strip()
+        response = self.t_distraction_response_var.get().strip()
         
         if not distraction:
             messagebox.showwarning("Empty Distraction", "Please enter a distraction")
@@ -909,12 +909,12 @@ class TrailingEntryTab:
         self._update_accumulated_distractions_string()
         
         self.distraction_tree.selection_remove(self.distraction_tree.selection())
-        self.distractions_var.set("")
-        self.distraction_response_var.set("")
+        self.t_distractions_var.set("")
+        self.t_distraction_response_var.set("")
         self.selected_distraction_index = None
         self.selected_distraction_original = None
         
-        self.status_var.set("Distraction added")
+        self.t_status_var.set("Distraction added")
     
     def _on_distraction_select(self, event):
         """Handle selection of a distraction in the table"""
@@ -923,11 +923,11 @@ class TrailingEntryTab:
             item = selection[0]
             values = self.distraction_tree.item(item, 'values')
             if values:
-                self.distractions_var.set(values[0])
-                self.distraction_response_var.set(values[1])
+                self.t_distractions_var.set(values[0])
+                self.t_distraction_response_var.set(values[1])
                 self.selected_distraction_index = item
                 self.selected_distraction_original = values[0]
-                self.status_var.set("Selected distraction - you can now Update or Delete it")
+                self.t_status_var.set("Selected distraction - you can now Update or Delete it")
                 self._update_distraction_button_states()
         else:
             self.selected_distraction_index = None
@@ -936,7 +936,7 @@ class TrailingEntryTab:
     
     def _update_distraction_button_states(self, *args):
         """Update the state of distraction management buttons"""
-        distraction = self.distractions_var.get().strip()
+        distraction = self.t_distractions_var.get().strip()
         has_content = bool(distraction)
         has_selection = self.selected_distraction_index is not None
         
@@ -955,8 +955,8 @@ class TrailingEntryTab:
             messagebox.showwarning("No Selection", "Please select a distraction from the table first")
             return
         
-        distraction = self.distractions_var.get().strip()
-        response = self.distraction_response_var.get().strip()
+        distraction = self.t_distractions_var.get().strip()
+        response = self.t_distraction_response_var.get().strip()
         
         if not distraction or not response:
             messagebox.showwarning("Empty Fields", "Both distraction and response are required")
@@ -966,12 +966,12 @@ class TrailingEntryTab:
         self._update_accumulated_distractions_string()
         
         self.distraction_tree.selection_remove(self.distraction_tree.selection())
-        self.distractions_var.set("")
-        self.distraction_response_var.set("")
+        self.t_distractions_var.set("")
+        self.t_distraction_response_var.set("")
         self.selected_distraction_index = None
         self.selected_distraction_original = None
         
-        self.status_var.set("Distraction updated")
+        self.t_status_var.set("Distraction updated")
     
     def _delete_selected_distraction(self):
         """Delete the selected distraction from the table"""
@@ -984,21 +984,21 @@ class TrailingEntryTab:
             self.distraction_tree.delete(selection[0])
             self._update_accumulated_distractions_string()
             
-            self.distractions_var.set("")
-            self.distraction_response_var.set("")
+            self.t_distractions_var.set("")
+            self.t_distraction_response_var.set("")
             self.selected_distraction_index = None
             self.selected_distraction_original = None
             
-            self.status_var.set("Distraction deleted")
+            self.t_status_var.set("Distraction deleted")
     
     def _clear_distraction_fields(self):
         """Clear the distraction input fields"""
         self.distraction_tree.selection_remove(self.distraction_tree.selection())
-        self.distractions_var.set("")
-        self.distraction_response_var.set("")
+        self.t_distractions_var.set("")
+        self.t_distraction_response_var.set("")
         self.selected_distraction_index = None
         self.selected_distraction_original = None
-        self.status_var.set("Distraction fields cleared")
+        self.t_status_var.set("Distraction fields cleared")
     
     def _update_accumulated_distractions_string(self):
         """Update the accumulated distractions string from the treeview"""
@@ -1008,7 +1008,7 @@ class TrailingEntryTab:
             if values:
                 distractions_list.append(f"{values[0]}:{values[1]}")
         
-        self.accumulated_distractions_var.set(", ".join(distractions_list))
+        self.t_accumulated_distractions_var.set(", ".join(distractions_list))
     
     # =========================================================================
     # Trail map methods
@@ -1077,7 +1077,7 @@ class TrailingEntryTab:
         self.view_trail_map_button.config(state=tk.NORMAL)
         self.delete_trail_map_button.config(state=tk.NORMAL)
         
-        self.status_var.set(f"{len(filepaths)} trail map(s) added")
+        self.t_status_var.set(f"{len(filepaths)} trail map(s) added")
     
     def _view_selected_trail_map(self):
         """Open the selected trail map file"""
@@ -1148,38 +1148,38 @@ class TrailingEntryTab:
         self._update_accumulated_distractions_string()
         
         return {
-            'date': self.date_var.get(),
-            'session': self.session_var.get(),
+            'date': self.t_date_var.get(),
+            'session': self.t_session_var.get(),
             'purpose': ", ".join(self.purpose_listbox.get(0, tk.END)),
-            'handler': self.handler_var.get(),
-            'field_support': self.field_support_var.get(),
-            'dog_name': self.dog_var.get(),
-            'location': self.location_var.get(),
-            'start_time': self.start_time_var.get(),
-            'trail_age': self.trail_age_var.get(),
-            'trail_length': self.trail_length_var.get(),
+            'handler': self.t_handler_var.get(),
+            'field_support': self.t_field_support_var.get(),
+            'dog_name': self.t_dog_var.get(),
+            'location': self.t_location_var.get(),
+            'start_time': self.t_start_time_var.get(),
+            'trail_age': self.t_trail_age_var.get(),
+            'trail_length': self.t_trail_length_var.get(),
             'terrain': ", ".join(self.terrain_listbox.get(0, tk.END)),
-            'difficulty': self.difficulty_var.get(),
+            'difficulty': self.t_difficulty_var.get(),
             # Weather when laying trail
-            'weather_laying': self.weather_laying_var.get(),
-            'temperature_laying': self.temp_laying_var.get(),
-            'wind_speed_laying': self.wind_laying_var.get(),
-            'wind_direction_laying': self.wind_direction_laying_var.get(),
-            'humidity_laying': self.humidity_laying_var.get(),
+            'weather_laying': self.t_weather_laying_var.get(),
+            'temperature_laying': self.t_temp_laying_var.get(),
+            'wind_speed_laying': self.t_wind_laying_var.get(),
+            'wind_direction_laying': self.t_wind_direction_laying_var.get(),
+            'humidity_laying': self.t_humidity_laying_var.get(),
             # Weather at time of running trail
-            'weather_running': self.weather_running_var.get(),
-            'temperature_running': self.temp_running_var.get(),
-            'wind_speed_running': self.wind_running_var.get(),
-            'wind_direction_running': self.wind_direction_running_var.get(),
-            'humidity_running': self.humidity_running_var.get(),
-            'start_behavior': self.start_behavior_var.get(),
-            'consistency': self.consistency_var.get(),
-            'head_position': self.head_pos_var.get(),
-            'pace': self.pace_var.get(),
-            'indication': self.indication_var.get(),
-            'time_to_complete': self.time_var.get(),
-            'distractions': self.accumulated_distractions_var.get(),
-            'success_rate': self.success_var.get(),
+            'weather_running': self.t_weather_running_var.get(),
+            'temperature_running': self.t_temp_running_var.get(),
+            'wind_speed_running': self.t_wind_running_var.get(),
+            'wind_direction_running': self.t_wind_direction_running_var.get(),
+            'humidity_running': self.t_humidity_running_var.get(),
+            'start_behavior': self.t_start_behavior_var.get(),
+            'consistency': self.t_consistency_var.get(),
+            'head_position': self.t_head_pos_var.get(),
+            'pace': self.t_pace_var.get(),
+            'indication': self.t_indication_var.get(),
+            'time_to_complete': self.t_time_var.get(),
+            'distractions': self.t_accumulated_distractions_var.get(),
+            'success_rate': self.t_success_var.get(),
             'notes': self.notes_text.get("1.0", tk.END).strip(),
             'impression': self.impression_text.get("1.0", tk.END).strip(),
             'map_files': self.map_files_list.copy(),
@@ -1188,40 +1188,40 @@ class TrailingEntryTab:
     def set_session_data(self, data):
         """Populate form from a dictionary of session data"""
         date_str = data.get('date', datetime.now().strftime("%Y-%m-%d"))
-        self.date_var.set(date_str)
+        self.t_date_var.set(date_str)
         # Also update the DateEntry picker
         try:
             self.date_picker.set_date(datetime.strptime(date_str, "%Y-%m-%d"))
         except (ValueError, AttributeError):
             pass
-        self.session_var.set(data.get('session', ''))
-        self.handler_var.set(data.get('handler', ''))
-        self.field_support_var.set(data.get('field_support', ''))
-        self.dog_var.set(data.get('dog_name', ''))
-        self.location_var.set(data.get('location', ''))
-        self.start_time_var.set(data.get('start_time', ''))
-        self.trail_age_var.set(data.get('trail_age', ''))
-        self.trail_length_var.set(data.get('trail_length', ''))
-        self.difficulty_var.set(data.get('difficulty', ''))
+        self.t_session_var.set(data.get('session', ''))
+        self.t_handler_var.set(data.get('handler', ''))
+        self.t_field_support_var.set(data.get('field_support', ''))
+        self.t_dog_var.set(data.get('dog_name', ''))
+        self.t_location_var.set(data.get('location', ''))
+        self.t_start_time_var.set(data.get('start_time', ''))
+        self.t_trail_age_var.set(data.get('trail_age', ''))
+        self.t_trail_length_var.set(data.get('trail_length', ''))
+        self.t_difficulty_var.set(data.get('difficulty', ''))
         # Weather when laying trail
-        self.weather_laying_var.set(data.get('weather_laying', ''))
-        self.temp_laying_var.set(data.get('temperature_laying', ''))
-        self.wind_laying_var.set(data.get('wind_speed_laying', ''))
-        self.wind_direction_laying_var.set(data.get('wind_direction_laying', ''))
-        self.humidity_laying_var.set(data.get('humidity_laying', ''))
+        self.t_weather_laying_var.set(data.get('weather_laying', ''))
+        self.t_temp_laying_var.set(data.get('temperature_laying', ''))
+        self.t_wind_laying_var.set(data.get('wind_speed_laying', ''))
+        self.t_wind_direction_laying_var.set(data.get('wind_direction_laying', ''))
+        self.t_humidity_laying_var.set(data.get('humidity_laying', ''))
         # Weather at time of running trail
-        self.weather_running_var.set(data.get('weather_running', ''))
-        self.temp_running_var.set(data.get('temperature_running', ''))
-        self.wind_running_var.set(data.get('wind_speed_running', ''))
-        self.wind_direction_running_var.set(data.get('wind_direction_running', ''))
-        self.humidity_running_var.set(data.get('humidity_running', ''))
-        self.start_behavior_var.set(data.get('start_behavior', ''))
-        self.consistency_var.set(data.get('consistency', ''))
-        self.head_pos_var.set(data.get('head_position', ''))
-        self.pace_var.set(data.get('pace', ''))
-        self.indication_var.set(data.get('indication', ''))
-        self.time_var.set(data.get('time_to_complete', ''))
-        self.success_var.set(data.get('success_rate', ''))
+        self.t_weather_running_var.set(data.get('weather_running', ''))
+        self.t_temp_running_var.set(data.get('temperature_running', ''))
+        self.t_wind_running_var.set(data.get('wind_speed_running', ''))
+        self.t_wind_direction_running_var.set(data.get('wind_direction_running', ''))
+        self.t_humidity_running_var.set(data.get('humidity_running', ''))
+        self.t_start_behavior_var.set(data.get('start_behavior', ''))
+        self.t_consistency_var.set(data.get('consistency', ''))
+        self.t_head_pos_var.set(data.get('head_position', ''))
+        self.t_pace_var.set(data.get('pace', ''))
+        self.t_indication_var.set(data.get('indication', ''))
+        self.t_time_var.set(data.get('time_to_complete', ''))
+        self.t_success_var.set(data.get('success_rate', ''))
         
         # Session Purposes
         self.purpose_listbox.delete(0, tk.END)
@@ -1278,12 +1278,12 @@ class TrailingEntryTab:
     def clear_form(self, keep_session=False):
         """Clear the entry form"""
         if not keep_session:
-            self.date_var.set(datetime.now().strftime("%Y-%m-%d"))
+            self.t_date_var.set(datetime.now().strftime("%Y-%m-%d"))
             if 'get_next_session_number' in self.callbacks:
-                next_session = self.callbacks['get_next_session_number'](self.dog_var.get())
-                self.session_var.set(str(next_session))
+                next_session = self.callbacks['get_next_session_number'](self.t_dog_var.get())
+                self.t_session_var.set(str(next_session))
             else:
-                self.session_var.set("1")
+                self.t_session_var.set("1")
         
         # Reset editing mode
         self.editing_session = False
@@ -1296,7 +1296,7 @@ class TrailingEntryTab:
         self.next_session_btn.config(state=tk.DISABLED)
         
         # Keep handler from defaults
-        self.handler_var.set(self._get_config_value('get_handler_name', ""))
+        self.t_handler_var.set(self._get_config_value('get_handler_name', ""))
         
         # Reset date picker to today
         try:
@@ -1305,45 +1305,45 @@ class TrailingEntryTab:
             pass
         
         # Clear all other fields
-        self.field_support_var.set("")
-        self.location_var.set("")
-        self.purpose_var.set("")
+        self.t_field_support_var.set("")
+        self.t_location_var.set("")
+        self.t_purpose_var.set("")
         self.purpose_listbox.delete(0, tk.END)
         self._update_purpose_scrollbar()
-        self.trail_age_var.set("")
-        self.trail_length_var.set("")
+        self.t_trail_age_var.set("")
+        self.t_trail_length_var.set("")
         self.terrain_listbox.delete(0, tk.END)
         self._update_terrain_scrollbar()
-        self.difficulty_var.set("")
+        self.t_difficulty_var.set("")
         # Weather when laying trail
-        self.weather_laying_var.set("")
-        self.temp_laying_var.set("")
-        self.wind_laying_var.set("")
-        self.wind_direction_laying_var.set("")
-        self.humidity_laying_var.set("")
+        self.t_weather_laying_var.set("")
+        self.t_temp_laying_var.set("")
+        self.t_wind_laying_var.set("")
+        self.t_wind_direction_laying_var.set("")
+        self.t_humidity_laying_var.set("")
         # Weather at time of running trail
-        self.weather_running_var.set("")
-        self.temp_running_var.set("")
-        self.wind_running_var.set("")
-        self.wind_direction_running_var.set("")
-        self.humidity_running_var.set("")
-        self.start_behavior_var.set("")
-        self.consistency_var.set("")
-        self.head_pos_var.set("")
-        self.pace_var.set("")
-        self.indication_var.set("")
-        self.distractions_var.set("")
-        self.distraction_response_var.set("")
-        self.accumulated_distractions_var.set("")
-        self.start_time_var.set("")
+        self.t_weather_running_var.set("")
+        self.t_temp_running_var.set("")
+        self.t_wind_running_var.set("")
+        self.t_wind_direction_running_var.set("")
+        self.t_humidity_running_var.set("")
+        self.t_start_behavior_var.set("")
+        self.t_consistency_var.set("")
+        self.t_head_pos_var.set("")
+        self.t_pace_var.set("")
+        self.t_indication_var.set("")
+        self.t_distractions_var.set("")
+        self.t_distraction_response_var.set("")
+        self.t_accumulated_distractions_var.set("")
+        self.t_start_time_var.set("")
         
         # Clear distraction table
         for item in self.distraction_tree.get_children():
             self.distraction_tree.delete(item)
         self.selected_distraction_index = None
         
-        self.success_var.set("")
-        self.time_var.set("")
+        self.t_success_var.set("")
+        self.t_time_var.set("")
         self.notes_text.delete("1.0", tk.END)
         self.impression_text.delete("1.0", tk.END)
         self.map_files_list = []
@@ -1351,43 +1351,43 @@ class TrailingEntryTab:
         self.view_trail_map_button.config(state=tk.DISABLED)
         self.delete_trail_map_button.config(state=tk.DISABLED)
         
-        self.status_var.set("Form cleared")
+        self.t_status_var.set("Form cleared")
         self.take_form_snapshot()
     
     def get_form_state_string(self):
         """Get a string representation of all form fields for comparison"""
         parts = [
-            self.date_var.get(),
-            self.session_var.get(),
-            self.dog_var.get(),
-            self.handler_var.get(),
-            self.field_support_var.get(),
+            self.t_date_var.get(),
+            self.t_session_var.get(),
+            self.t_dog_var.get(),
+            self.t_handler_var.get(),
+            self.t_field_support_var.get(),
             ", ".join(self.purpose_listbox.get(0, tk.END)),
-            self.location_var.get(),
-            self.start_time_var.get(),
-            self.trail_age_var.get(),
-            self.trail_length_var.get(),
+            self.t_location_var.get(),
+            self.t_start_time_var.get(),
+            self.t_trail_age_var.get(),
+            self.t_trail_length_var.get(),
             ", ".join(self.terrain_listbox.get(0, tk.END)),
-            self.difficulty_var.get(),
+            self.t_difficulty_var.get(),
             # Weather when laying trail
-            self.weather_laying_var.get(),
-            self.temp_laying_var.get(),
-            self.wind_laying_var.get(),
-            self.wind_direction_laying_var.get(),
-            self.humidity_laying_var.get(),
+            self.t_weather_laying_var.get(),
+            self.t_temp_laying_var.get(),
+            self.t_wind_laying_var.get(),
+            self.t_wind_direction_laying_var.get(),
+            self.t_humidity_laying_var.get(),
             # Weather at time of running trail
-            self.weather_running_var.get(),
-            self.temp_running_var.get(),
-            self.wind_running_var.get(),
-            self.wind_direction_running_var.get(),
-            self.humidity_running_var.get(),
-            self.start_behavior_var.get(),
-            self.consistency_var.get(),
-            self.head_pos_var.get(),
-            self.pace_var.get(),
-            self.indication_var.get(),
-            self.time_var.get(),
-            self.success_var.get(),
+            self.t_weather_running_var.get(),
+            self.t_temp_running_var.get(),
+            self.t_wind_running_var.get(),
+            self.t_wind_direction_running_var.get(),
+            self.t_humidity_running_var.get(),
+            self.t_start_behavior_var.get(),
+            self.t_consistency_var.get(),
+            self.t_head_pos_var.get(),
+            self.t_pace_var.get(),
+            self.t_indication_var.get(),
+            self.t_time_var.get(),
+            self.t_success_var.get(),
             self.notes_text.get("1.0", tk.END).strip(),
             self.impression_text.get("1.0", tk.END).strip(),
         ]
@@ -1431,7 +1431,7 @@ class TrailingEntryTab:
     
     def set_status(self, message):
         """Set the status message"""
-        self.status_var.set(message)
+        self.t_status_var.set(message)
     
     def enable_drag_drop(self, dnd_module):
         """
@@ -1498,7 +1498,7 @@ if __name__ == "__main__":
     tab = TrailingEntryTab(entry_frame, TestConfig(), callbacks)
     
     # Status bar
-    status_bar = tk.Label(root, textvariable=tab.status_var, bd=1, relief=tk.SUNKEN, anchor=tk.W)
+    status_bar = tk.Label(root, textvariable=tab.t_status_var, bd=1, relief=tk.SUNKEN, anchor=tk.W)
     status_bar.pack(side=tk.BOTTOM, fill=tk.X)
     
     root.mainloop()
