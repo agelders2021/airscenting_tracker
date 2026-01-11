@@ -826,9 +826,28 @@ def update_db_from_json(json_data, db_type):
         return False
 
 
+def validate_json_file(filepath):
+    """Validate that a JSON file can be loaded without errors.
+    
+    Args:
+        filepath: Path to the JSON file
+        
+    Returns:
+        bool: True if valid, False otherwise
+    """
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            json.load(f)
+        return True
+    except Exception as e:
+        print(f"JSON validation failed for {filepath}: {e}")
+        return False
+
+
 def sync_primary_to_secondary(primary_dict, secondary_dict, secondary_folder):
     """
     Sync primary JSON folder to secondary - copy newer/missing files.
+    Only copies valid JSON files.
     
     Returns:
         int: Number of files copied
@@ -850,6 +869,12 @@ def sync_primary_to_secondary(primary_dict, secondary_dict, secondary_folder):
         if should_copy:
             try:
                 src = primary_info["filepath"]
+                
+                # Validate JSON before copying
+                if not validate_json_file(src):
+                    print(f"Sync: Skipping invalid JSON file: {src.name}")
+                    continue
+                
                 dst = Path(secondary_folder) / src.name
                 shutil.copy2(str(src), str(dst))
                 count += 1
@@ -863,6 +888,7 @@ def sync_primary_to_secondary(primary_dict, secondary_dict, secondary_folder):
 def sync_secondary_to_primary(secondary_dict, primary_dict, primary_folder, db_type):
     """
     Sync secondary JSON folder to primary - copy newer files and update DB.
+    Only copies valid JSON files.
     
     Returns:
         int: Number of files copied
@@ -884,6 +910,12 @@ def sync_secondary_to_primary(secondary_dict, primary_dict, primary_folder, db_t
         if should_copy:
             try:
                 src = secondary_info["filepath"]
+                
+                # Validate JSON before copying
+                if not validate_json_file(src):
+                    print(f"Sync: Skipping invalid JSON file from secondary: {src.name}")
+                    continue
+                
                 dst = Path(primary_folder) / src.name
                 shutil.copy2(str(src), str(dst))
                 count += 1

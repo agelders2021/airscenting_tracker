@@ -280,7 +280,7 @@ class TrailingUI:
         if self.machine_db_path:
             json_folder = Path(self.machine_db_path) / "JSON"
             if json_folder.exists():
-                return json_folder / ".airscenting_config.json"
+                return json_folder / ".training_log_config.json"
         return None
     
     def load_config(self):
@@ -347,7 +347,7 @@ class TrailingUI:
         # Mirror to secondary
         secondary_folder = get_secondary_json_folder(create_if_missing=True)
         if secondary_folder:
-            secondary_config_path = secondary_folder / ".airscenting_config.json"
+            secondary_config_path = secondary_folder / ".training_log_config.json"
             try:
                 with open(secondary_config_path, 'w') as f:
                     json.dump(self.config, f, indent=2)
@@ -416,6 +416,17 @@ class TrailingUI:
                 self.trailing_entry.editing_session = False
                 self.trailing_entry.editing_row = None
             
+            # Save last handler and dog to config
+            current_handler = sv.t_handler.get()
+            current_dog = sv.t_dog.get()
+            if "trailing" not in self.config:
+                self.config["trailing"] = {}
+            if current_handler:
+                self.config["trailing"]["default_handler"] = current_handler
+            if current_dog:
+                self.config["trailing"]["last_dog"] = current_dog
+            self.save_config()
+            
             self.show_status_message(message, "info")
             return True
         else:
@@ -463,14 +474,25 @@ class TrailingUI:
         """Open dialog to view/edit/delete prior sessions"""
         from tkinter import Toplevel, Listbox, Scrollbar
         
+        # Block if sync is in progress
+        if sv.sync_in_progress:
+            messagebox.showinfo(
+                "Sync In Progress",
+                "Please wait - background sync is in progress.\n\n"
+                "Edit/Hide operations are temporarily disabled to ensure data integrity.\n"
+                "This should only take a few seconds."
+            )
+            return
+        
         dog_name = sv.t_dog.get()
         if not dog_name:
             messagebox.showwarning("No Dog Selected", "Please select a dog first.")
             return
         
-        # Get all sessions for this dog (including hidden)
+        # Get sessions for this dog based on filter
         db_ops = DatabaseOperations(self)
-        sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter="All")
+        status_filter = sv.t_session_status_filter.get()
+        sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter=status_filter.capitalize())
         
         if not sessions:
             messagebox.showinfo("No Sessions", f"No sessions found for {dog_name}")
@@ -478,85 +500,172 @@ class TrailingUI:
         
         # Create selection dialog
         dialog = Toplevel(self.root)
-        dialog.title(f"Sessions for {dog_name}")
-        dialog.geometry("500x400")
+        dialog.title("Select Sessions to View/Edit/Hide")
+        dialog.geometry("650x450")
         dialog.transient(self.root)
-        dialog.grab_set()
         
-        # Session list
-        tk.Label(dialog, text="Select a session:", font=("Helvetica", 10, "bold")).pack(pady=5)
+        # Instructions
+        instructions = tk.Label(
+            dialog,
+            text="Select sessions to navigate:\n"
+                 "\u2022 Click to select one session\n"
+                 "\u2022 Ctrl+Click to select multiple sessions\n"
+                 "\u2022 Shift+Click to select a range\n"
+                 "Use Previous/Next buttons to navigate through selected sessions",
+            justify="left",
+            padx=10,
+            pady=10
+        )
+        instructions.pack()
         
+        # Listbox with scrollbar
         list_frame = tk.Frame(dialog)
         list_frame.pack(fill="both", expand=True, padx=10, pady=5)
         
         scrollbar = Scrollbar(list_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        session_listbox = Listbox(list_frame, yscrollcommand=scrollbar.set, font=("Courier", 10), width=60)
+        session_listbox = Listbox(list_frame, selectmode="extended", yscrollcommand=scrollbar.set, 
+                                  font=("Courier", 10), width=70)
         session_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=session_listbox.yview)
         
         # Store session data for lookup
-        session_data_map = {}
+        session_data_list = []
         
-        for session in sessions:
-            session_num = session.get('t_session_number', '?')
-            date = session.get('t_date', '')
-            status = session.get('status', 'active')
-            status_marker = " [HIDDEN]" if status == 'deleted' else ""
-            display_text = f"Session {session_num}: {date}{status_marker}"
-            session_listbox.insert(tk.END, display_text)
-            session_data_map[session_num] = session
+        def populate_listbox(sessions_to_show):
+            """Populate the listbox with session data"""
+            session_listbox.delete(0, tk.END)
+            session_data_list.clear()
+            
+            for session in sessions_to_show:
+                session_num = session.get('t_session_number', '?')
+                date = session.get('t_date', '')
+                handler = session.get('t_handler', '') or ''
+                location = session.get('t_location', '') or ''
+                status = session.get('status', 'active')
+                status_marker = " [HIDDEN]" if status == 'deleted' else ""
+                
+                # Format: Session #  |  Date  |  Handler  |  Location
+                display_text = f"#{session_num:3d}  |  {str(date):10s}  |  {handler:15s}  |  {location:20s}{status_marker}"
+                session_listbox.insert(tk.END, display_text)
+                session_data_list.append(session)
+        
+        # Initial population
+        populate_listbox(sessions)
         
         # Store the list for navigation
         self.trailing_entry.dog_sessions_list = sessions
         
-        def load_selected():
-            selection = session_listbox.curselection()
-            if not selection:
-                return
-            idx = selection[0]
-            session = sessions[idx]
-            self.trailing_entry.current_session_index = idx
-            self._load_session_into_form(session)
-            self._update_navigation_buttons()
-            dialog.destroy()
+        def refresh_sessions():
+            """Refresh the session list based on current filter"""
+            status_filter = sv.t_session_status_filter.get()
+            new_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter=status_filter.capitalize())
+            populate_listbox(new_sessions)
+            self.trailing_entry.dog_sessions_list = new_sessions
+            
+            # Update button text based on filter
+            if status_filter == 'deleted':
+                delete_button.config(text="Restore Selected", bg="#28a745")
+            else:
+                delete_button.config(text="Hide Selected", bg="#DC143C")
+        
+        # Filter radiobuttons
+        filter_frame = tk.Frame(dialog)
+        filter_frame.pack(pady=(5, 0))
+        
+        tk.Label(filter_frame, text="Show Sessions:").pack(side=tk.LEFT, padx=(0, 10))
+        tk.Radiobutton(filter_frame, text="Active", variable=sv.t_session_status_filter,
+                      value="active", command=refresh_sessions).pack(side=tk.LEFT, padx=5)
+        tk.Radiobutton(filter_frame, text="Hidden", variable=sv.t_session_status_filter,
+                      value="deleted", command=refresh_sessions).pack(side=tk.LEFT, padx=5)
+        tk.Radiobutton(filter_frame, text="Both", variable=sv.t_session_status_filter,
+                      value="all", command=refresh_sessions).pack(side=tk.LEFT, padx=5)
         
         def view_selected():
-            load_selected()
-        
-        def delete_selected():
-            selection = session_listbox.curselection()
-            if not selection:
+            """Load selected sessions for viewing/editing"""
+            selected_indices = session_listbox.curselection()
+            if not selected_indices:
+                messagebox.showwarning("No Selection", "Please select at least one session")
                 return
-            idx = selection[0]
-            session = sessions[idx]
-            session_num = session.get('t_session_number', '?')
-            status = session.get('status', 'active')
             
-            if status == 'deleted':
-                # Restore
-                if messagebox.askyesno("Restore Session", f"Restore session {session_num}?"):
-                    db_ops.update_session_status(session_num, dog_name, 'active')
-                    self.show_status_message(f"Session {session_num} restored", "info")
+            # Get selected sessions
+            selected_sessions = [session_data_list[i] for i in selected_indices]
+            self.trailing_entry.dog_sessions_list = selected_sessions
+            self.trailing_entry.current_session_index = 0
+            
+            # Load the first selected session
+            self._load_session_into_form(selected_sessions[0])
+            self._update_navigation_buttons()
+            
+            dialog.destroy()
+            
+            self.show_status_message(f"Viewing {len(selected_sessions)} selected session(s)", "info")
+        
+        def delete_restore_selected():
+            """Handle delete/restore based on current filter"""
+            selected_indices = session_listbox.curselection()
+            if not selected_indices:
+                messagebox.showwarning("No Selection", "Please select at least one session")
+                return
+            
+            selected_sessions = [session_data_list[i] for i in selected_indices]
+            selected_nums = [s.get('t_session_number') for s in selected_sessions]
+            status_filter = sv.t_session_status_filter.get()
+            
+            if status_filter == 'deleted':
+                # Restore sessions
+                result = messagebox.askyesno(
+                    "Confirm Restore",
+                    f"Restore {len(selected_nums)} session(s) to active?\n\n"
+                    f"Sessions: {', '.join(map(str, selected_nums))}",
+                    icon='question'
+                )
+                
+                if result:
+                    for session_num in selected_nums:
+                        db_ops.update_session_status(session_num, dog_name, 'active')
+                    self.show_status_message(f"Restored {len(selected_nums)} session(s)", "info")
                     dialog.destroy()
             else:
-                # Hide
-                if messagebox.askyesno("Hide Session", f"Hide session {session_num}?"):
-                    db_ops.update_session_status(session_num, dog_name, 'deleted')
-                    self.show_status_message(f"Session {session_num} hidden", "info")
+                # Hide sessions
+                result = messagebox.askyesno(
+                    "Confirm Hide",
+                    f"Mark {len(selected_nums)} session(s) as hidden?\n\n"
+                    f"Sessions: {', '.join(map(str, selected_nums))}\n\n"
+                    "This can be undone by restoring the sessions.",
+                    icon='warning'
+                )
+                
+                if result:
+                    for session_num in selected_nums:
+                        db_ops.update_session_status(session_num, dog_name, 'deleted')
+                    self.show_status_message(f"Hidden {len(selected_nums)} session(s)", "info")
                     dialog.destroy()
         
         # Buttons
         btn_frame = tk.Frame(dialog)
         btn_frame.pack(pady=10)
         
-        tk.Button(btn_frame, text="View/Edit", command=view_selected, bg="#4169E1", fg="white", width=12).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="Hide/Restore", command=delete_selected, bg="#dc3545", fg="white", width=12).pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="Cancel", command=dialog.destroy, width=12).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="View Selected", command=view_selected, 
+                  bg="#4169E1", fg="white", width=15).pack(side=tk.LEFT, padx=5)
         
-        # Double-click to load
-        session_listbox.bind('<Double-Button-1>', lambda e: load_selected())
+        # Context-aware button text based on filter
+        status_filter = sv.t_session_status_filter.get()
+        if status_filter == 'deleted':
+            button_text = "Restore Selected"
+            button_color = "#28a745"
+        else:
+            button_text = "Hide Selected"
+            button_color = "#DC143C"
+        
+        delete_button = tk.Button(btn_frame, text=button_text, command=delete_restore_selected,
+                                   bg=button_color, fg="white", width=15)
+        delete_button.pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Cancel", command=dialog.destroy, width=10).pack(side=tk.LEFT, padx=5)
+        
+        # Double-click to view
+        session_listbox.bind('<Double-Button-1>', lambda e: view_selected())
     
     def _load_session_into_form(self, session_data):
         """Load session data into the form for editing"""
@@ -623,7 +732,170 @@ class TrailingUI:
     
     def on_export_pdf(self):
         """Export current session to PDF"""
-        messagebox.showinfo("Export PDF", "PDF export for trailing sessions is not yet implemented.")
+        from tkinter import filedialog
+        
+        # Check if a session is loaded
+        if not sv.t_session.get() or sv.t_session.get() == "":
+            messagebox.showwarning("No Session", "Please load a session to export.")
+            return
+        
+        # Get current session data from form
+        session_data = self.trailing_entry.get_session_data()
+        dog_name = sv.t_dog.get()
+        session_num = sv.t_session.get()
+        
+        # Ask for save location
+        default_filename = f"trailing_session_{dog_name}_{session_num}.pdf"
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".pdf",
+            filetypes=[("PDF files", "*.pdf")],
+            initialfile=default_filename,
+            title="Export Session to PDF"
+        )
+        
+        if not filepath:
+            return
+        
+        try:
+            self._export_session_to_pdf(filepath, session_data)
+            self.show_status_message(f"PDF exported: {filepath}", "info")
+            
+            # Ask if user wants to open the file
+            if messagebox.askyesno("Export Complete", "PDF exported successfully!\n\nWould you like to open it?"):
+                import subprocess
+                import platform
+                if platform.system() == 'Windows':
+                    os.startfile(filepath)
+                elif platform.system() == 'Darwin':  # macOS
+                    subprocess.run(['open', filepath])
+                else:  # Linux
+                    subprocess.run(['xdg-open', filepath])
+                    
+        except Exception as e:
+            messagebox.showerror("Export Error", f"Failed to export PDF:\n{e}")
+            print(f"PDF export error: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _export_session_to_pdf(self, filepath, session_data):
+        """Export a trailing session to PDF file"""
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        
+        doc = SimpleDocTemplate(filepath, pagesize=letter, 
+                                rightMargin=0.5*inch, leftMargin=0.5*inch,
+                                topMargin=0.5*inch, bottomMargin=0.5*inch)
+        
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('Title', parent=styles['Heading1'], alignment=1, spaceAfter=20)
+        heading_style = ParagraphStyle('Heading', parent=styles['Heading2'], spaceAfter=10, spaceBefore=15)
+        
+        elements = []
+        
+        # Title
+        dog_name = session_data.get('t_dog_name', 'Unknown')
+        session_num = session_data.get('t_session_number', '?')
+        elements.append(Paragraph(f"Trailing Session Report", title_style))
+        elements.append(Paragraph(f"{dog_name} - Session #{session_num}", styles['Heading2']))
+        elements.append(Spacer(1, 0.2*inch))
+        
+        # Session Information
+        elements.append(Paragraph("Session Information", heading_style))
+        session_info = [
+            ['Date:', session_data.get('t_date', ''), 'Handler:', session_data.get('t_handler', '')],
+            ['Location:', session_data.get('t_location', ''), 'Field Support:', session_data.get('t_field_support', '')],
+            ['Start Time:', session_data.get('t_start_time', ''), 'Finish Time:', session_data.get('t_finish_time', '')],
+        ]
+        t = Table(session_info, colWidths=[1.2*inch, 2.3*inch, 1.2*inch, 2.3*inch])
+        t.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(t)
+        
+        # Trail Information
+        elements.append(Paragraph("Trail Information", heading_style))
+        trail_info = [
+            ['Trail Age:', session_data.get('t_trail_age', ''), 'Trail Length:', session_data.get('t_trail_length', '')],
+            ['Difficulty:', session_data.get('t_difficulty', ''), 'Trail Layer:', session_data.get('t_trail_layer', '')],
+            ['Cross Track:', session_data.get('t_cross_track_layer', ''), 'Cross Track Age:', session_data.get('t_cross_track_age', '')],
+        ]
+        t = Table(trail_info, colWidths=[1.2*inch, 2.3*inch, 1.2*inch, 2.3*inch])
+        t.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(t)
+        
+        # Weather - Laying Trail
+        elements.append(Paragraph("Weather When Laying Trail", heading_style))
+        weather_laying = [
+            ['Weather:', session_data.get('t_weather_laying', ''), 'Temperature:', session_data.get('t_temperature_laying', '')],
+            ['Wind Speed:', session_data.get('t_wind_speed_laying', ''), 'Wind Direction:', session_data.get('t_wind_direction_laying', '')],
+            ['Humidity:', session_data.get('t_humidity_laying', ''), '', ''],
+        ]
+        t = Table(weather_laying, colWidths=[1.2*inch, 2.3*inch, 1.2*inch, 2.3*inch])
+        t.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(t)
+        
+        # Weather - Running Trail
+        elements.append(Paragraph("Weather When Running Trail", heading_style))
+        weather_running = [
+            ['Weather:', session_data.get('t_weather_running', ''), 'Temperature:', session_data.get('t_temperature_running', '')],
+            ['Wind Speed:', session_data.get('t_wind_speed_running', ''), 'Wind Direction:', session_data.get('t_wind_direction_running', '')],
+            ['Humidity:', session_data.get('t_humidity_running', ''), '', ''],
+        ]
+        t = Table(weather_running, colWidths=[1.2*inch, 2.3*inch, 1.2*inch, 2.3*inch])
+        t.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(t)
+        
+        # Behavior/Performance
+        elements.append(Paragraph("Behavior & Performance", heading_style))
+        behavior = [
+            ['Start Behavior:', session_data.get('t_start_behavior', ''), 'Consistency:', session_data.get('t_consistency', '')],
+            ['Head Position:', session_data.get('t_head_position', ''), 'Pace:', session_data.get('t_pace', '')],
+            ['Indication:', session_data.get('t_indication', ''), '', ''],
+            ['Time to Complete:', session_data.get('t_time_to_complete', ''), 'Success Rate:', session_data.get('t_success_rate', '')],
+        ]
+        t = Table(behavior, colWidths=[1.2*inch, 2.3*inch, 1.2*inch, 2.3*inch])
+        t.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(t)
+        
+        # Overall Impression
+        impression = session_data.get('t_impression', '')
+        if impression:
+            elements.append(Paragraph("Overall Impression", heading_style))
+            elements.append(Paragraph(impression, styles['Normal']))
+        
+        # Build PDF
+        doc.build(elements)
     
     def load_initial_data(self):
         """Load initial data after UI is ready"""

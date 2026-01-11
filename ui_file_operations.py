@@ -33,6 +33,8 @@ class FileOperations:
             from sv import sv
             sv.db_path.set(folder)
             self.ui.machine_db_path = folder
+            # Save bootstrap file
+            self.ui.save_bootstrap()
     
     def select_folder(self):
         """Select trail maps folder"""
@@ -41,6 +43,8 @@ class FileOperations:
             from sv import sv
             sv.trail_maps_folder.set(folder)
             self.ui.machine_trail_maps_folder = folder
+            # Save bootstrap file
+            self.ui.save_bootstrap()
     
     def select_backup_folder(self):
         """Select backup folder"""
@@ -49,6 +53,8 @@ class FileOperations:
             from sv import sv
             sv.backup_folder.set(folder)
             self.ui.machine_backup_folder = folder
+            # Save bootstrap file
+            self.ui.save_bootstrap()
     
     # ========================================
     # DRAG & DROP HANDLERS

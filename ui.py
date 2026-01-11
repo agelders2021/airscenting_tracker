@@ -637,7 +637,7 @@ class AirScentingUI:
         if self.machine_db_path:
             json_folder = Path(self.machine_db_path) / "JSON"
             if json_folder.exists():
-                return json_folder / ".airscenting_config.json"
+                return json_folder / ".training_log_config.json"
         return None
     
     def load_config(self):
@@ -726,7 +726,7 @@ class AirScentingUI:
         # Mirror to secondary JSON folder if available - create folder if needed
         secondary_folder = get_secondary_json_folder(create_if_missing=True)
         if secondary_folder:
-            secondary_config_path = secondary_folder / ".airscenting_config.json"
+            secondary_config_path = secondary_folder / ".training_log_config.json"
             try:
                 with open(secondary_config_path, 'w') as f:
                     json.dump(self.config, f, indent=2)
@@ -796,10 +796,10 @@ class AirScentingUI:
         self.a_edit_delete_btn.grid(row=0, column=5, padx=5, pady=2)
         
         # Previous and Next session navigation buttons
-        self.a_prev_session_btn = tk.Button(session_frame, text="â—€ Previous", bg="#FF8C00", fg="white",
+        self.a_prev_session_btn = tk.Button(session_frame, text="\u25C0 Previous", bg="#FF8C00", fg="white",
                                          width=10, command=self.navigation.navigate_previous_session, state=tk.DISABLED)
         self.a_prev_session_btn.grid(row=0, column=6, padx=2, pady=2)
-        self.a_next_session_btn = tk.Button(session_frame, text="Next â–¶", bg="#FF8C00", fg="white",
+        self.a_next_session_btn = tk.Button(session_frame, text="Next \u25B6", bg="#FF8C00", fg="white",
                                          width=10, command=self.navigation.navigate_next_session, state=tk.DISABLED)
         self.a_next_session_btn.grid(row=0, column=7, padx=2, pady=2)
         

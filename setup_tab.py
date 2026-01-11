@@ -114,6 +114,9 @@ class SetupTab:
                 "This folder contains the database as well as needed folders\n"
                 "for ancillary data such as images and primary backup for\n"
                 "error recovery.")
+        # Add FocusOut handler to validate typed paths
+        primary_entry.bind('<FocusOut>', lambda e: self._validate_typed_path('primary'))
+        
         tk.Button(db_frame, text="Browse", command=self.ui.file_ops.select_db_folder).pack(side="left", padx=5)
         self.s_create_db_btn = tk.Button(db_frame, text="Initialize Data Structures", 
                                        command=self.initialize_data_structures, state="disabled")
@@ -135,6 +138,9 @@ class SetupTab:
                 "Optional secondary backup location on a different drive.\n"
                 "All writes to the Primary Storage Folder's JSON and Images\n"
                 "subfolders are automatically mirrored here for redundancy.")
+        # Add FocusOut handler to validate typed paths
+        secondary_entry.bind('<FocusOut>', lambda e: self._validate_typed_path('secondary'))
+        
         tk.Button(backup_frame, text="Browse", command=self.ui.file_ops.select_backup_folder).pack(side="left", padx=5)
         tk.Button(backup_frame, text="Restore from Secondary Backup", 
                  command=self.ui.misc_data_ops.restore_settings_from_json).pack(side="left", padx=5)
@@ -384,6 +390,7 @@ class SetupTab:
         if folder:
             sv.db_path.set(folder)
             self.ui.machine_db_path = folder
+            self.ui.save_bootstrap()
 
     
     def select_folder(self):
@@ -391,6 +398,8 @@ class SetupTab:
         folder = filedialog.askdirectory(title="Select Trail Maps Storage Folder")
         if folder:
             sv.trail_maps_folder.set(folder)
+            self.ui.machine_trail_maps_folder = folder
+            self.ui.save_bootstrap()
 
     def select_backup_folder(self):
         """Select backup folder"""
@@ -398,6 +407,78 @@ class SetupTab:
         if folder:
             sv.backup_folder.set(folder)
             self.ui.machine_backup_folder = folder
+            self.ui.save_bootstrap()
+
+    def _validate_typed_path(self, path_type):
+        """Validate a path that was typed (not browsed) and update bootstrap if needed.
+        
+        Args:
+            path_type: 'primary', 'secondary', or 'trail_maps'
+        """
+        if path_type == 'primary':
+            path_var = sv.db_path
+            old_path = getattr(self.ui, 'machine_db_path', '') or ''
+            attr_name = 'machine_db_path'
+            label = "Primary Storage Folder"
+        elif path_type == 'secondary':
+            path_var = sv.backup_folder
+            old_path = getattr(self.ui, 'machine_backup_folder', '') or ''
+            attr_name = 'machine_backup_folder'
+            label = "Secondary Backup Folder"
+        elif path_type == 'trail_maps':
+            path_var = sv.trail_maps_folder
+            old_path = getattr(self.ui, 'machine_trail_maps_folder', '') or ''
+            attr_name = 'machine_trail_maps_folder'
+            label = "Trail Maps Folder"
+        else:
+            return
+        
+        new_path = path_var.get().strip()
+        
+        # No change or empty - do nothing
+        if not new_path or new_path == old_path:
+            return
+        
+        # Check if path exists
+        folder_path = Path(new_path)
+        if not folder_path.exists():
+            # Ask if user wants to create it
+            result = messagebox.askyesno(
+                "Folder Does Not Exist",
+                f"The {label} does not exist:\n\n{new_path}\n\n"
+                "Would you like to create it?"
+            )
+            if result:
+                try:
+                    folder_path.mkdir(parents=True, exist_ok=True)
+                    sv.status.set(f"Created folder: {new_path}")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Could not create folder:\n{e}")
+                    # Revert to old path
+                    path_var.set(old_path)
+                    return
+            else:
+                # User declined, revert to old path
+                path_var.set(old_path)
+                return
+        
+        # Path exists or was created - ask if user wants to update
+        result = messagebox.askyesno(
+            "Update Folder Location",
+            f"Do you want to update the {label} to:\n\n{new_path}\n\n"
+            "This will update the bootstrap configuration file."
+        )
+        
+        if result:
+            # Update the machine attribute
+            setattr(self.ui, attr_name, new_path)
+            
+            # Save bootstrap file
+            self.ui.save_bootstrap()
+            sv.status.set(f"Updated {label} and saved bootstrap")
+        else:
+            # Revert to old path
+            path_var.set(old_path)
 
     def update_create_db_button_state(self, *args):
         """Enable/disable Initialize Data Structures button based on folder selection"""

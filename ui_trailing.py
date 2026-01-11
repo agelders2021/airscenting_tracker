@@ -173,8 +173,9 @@ class TrailingEntryTab:
     
     def _create_session_info_section(self, frame):
         """Create Session Information section (airscenting-style layout with purpose accumulator)"""
-        session_frame = tk.LabelFrame(frame, text="Session Information", padx=10, pady=5)
-        session_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=5)
+        self.session_frame = tk.LabelFrame(frame, text="Session Information", padx=10, pady=5)
+        self.session_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=5)
+        session_frame = self.session_frame  # Keep local reference for existing code
         
         # Row 0: Date, Session #, and action buttons
         tk.Label(session_frame, text="Date:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
@@ -1216,7 +1217,32 @@ class TrailingEntryTab:
             self.view_trail_map_button.config(state=tk.DISABLED)
             self.delete_trail_map_button.config(state=tk.DISABLED)
         
+        # Update session frame title based on status
+        status = data.get('status', 'active')
+        self.update_session_frame_title(status)
+        
         self.take_form_snapshot()
+    
+    def update_session_frame_title(self, status):
+        """Update the Session Information LabelFrame title based on status
+        
+        Args:
+            status: 'active', 'deleted', or None
+        """
+        if hasattr(self, 'session_frame'):
+            if status == 'deleted':
+                self.session_frame.config(
+                    text="Session Information *** MARKED HIDDEN ***",
+                    foreground="red",
+                    font=("TkDefaultFont", 9, "bold")
+                )
+            else:
+                # Active or None (treat NULL as active)
+                self.session_frame.config(
+                    text="Session Information",
+                    foreground="black",
+                    font=("TkDefaultFont", 9)
+                )
     
     def set_selected_purposes(self, purposes_list):
         """Populate purpose listbox from a list of purpose names"""
@@ -1331,6 +1357,10 @@ class TrailingEntryTab:
         self.delete_trail_map_button.config(state=tk.DISABLED)
         
         sv.t_status.set("Form cleared")
+        
+        # Reset session frame title
+        self.update_session_frame_title('active')
+        
         self.take_form_snapshot()
     
     def get_form_state_string(self):

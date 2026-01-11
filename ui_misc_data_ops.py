@@ -120,7 +120,7 @@ class MiscDataOperations:
             return False
         
         json_files = list(json_path.glob("*session_*.json"))
-        config_file = json_path / ".airscenting_config.json"
+        config_file = json_path / ".training_log_config.json"
         has_config = config_file.exists()
         
         if not json_files and not has_config:
@@ -330,14 +330,14 @@ class MiscDataOperations:
         Restore configuration data (dogs, terrains, locations, distractions) from config file.
         
         Args:
-            json_path: Path to JSON folder containing .airscenting_config.json
+            json_path: Path to JSON folder containing .training_log_config.json
             
         Returns:
             bool: True if config was restored, False otherwise
         """
         import database
         
-        config_file = json_path / ".airscenting_config.json"
+        config_file = json_path / ".training_log_config.json"
         if not config_file.exists():
             return False
         
@@ -768,7 +768,7 @@ class MiscDataOperations:
         
         if json_subfolder.exists():
             # Try new config file name first
-            candidate = json_subfolder / ".airscenting_config.json"
+            candidate = json_subfolder / ".training_log_config.json"
             if candidate.exists():
                 settings_path = candidate
             else:
@@ -780,7 +780,7 @@ class MiscDataOperations:
         if not settings_path:
             messagebox.showinfo("No Settings Backup", 
                                f"No settings backup file found in:\n{backup_folder}/JSON/\n\n"
-                               f"Looking for: .airscenting_config.json")
+                               f"Looking for: .training_log_config.json")
             return
         
         try:
@@ -1371,7 +1371,7 @@ class MiscDataOperations:
             distraction_added = 0
             
             # Try new config file first, then old settings file
-            settings_path = backup_path / ".airscenting_config.json"
+            settings_path = backup_path / ".training_log_config.json"
             if not settings_path.exists():
                 settings_path = backup_path / "airscenting_settings.json"
             

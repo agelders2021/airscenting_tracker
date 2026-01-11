@@ -39,8 +39,8 @@ DB_CONFIG = {
 
 # Application settings
 APP_TITLE = "Trailing Logger"
-CONFIG_FILE = Path.home() / ".air_scenting_config.json"  # Shared config file
-BOOTSTRAP_FILE = Path.home() / ".airscent_bootstrap.json"  # Shared bootstrap file
+CONFIG_FILE = Path.home() / ".training_log_config.json"  # Shared config file
+BOOTSTRAP_FILE = Path.home() / ".training_log_bootstrap.json"  # Shared bootstrap file
 
 # Trailing-specific constants
 T_APP_TITLE = "Trailing Logger"

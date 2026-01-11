@@ -80,6 +80,7 @@ class Stringvars:
         self.t_field_support = tk.StringVar(master=master)
         self.t_purpose = tk.StringVar(master=master)  # Current dropdown selection
         self.t_status = tk.StringVar(master=master, value="Ready")
+        self.t_session_status_filter = tk.StringVar(master=master, value="active")  # Filter for session status
         
         # ===== TRAILING TRAIL DETAILS =====
         self.t_location = tk.StringVar(master=master)
