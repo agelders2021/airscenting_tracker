@@ -299,7 +299,7 @@ class FileOperations:
             else:
                 error_msg = f"Could not find file: {file_path}\n\nSearched in:\n"
                 for p in possible_paths:
-                    error_msg += f"  • {p}\n"
+                    error_msg += f"  â€¢ {p}\n"
                 error_msg += "\nTip: Check your trail maps folder setting in Setup tab."
                 messagebox.showerror("File Not Found", error_msg)
                 return

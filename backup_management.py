@@ -174,10 +174,10 @@ class BackupSyncManager:
         1. Scan primary JSON folder
         2. Scan secondary JSON folder (if exists)
         3. Get DB sessions with UUID/update_time
-        4. Sync DB → Primary JSON (DB newer or missing in JSON)
-        5. Sync Primary JSON → DB (JSON newer)
-        6. Sync Primary → Secondary (Primary newer or missing)
-        7. Sync Secondary → Primary (Secondary newer, also update DB)
+        4. Sync DB â†’ Primary JSON (DB newer or missing in JSON)
+        5. Sync Primary JSON â†’ DB (JSON newer)
+        6. Sync Primary â†’ Secondary (Primary newer or missing)
+        7. Sync Secondary â†’ Primary (Secondary newer, also update DB)
         """
         primary_path = Path(primary_folder) if primary_folder else None
         secondary_path = Path(secondary_folder) if secondary_folder else None
@@ -204,7 +204,7 @@ class BackupSyncManager:
         db_sessions = get_db_sessions_for_sync(db_type)
         print(f"Sync: Found {len(db_sessions)} sessions in database")
         
-        # Step 4: Sync DB → Primary JSON
+        # Step 4: Sync DB â†’ Primary JSON
         if primary_path and primary_path.exists():
             if status_callback:
                 status_callback("Sync: Updating JSON from database...")
@@ -214,21 +214,21 @@ class BackupSyncManager:
                 # Re-scan primary after updates
                 primary_dict = scan_json_folder(primary_path)
         
-        # Step 5: Sync Primary JSON → DB
+        # Step 5: Sync Primary JSON â†’ DB
         if primary_dict:
             if status_callback:
                 status_callback("Sync: Updating database from JSON...")
             count = sync_json_to_db(primary_dict, db_sessions, db_type)
             self.sync_results["json_to_db"] = count
         
-        # Step 6: Sync Primary → Secondary
+        # Step 6: Sync Primary â†’ Secondary
         if secondary_path and secondary_path.exists() and primary_dict:
             if status_callback:
                 status_callback("Sync: Mirroring to secondary backup...")
             count = sync_primary_to_secondary(primary_dict, secondary_dict, secondary_path)
             self.sync_results["primary_to_secondary"] = count
         
-        # Step 7: Sync Secondary → Primary (and DB)
+        # Step 7: Sync Secondary â†’ Primary (and DB)
         if secondary_path and secondary_path.exists() and primary_path and primary_path.exists():
             if status_callback:
                 status_callback("Sync: Checking secondary for newer files...")

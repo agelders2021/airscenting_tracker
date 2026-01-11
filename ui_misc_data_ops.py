@@ -143,7 +143,7 @@ class MiscDataOperations:
         result = messagebox.askyesno(
             "Rebuild Database?",
             f"{reason}\n\n"
-            f"Found in {json_path}:\n" + "\n".join(f"  • {item}" for item in restore_items) + "\n\n"
+            f"Found in {json_path}:\n" + "\n".join(f"  â€¢ {item}" for item in restore_items) + "\n\n"
             "Would you like to rebuild the database from these backups?",
             icon='question'
         )
@@ -487,6 +487,12 @@ class MiscDataOperations:
         def step10():
             # Start background sync between DB and JSON folders
             self._start_background_sync()
+            
+            # Select Entry tab since database is valid
+            # (We only get here if validate_database_at_startup returned True)
+            if hasattr(self.ui, 'notebook') and hasattr(self.ui, 'entry_tab'):
+                self.ui.notebook.select(self.ui.entry_tab)
+                print("Database valid - starting on Entry tab")
         
         # Start the chain with database validation
         step0()
@@ -723,154 +729,20 @@ class MiscDataOperations:
                 sv.status.set("Warning: Secondary backup folder unavailable - backup saved to primary only")
     
     def save_settings_backup(self):
-        """Save settings to JSON backup file in both primary and secondary locations"""
-        from ui_utils import save_json_mirrored
+        """Save settings to JSON backup file in both primary and secondary locations.
         
+        Uses the main config file which is already mirrored to secondary.
+        """
         try:
-            db_type = sv.db_type.get()
-            
-            # Collect dogs from database
-            dogs = []
-            try:
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                # Check if database file exists
-                if db_type == "sqlite":
-                    import config as config_module
-                    db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-                    if os.path.exists(db_path):
-                        with database.get_connection() as conn:
-                            result = conn.execute(text("SELECT name FROM dogs ORDER BY name"))
-                            dogs = [row[0] for row in result]
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass  # If database doesn't exist yet, dogs list stays empty
-            
-            # Collect locations from database
-            locations = []
-            try:
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                # Check if database file exists
-                if db_type == "sqlite":
-                    import config as config_module
-                    db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-                    if os.path.exists(db_path):
-                        with database.get_connection() as conn:
-                            result = conn.execute(text("SELECT name FROM training_locations ORDER BY name"))
-                            locations = [row[0] for row in result]
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass  # If database doesn't exist yet, locations list stays empty
-            
-            # Collect terrain types from database
-            terrain_types = []
-            try:
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                # Check if database file exists
-                if db_type == "sqlite":
-                    import config as config_module
-                    db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-                    if os.path.exists(db_path):
-                        with database.get_connection() as conn:
-                            result = conn.execute(text("SELECT name FROM terrain_types ORDER BY name"))
-                            terrain_types = [row[0] for row in result]
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass  # If database doesn't exist yet, terrain_types list stays empty
-            
-            # Collect distraction types from database
-            distraction_types = []
-            try:
-                import config
-                old_db_type = config.DB_TYPE
-                config.DB_TYPE = db_type
-                
-                from database import engine
-                engine.dispose()
-                from importlib import reload
-                import database
-                reload(database)
-                
-                # Check if database file exists
-                if db_type == "sqlite":
-                    import config as config_module
-                    db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
-                    if os.path.exists(db_path):
-                        with database.get_connection() as conn:
-                            result = conn.execute(text("SELECT name FROM distraction_types ORDER BY name"))
-                            distraction_types = [row[0] for row in result]
-                
-                # Restore original DB_TYPE
-                config.DB_TYPE = old_db_type
-                database.engine.dispose()
-                reload(database)
-            except:
-                pass  # If database doesn't exist yet, distraction_types list stays empty
-            
-            # Get handler name from config
-            handler_name = self.ui.config.get("handler_name", "")
-            
-            # Create settings dictionary
-            settings = {
-                "dogs": sorted(dogs),
-                "training_locations": sorted(locations),
-                "terrain_types": sorted(terrain_types),
-                "distraction_types": sorted(distraction_types),
-                "handler_name": handler_name,
-                "backup_date": datetime.now().isoformat()
-            }
-            
-            # Save to both primary and secondary using mirrored write
-            primary, secondary = save_json_mirrored("airscenting_settings.json", settings)
-            
-            if primary:
-                print(f"Settings backup saved: {primary}")
-            if secondary:
-                print(f"Settings backup mirrored: {secondary}")
-            
+            # The main config file already contains all settings and is mirrored
+            # Just ensure config is up-to-date and save it
+            self.ui.save_config()
+            print("Settings backup saved via main config file")
         except Exception as e:
             print(f"Warning: Failed to save settings backup: {e}")
     
     def restore_settings_from_json(self):
-        """Restore settings from JSON backup file in secondary backup folder"""
+        """Restore settings from JSON config file in secondary backup folder"""
         # Block if sync is in progress
         if sv.sync_in_progress:
             messagebox.showinfo(
@@ -890,25 +762,25 @@ class MiscDataOperations:
             messagebox.showwarning("Invalid Folder", f"Secondary backup folder does not exist:\n{backup_folder}")
             return
         
-        # Look for settings file in JSON subfolder first, then root (for backward compatibility)
+        # Look for config file in JSON subfolder
         json_subfolder = backup_path / "JSON"
         settings_path = None
         
         if json_subfolder.exists():
-            candidate = json_subfolder / "airscenting_settings.json"
+            # Try new config file name first
+            candidate = json_subfolder / ".airscenting_config.json"
             if candidate.exists():
                 settings_path = candidate
-        
-        # Fallback to root folder for backward compatibility
-        if not settings_path:
-            candidate = backup_path / "airscenting_settings.json"
-            if candidate.exists():
-                settings_path = candidate
+            else:
+                # Fallback to old settings file for backward compatibility
+                candidate = json_subfolder / "airscenting_settings.json"
+                if candidate.exists():
+                    settings_path = candidate
         
         if not settings_path:
             messagebox.showinfo("No Settings Backup", 
                                f"No settings backup file found in:\n{backup_folder}/JSON/\n\n"
-                               f"Looking for: airscenting_settings.json")
+                               f"Looking for: .airscenting_config.json")
             return
         
         try:
@@ -917,8 +789,20 @@ class MiscDataOperations:
                 settings = json.load(f)
             
             print(f"Restore: Loaded settings from {settings_path}")
-            print(f"Restore: Found dogs: {settings.get('dogs', [])}")
-            print(f"Restore: Found locations: {settings.get('training_locations', [])}")
+            
+            # Handle both old and new config formats
+            # New format uses 'dog_names', old uses 'dogs'
+            dogs = settings.get("dog_names", settings.get("dogs", []))
+            locations = settings.get("training_locations", [])
+            terrain_types = settings.get("terrain_types", [])
+            distraction_types = settings.get("distraction_types", [])
+            
+            # Get handler from nested config (new) or flat (old)
+            airscenting_config = settings.get("airscenting", {})
+            handler_name = airscenting_config.get("default_handler", settings.get("handler_name", ""))
+            
+            print(f"Restore: Found dogs: {dogs}")
+            print(f"Restore: Found locations: {locations}")
             
             db_type = sv.db_type.get()
             
@@ -939,7 +823,6 @@ class MiscDataOperations:
             distraction_added = 0
             
             # Insert dogs to database
-            dogs = settings.get("dogs", [])
             if dogs:
                 print(f"Restore: Attempting to restore {len(dogs)} dogs...")
                 for dog_name in dogs:
@@ -965,7 +848,6 @@ class MiscDataOperations:
                         print(f"Restore: Failed to add dog '{dog_name}': {e}")
             
             # Insert locations to database
-            locations = settings.get("training_locations", [])
             if locations:
                 print(f"Restore: Attempting to restore {len(locations)} locations...")
                 for location in locations:
@@ -991,7 +873,6 @@ class MiscDataOperations:
                         print(f"Restore: Failed to add location '{location}': {e}")
             
             # Insert terrain types to database
-            terrain_types = settings.get("terrain_types", [])
             if terrain_types:
                 print(f"Restore: Attempting to restore {len(terrain_types)} terrain types...")
                 for terrain in terrain_types:
@@ -1014,7 +895,6 @@ class MiscDataOperations:
                         print(f"Restore: Failed to add terrain type '{terrain}': {e}")
             
             # Insert distraction types to database
-            distraction_types = settings.get("distraction_types", [])
             if distraction_types:
                 print(f"Restore: Attempting to restore {len(distraction_types)} distraction types...")
                 for distraction in distraction_types:
@@ -1041,10 +921,12 @@ class MiscDataOperations:
             database.engine.dispose()
             reload(database)
             
-            # Save handler name to config
-            if "handler_name" in settings:
-                self.ui.config["handler_name"] = settings["handler_name"]
-                sv.default_handler.set(settings["handler_name"])
+            # Save handler name to nested airscenting config
+            if handler_name:
+                if "airscenting" not in self.ui.config:
+                    self.ui.config["airscenting"] = {}
+                self.ui.config["airscenting"]["default_handler"] = handler_name
+                sv.default_handler.set(handler_name)
             
             self.ui.save_config()
             
@@ -1092,8 +974,8 @@ class MiscDataOperations:
                 msg += f"Added {terrain_added} terrain type(s)\n"
             if distraction_added > 0:
                 msg += f"Added {distraction_added} distraction type(s)\n"
-            if "handler_name" in settings:
-                msg += f"Restored handler name: {settings['handler_name']}\n"
+            if handler_name:
+                msg += f"Restored handler name: {handler_name}\n"
             if sessions_restored > 0:
                 msg += f"Restored {sessions_restored} session(s)\n"
             
@@ -1483,12 +1365,16 @@ class MiscDataOperations:
             if hasattr(self.ui, 'a_location_combo'):
                 self.ui.refresh_location_list()
             
-            # Also try to restore from settings backup if it exists
+            # Also try to restore from config backup if it exists
             settings_restored = False
             terrain_added = 0
             distraction_added = 0
             
-            settings_path = backup_path / "airscenting_settings.json"
+            # Try new config file first, then old settings file
+            settings_path = backup_path / ".airscenting_config.json"
+            if not settings_path.exists():
+                settings_path = backup_path / "airscenting_settings.json"
+            
             if settings_path.exists():
                 try:
                     with open(settings_path, 'r') as f:

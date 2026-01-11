@@ -249,9 +249,11 @@ class Misc2Operations:
             if working_dialog:
                 working_dialog.close(delay_ms=200)
 
-        # Save last handler name to config
+        # Save last handler name to nested airscenting config
         if handler:
-            self.ui.config["last_handler_name"] = handler
+            if "airscenting" not in self.ui.config:
+                self.ui.config["airscenting"] = {}
+            self.ui.config["airscenting"]["last_handler"] = handler
             self.ui.save_config()
 
         # Save session to JSON backup (include uuid and update_time for sync)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-About Dialog for Airscent Training Tracker
+About Dialog for Training Tracker Applications
 Copyright (C) 2024 Al Gelders
 
 This program is free software: you can redistribute it and/or modify
@@ -13,12 +13,19 @@ import tkinter as tk
 from tkinter import ttk
 import webbrowser
 
+# Default values for airscenting (backward compatible)
+DEFAULT_APP_TITLE = "Airscent Training Tracker"
+DEFAULT_GITHUB_URL = "https://github.com/agelders2021/airscent_tracker"
+
 class AboutDialog:
     """Display an About dialog with program information"""
     
-    def __init__(self, parent, version="1.0"):
+    def __init__(self, parent, version="1.0", app_title=None, github_url=None):
+        self.app_title = app_title or DEFAULT_APP_TITLE
+        self.github_url = github_url or DEFAULT_GITHUB_URL
+        
         self.dialog = tk.Toplevel(parent)
-        self.dialog.title("About Airscent Training Tracker")
+        self.dialog.title(f"About {self.app_title}")
         self.dialog.resizable(False, False)
         
         # Set size
@@ -42,7 +49,7 @@ class AboutDialog:
         # Title
         title_label = tk.Label(
             frame,
-            text="Airscent Training Tracker",
+            text=self.app_title,
             font=('Arial', 16, 'bold'),
             bg='white',
             fg='#2c3e50'
@@ -62,7 +69,7 @@ class AboutDialog:
         # Copyright
         copyright_label = tk.Label(
             frame,
-            text="Copyright © 2024 Al Gelders",
+            text="Copyright Â© 2024 Al Gelders",
             font=('Arial', 10),
             bg='white',
             fg='#34495e'
@@ -100,17 +107,16 @@ class AboutDialog:
         github_label.pack()
         
         # Clickable GitHub URL
-        github_url = "https://github.com/agelders2021/mantrailing_tracker"
         github_link = tk.Label(
             github_frame,
-            text=github_url,
+            text=self.github_url,
             font=('Arial', 9, 'underline'),
             bg='white',
             fg='#3498db',
             cursor='hand2'
         )
         github_link.pack()
-        github_link.bind('<Button-1>', lambda e: webbrowser.open(github_url))
+        github_link.bind('<Button-1>', lambda e: webbrowser.open(self.github_url))
         
         # Close button
         close_button = ttk.Button(
@@ -127,6 +133,6 @@ class AboutDialog:
         # Bind Escape key to close
         self.dialog.bind('<Escape>', lambda e: self.dialog.destroy())
 
-def show_about(parent, version="1.0"):
+def show_about(parent, version="1.0", app_title=None, github_url=None):
     """Convenience function to show the About dialog"""
-    AboutDialog(parent, version)
+    AboutDialog(parent, version, app_title, github_url)

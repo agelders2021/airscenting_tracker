@@ -608,8 +608,11 @@ class SetupTab:
             sv.subjects_found.set("")
             self.ui.form_mgmt.update_subjects_found()
             
-            # Refresh dog list on Setup tab
+            # Refresh Setup tab lists
             self.refresh_dog_list()
+            self.load_locations_from_database()
+            self.load_terrain_from_database()
+            self.load_distraction_from_database()
             
             # Save configuration and bootstrap to persist the new paths
             self.ui.save_config()
@@ -639,21 +642,23 @@ class SetupTab:
         secondary_images = secondary_path / "Images"
         secondary_json = secondary_path / "JSON"
         
-        # Check what already exists
+        # Check what already exists and has files
         images_exists = secondary_images.exists()
         json_exists = secondary_json.exists()
+        images_has_files = images_exists and any(secondary_images.iterdir())
+        json_has_files = json_exists and any(secondary_json.iterdir())
         
-        if images_exists or json_exists:
+        if images_has_files or json_has_files:
             exists_list = []
-            if images_exists:
+            if images_has_files:
                 exists_list.append("Images/")
-            if json_exists:
+            if json_has_files:
                 exists_list.append("JSON/")
             
             messagebox.showinfo(
                 "Secondary Backup Folder",
                 f"Secondary backup folder already has data:\n\n"
-                f"Found: {', '.join(exists_list)}\n\n"
+                f"Found files in: {', '.join(exists_list)}\n\n"
                 f"Existing files will be preserved.\n"
                 f"New backups will be added to these folders."
             )
@@ -662,6 +667,9 @@ class SetupTab:
         try:
             secondary_images.mkdir(exist_ok=True)
             secondary_json.mkdir(exist_ok=True)
+            print(f"Created/verified secondary backup folders:")
+            print(f"  Images: {secondary_images} (exists={secondary_images.exists()})")
+            print(f"  JSON: {secondary_json} (exists={secondary_json.exists()})")
             
             # Update machine-specific path for bootstrap
             self.ui.machine_backup_folder = secondary_folder
@@ -820,8 +828,11 @@ class SetupTab:
                 # Update subjects_found combo state (will disable since num_subjects is blank)
                 self.ui.form_mgmt.update_subjects_found()
                 
-                # Refresh dog list on Setup tab (new database has no dogs)
+                # Refresh Setup tab lists (new database has no data initially, but offer_load_default_types may have added some)
                 self.refresh_dog_list()
+                self.load_locations_from_database()
+                self.load_terrain_from_database()
+                self.load_distraction_from_database()
                 
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to create database:\n{e}\n\n{type(e).__name__}")
@@ -937,8 +948,11 @@ class SetupTab:
                 # Update subjects_found combo state (will disable since num_subjects is blank)
                 self.ui.form_mgmt.update_subjects_found()
                 
-                # Refresh dog list on Setup tab (new database has no dogs)
+                # Refresh Setup tab lists
                 self.refresh_dog_list()
+                self.load_locations_from_database()
+                self.load_terrain_from_database()
+                self.load_distraction_from_database()
                 
             except Exception as e:
                 # Restore original DB_TYPE on error
@@ -1040,7 +1054,7 @@ class SetupTab:
             db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
             if not os.path.exists(db_path):
                 # Database doesn't exist - clear combobox and return
-                if hasattr(self.ui, 'a_location_combo'):
+                if hasattr(self.ui, 'a_location_combo') and self.ui.a_location_combo:
                     self.ui.a_location_combo['values'] = []
                 return
         
@@ -1070,7 +1084,7 @@ class SetupTab:
             reload(database)
             
             # Update combobox
-            if hasattr(self.ui, 'a_location_combo'):
+            if hasattr(self.ui, 'a_location_combo') and self.ui.a_location_combo:
                 self.ui.a_location_combo['values'] = locations
                 
         except Exception as e:
@@ -1088,9 +1102,7 @@ class SetupTab:
             # If table doesn't exist yet, silently skip
             if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
                 # Clear the combobox
-                #if hasattr(self.ui, 'a_location_combo'):   ahg
-                if hasattr(self.ui, 'a_location_combo'):
-                    #self.ui.a_location_combo['values'] = []   ahg
+                if hasattr(self.ui, 'a_location_combo') and self.ui.a_location_combo:
                     self.ui.a_location_combo['values'] = []
             else:
                 print(f"Error refreshing location list: {e}")
@@ -1140,7 +1152,7 @@ class SetupTab:
                 self.s_terrain_tree.insert('', tk.END, text=str(idx), values=(terrain,))
             
             # Also update Entry tab terrain combo box
-            if hasattr(self.ui, 'a_terrain_combo'):
+            if hasattr(self.ui, 'a_terrain_combo') and self.ui.a_terrain_combo:
                 self.ui.a_terrain_combo['values'] = terrain_types
                 
         except Exception as e:
@@ -1278,6 +1290,9 @@ class SetupTab:
                 sv.new_location.set("")
                 sv.status.set(f"Added location: {location}")
                 
+                # Sync config with database and save
+                self._sync_config_from_database()
+                
             except Exception as e:
                 # Restore original DB_TYPE on error
                 try:
@@ -1343,6 +1358,9 @@ class SetupTab:
                 
                 sv.status.set(f"Removed location: {location}")
                 self.s_remove_location_btn.config(state="disabled")
+                
+                # Sync config with database and save
+                self._sync_config_from_database()
                 
             except Exception as e:
                 # Restore original DB_TYPE on error
@@ -1446,7 +1464,7 @@ class SetupTab:
             # print(f"DEBUG refresh_dog_list: db_path={db_path}, exists={os.path.exists(db_path)}")  # DEBUG
             if not os.path.exists(db_path):
                 # Database doesn't exist - clear combobox/listbox and return
-                if hasattr(self.ui, 'a_dog_combo'):
+                if hasattr(self.ui, 'a_dog_combo') and self.ui.a_dog_combo:
                     self.ui.a_dog_combo['values'] = []
                 if hasattr(self, 's_dog_listbox'):
                     self.s_dog_listbox.delete(0, tk.END)
@@ -1481,7 +1499,7 @@ class SetupTab:
             reload(database)
             
             # Update combobox
-            if hasattr(self.ui, 'a_dog_combo'):
+            if hasattr(self.ui, 'a_dog_combo') and self.ui.a_dog_combo:
                 self.ui.a_dog_combo['values'] = dogs
                 # print(f"DEBUG refresh_dog_list: Updated dog_combo with {len(dogs)} dogs")  # DEBUG
             
@@ -1507,7 +1525,7 @@ class SetupTab:
             # If database/tables don't exist yet, silently skip (they'll be created later)
             if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
                 # Clear the combobox and listbox
-                if hasattr(self.ui, 'a_dog_combo'):
+                if hasattr(self.ui, 'a_dog_combo') and self.ui.a_dog_combo:
                     self.ui.a_dog_combo['values'] = []
                 if hasattr(self, 's_dog_listbox'):
                     self.s_dog_listbox.delete(0, tk.END)
@@ -1566,7 +1584,7 @@ class SetupTab:
                 self.s_dog_listbox.insert(tk.END, dog_name)
                 
                 # Update dog combobox in Entry tab if it exists
-                if hasattr(self.ui, 'a_dog_combo'):
+                if hasattr(self.ui, 'a_dog_combo') and self.ui.a_dog_combo:
                     self.refresh_dog_list()
                 
                 # Select the newly added dog in the combobox
@@ -1575,8 +1593,8 @@ class SetupTab:
                 sv.new_dog.set("")
                 sv.status.set(f"Added dog: {dog_name}")
                 
-                # Auto-backup settings after adding dog
-                self.ui.misc_data_ops.save_settings_backup()
+                # Sync config with database and save
+                self._sync_config_from_database()
                 
             except Exception as e:
                 # Restore original DB_TYPE on error
@@ -1646,11 +1664,14 @@ class SetupTab:
                 self.s_dog_listbox.delete(selection[0])
                 
                 # Update dog combobox in Entry tab if it exists
-                if hasattr(self.ui, 'a_dog_combo'):
+                if hasattr(self.ui, 'a_dog_combo') and self.ui.a_dog_combo:
                     self.refresh_dog_list()
                 
                 sv.status.set(f"Removed dog: {dog_name}")
                 self.s_remove_dog_btn.config(state="disabled")
+                
+                # Sync config with database and save
+                self._sync_config_from_database()
                 
             except Exception as e:
                 # Restore original DB_TYPE on error
@@ -1721,6 +1742,9 @@ class SetupTab:
                 sv.new_terrain.set("")
                 sv.status.set(f"Added terrain type: {terrain}")
                 
+                # Sync config with database and save
+                self._sync_config_from_database()
+                
             except Exception as e:
                 # Restore original DB_TYPE on error
                 try:
@@ -1787,6 +1811,9 @@ class SetupTab:
                 
                 sv.status.set(f"Removed terrain type: {terrain}")
                 
+                # Sync config with database and save
+                self._sync_config_from_database()
+                
             except Exception as e:
                 # Restore original DB_TYPE on error
                 try:
@@ -1824,6 +1851,9 @@ class SetupTab:
                     if t == terrain:
                         self.s_terrain_tree.selection_set(new_item)
                         self.s_terrain_tree.see(new_item)
+                
+                # Save config
+                self.ui.save_config()
 
     def move_terrain_down(self):
         """Move selected terrain type down"""
@@ -1847,6 +1877,9 @@ class SetupTab:
                     if t == terrain:
                         self.s_terrain_tree.selection_set(new_item)
                         self.s_terrain_tree.see(new_item)
+                
+                # Save config
+                self.ui.save_config()
 
     def restore_default_terrain_types(self):
         """Restore default terrain types"""
@@ -1863,6 +1896,9 @@ class SetupTab:
                 self.s_terrain_tree.insert('', tk.END, text=str(idx), values=(terrain,))
             
             sv.status.set("Restored default terrain types")
+            
+            # Save config
+            self.ui.save_config()
     
 
     def update_distraction_type_button_states(self, *args):
@@ -1918,6 +1954,9 @@ class SetupTab:
                 sv.new_distraction.set("")
                 sv.status.set(f"Added distraction type: {distraction}")
                 
+                # Sync config with database and save
+                self._sync_config_from_database()
+                
             except Exception as e:
                 # Restore original DB_TYPE on error
                 try:
@@ -1935,10 +1974,6 @@ class SetupTab:
                 else:
                     messagebox.showerror("Database Error", f"Failed to add distraction type:\n{e}")
                     print(f"Error adding distraction type: {e}")
-    
-                
-                sv.new_distraction.set("")
-                sv.status.set(f"Added distraction type: {distraction}")
 
     def remove_distraction_type(self):
         """Remove selected distraction type from database"""
@@ -1988,6 +2023,9 @@ class SetupTab:
                 
                 sv.status.set(f"Removed distraction type: {distraction}")
                 
+                # Sync config with database and save
+                self._sync_config_from_database()
+                
             except Exception as e:
                 # Restore original DB_TYPE on error
                 try:
@@ -2025,6 +2063,9 @@ class SetupTab:
                     if d == distraction:
                         self.s_distraction_type_tree.selection_set(new_item)
                         self.s_distraction_type_tree.see(new_item)
+                
+                # Save config
+                self.ui.save_config()
 
     def move_distraction_down(self):
         """Move selected distraction type down"""
@@ -2048,6 +2089,9 @@ class SetupTab:
                     if d == distraction:
                         self.s_distraction_type_tree.selection_set(new_item)
                         self.s_distraction_type_tree.see(new_item)
+                
+                # Save config
+                self.ui.save_config()
 
     def restore_default_distraction_types(self):
         """Restore default distraction types"""
@@ -2064,6 +2108,9 @@ class SetupTab:
                 self.s_distraction_type_tree.insert('', tk.END, text=str(idx), values=(distraction,))
             
             sv.status.set("Restored default distraction types")
+            
+            # Save config
+            self.ui.save_config()
     
 
     def save_configuration_settings(self):
@@ -2086,8 +2133,12 @@ class SetupTab:
             if not result:
                 return  # User cancelled
         
-        # Update config with default values
-        self.ui.config["handler_name"] = sv.default_handler.get()
+        # Ensure airscenting section exists
+        if "airscenting" not in self.ui.config:
+            self.ui.config["airscenting"] = {}
+        
+        # Update config with default values (nested under airscenting)
+        self.ui.config["airscenting"]["default_handler"] = sv.default_handler.get()
         self.ui.config["db_type"] = sv.db_type.get()
         
         # Get current data from database and store in config for backup/rebuild
@@ -2130,5 +2181,37 @@ class SetupTab:
         self.ui.form_mgmt.take_form_snapshot()
         
         sv.status.set("Configuration saved successfully!")
+    
+    def _sync_config_from_database(self):
+        """Sync config with current database data and save to file.
+        
+        Called after any add/remove/move operation on dogs, locations,
+        terrain types, or distraction types.
+        """
+        try:
+            from ui_database import get_db_manager
+            db_mgr = get_db_manager(sv.db_type.get())
+            
+            # Get dog names from database
+            dog_names = db_mgr.load_dogs()
+            self.ui.config["dog_names"] = dog_names if dog_names else []
+            
+            # Get terrain types from database
+            terrain_types = db_mgr.load_terrain_types()
+            self.ui.config["terrain_types"] = terrain_types if terrain_types else []
+            
+            # Get distraction types from database
+            distraction_types = db_mgr.load_distraction_types()
+            self.ui.config["distraction_types"] = distraction_types if distraction_types else []
+            
+            # Get training locations from database
+            locations = db_mgr.load_locations()
+            self.ui.config["training_locations"] = locations if locations else []
+            
+            # Save config to file
+            self.ui.save_config()
+            
+        except Exception as e:
+            print(f"Warning: Could not sync config from database: {e}")
     
 

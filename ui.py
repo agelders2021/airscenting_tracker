@@ -206,13 +206,13 @@ class AirScentingUI:
         status_bar_frame.pack(side=tk.BOTTOM, fill=tk.X)
         
         # Left arrow button for message history
-        self.status_left_arrow = tk.Button(status_bar_frame, text="◀", 
+        self.status_left_arrow = tk.Button(status_bar_frame, text="â—€", 
                                            width=2, state="disabled",
                                            command=self.prev_status_message)
         self.status_left_arrow.pack(side=tk.LEFT, padx=(2, 0))
         
         # Right arrow button for message history
-        self.status_right_arrow = tk.Button(status_bar_frame, text="▶", 
+        self.status_right_arrow = tk.Button(status_bar_frame, text="â–¶", 
                                             width=2, state="disabled",
                                             command=self.next_status_message)
         self.status_right_arrow.pack(side=tk.LEFT, padx=(2, 0))
@@ -240,7 +240,7 @@ class AirScentingUI:
         
         
         # Cancel button to dismiss message (visible X button)
-        # self.status_cancel_button = tk.Button(status_bar_frame, text="✕", 
+        # self.status_cancel_button = tk.Button(status_bar_frame, text="âœ•", 
         #                                       width=3, 
         #                                       command=self.dismiss_status_message,
         #                                       relief=tk.FLAT,
@@ -644,15 +644,22 @@ class AirScentingUI:
         """Load configuration from file in primary JSON folder only.
         
         Returns default config if JSON folder not yet configured.
+        Uses nested structure for program-specific settings (airscenting/trailing).
         """
         default_config = {
-            "handler_name": "",
-            "last_handler_name": "",
             "terrain_types": get_default_terrain_types(),
             "distraction_types": get_default_distraction_types(),
             "training_locations": [],
-            "dog_names": [],  # Store dog names in config
-            "db_type": "sqlite"  # Default database type
+            "dog_names": [],
+            "db_type": "sqlite",
+            "airscenting": {
+                "default_handler": "",
+                "last_handler": ""
+            },
+            "trailing": {
+                "default_handler": "",
+                "last_dog": ""
+            }
         }
         
         # Only look in primary JSON folder
@@ -662,18 +669,33 @@ class AirScentingUI:
             try:
                 with open(json_config_path, 'r') as f:
                     saved = json.load(f)
-                    # Add terrain_types if not present
+                    
+                    # Migrate old flat format to nested format
+                    if "airscenting" not in saved:
+                        saved["airscenting"] = {
+                            "default_handler": saved.get("handler_name", ""),
+                            "last_handler": saved.get("last_handler_name", "")
+                        }
+                        # Remove old keys if present
+                        saved.pop("handler_name", None)
+                        saved.pop("last_handler_name", None)
+                    
+                    if "trailing" not in saved:
+                        saved["trailing"] = {
+                            "default_handler": "",
+                            "last_dog": ""
+                        }
+                    
+                    # Add shared settings if not present
                     if "terrain_types" not in saved:
                         saved["terrain_types"] = get_default_terrain_types()
-                    # Add distraction_types if not present
                     if "distraction_types" not in saved:
                         saved["distraction_types"] = get_default_distraction_types()
-                    # Add training_locations if not present
                     if "training_locations" not in saved:
                         saved["training_locations"] = []
-                    # Add dog_names if not present
                     if "dog_names" not in saved:
                         saved["dog_names"] = []
+                    
                     default_config.update(saved)
             except:
                 pass
@@ -774,10 +796,10 @@ class AirScentingUI:
         self.a_edit_delete_btn.grid(row=0, column=5, padx=5, pady=2)
         
         # Previous and Next session navigation buttons
-        self.a_prev_session_btn = tk.Button(session_frame, text="◀ Previous", bg="#FF8C00", fg="white",
+        self.a_prev_session_btn = tk.Button(session_frame, text="â—€ Previous", bg="#FF8C00", fg="white",
                                          width=10, command=self.navigation.navigate_previous_session, state=tk.DISABLED)
         self.a_prev_session_btn.grid(row=0, column=6, padx=2, pady=2)
-        self.a_next_session_btn = tk.Button(session_frame, text="Next ▶", bg="#FF8C00", fg="white",
+        self.a_next_session_btn = tk.Button(session_frame, text="Next â–¶", bg="#FF8C00", fg="white",
                                          width=10, command=self.navigation.navigate_next_session, state=tk.DISABLED)
         self.a_next_session_btn.grid(row=0, column=7, padx=2, pady=2)
         
@@ -804,8 +826,9 @@ class AirScentingUI:
         
         # Row 3: Handler, Session Purpose
         tk.Label(session_frame, text="Handler:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        # If handler_name is set, use it; otherwise use last_handler_name
-        default_handler = self.config.get("handler_name", "") or self.config.get("last_handler_name", "")
+        # Get handler from nested airscenting config
+        airscenting_config = self.config.get("airscenting", {})
+        default_handler = airscenting_config.get("default_handler", "") or airscenting_config.get("last_handler", "")
         sv.handler.set(default_handler)
         tk.Entry(session_frame, textvariable=sv.handler, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
@@ -1722,20 +1745,20 @@ class AirScentingUI:
         # Build error messages
         errors = []
         if not database_exists:
-            errors.append("• Database not created")
+            errors.append("â€¢ Database not created")
         
         # Check both that folder is set AND exists on disk
         if not backup_folder or not os.path.exists(backup_folder):
             if not backup_folder:
-                errors.append("• Backup folder not selected")
+                errors.append("â€¢ Backup folder not selected")
             else:
-                errors.append(f"• Backup folder does not exist: {backup_folder}")
+                errors.append(f"â€¢ Backup folder does not exist: {backup_folder}")
         
         if not trail_maps_folder or not os.path.exists(trail_maps_folder):
             if not trail_maps_folder:
-                errors.append("• Trail Maps Storage folder not selected")
+                errors.append("â€¢ Trail Maps Storage folder not selected")
             else:
-                errors.append(f"• Trail Maps Storage folder does not exist: {trail_maps_folder}")
+                errors.append(f"â€¢ Trail Maps Storage folder does not exist: {trail_maps_folder}")
         
         # Check if at least one dog is defined
         if database_exists:
@@ -1761,7 +1784,7 @@ class AirScentingUI:
                 reload(database)
                 
                 if dog_count == 0:
-                    errors.append("• At least one dog must be defined")
+                    errors.append("â€¢ At least one dog must be defined")
             except Exception as e:
                 print(f"Error checking dogs: {e}")
                 # Don't block if there's an error checking

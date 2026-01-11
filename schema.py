@@ -20,6 +20,11 @@ def create_tables():
         distraction_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
         selected_terrain_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
         subject_response_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
+        # Trailing session tables
+        t_session_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
+        t_selected_terrain_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
+        t_selected_purpose_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
+        t_distraction_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
     else:  # postgres or supabase
         dog_id_type = "SERIAL PRIMARY KEY"
         session_id_type = "SERIAL PRIMARY KEY"
@@ -29,6 +34,11 @@ def create_tables():
         distraction_id_type = "SERIAL PRIMARY KEY"
         selected_terrain_id_type = "SERIAL PRIMARY KEY"
         subject_response_id_type = "SERIAL PRIMARY KEY"
+        # Trailing session tables
+        t_session_id_type = "SERIAL PRIMARY KEY"
+        t_selected_terrain_id_type = "SERIAL PRIMARY KEY"
+        t_selected_purpose_id_type = "SERIAL PRIMARY KEY"
+        t_distraction_id_type = "SERIAL PRIMARY KEY"
     
     # Settings table (for database-specific settings like last dog)
     settings_table = f"""
@@ -140,6 +150,94 @@ def create_tables():
     )
     """
     
+    # =========================================================================
+    # TRAILING SESSION TABLES
+    # =========================================================================
+    
+    # Trailing training sessions table
+    t_sessions_table = f"""
+    CREATE TABLE IF NOT EXISTS t_training_sessions (
+        id {t_session_id_type},
+        t_date DATE NOT NULL,
+        t_session_number INTEGER NOT NULL,
+        t_handler TEXT,
+        t_field_support TEXT,
+        t_dog_name TEXT,
+        t_location TEXT,
+        t_start_time TEXT,
+        t_finish_time TEXT,
+        t_trail_age TEXT,
+        t_trail_length TEXT,
+        t_difficulty TEXT,
+        t_trail_layer TEXT,
+        t_cross_track_layer TEXT,
+        t_cross_track_age TEXT,
+        t_weather_laying TEXT,
+        t_temperature_laying TEXT,
+        t_wind_speed_laying TEXT,
+        t_wind_direction_laying TEXT,
+        t_humidity_laying TEXT,
+        t_weather_running TEXT,
+        t_temperature_running TEXT,
+        t_wind_speed_running TEXT,
+        t_wind_direction_running TEXT,
+        t_humidity_running TEXT,
+        t_start_behavior TEXT,
+        t_consistency TEXT,
+        t_head_position TEXT,
+        t_pace TEXT,
+        t_indication TEXT,
+        t_time_to_complete TEXT,
+        t_success_rate TEXT,
+        t_impression TEXT,
+        t_map_files TEXT,
+        user_name TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        entry_type TEXT,
+        update_time TIMESTAMP,
+        uuid TEXT,
+        status TEXT DEFAULT 'active',
+        UNIQUE(t_session_number, t_dog_name)
+    )
+    """
+    
+    # Trailing selected terrains table (many-to-many: t_sessions to terrain types)
+    t_selected_terrains_table = f"""
+    CREATE TABLE IF NOT EXISTS t_selected_terrains (
+        id {t_selected_terrain_id_type},
+        t_session_id INTEGER NOT NULL,
+        terrain_name TEXT NOT NULL,
+        user_name TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (t_session_id) REFERENCES t_training_sessions(id)
+    )
+    """
+    
+    # Trailing selected purposes table (many-to-many: t_sessions to purposes)
+    t_selected_purposes_table = f"""
+    CREATE TABLE IF NOT EXISTS t_selected_purposes (
+        id {t_selected_purpose_id_type},
+        t_session_id INTEGER NOT NULL,
+        purpose_name TEXT NOT NULL,
+        user_name TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (t_session_id) REFERENCES t_training_sessions(id)
+    )
+    """
+    
+    # Trailing distractions table (one-to-many: t_sessions to distractions as JSON)
+    t_distractions_table = f"""
+    CREATE TABLE IF NOT EXISTS t_distractions (
+        id {t_distraction_id_type},
+        t_session_id INTEGER NOT NULL,
+        distraction_data TEXT NOT NULL,
+        user_name TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (t_session_id) REFERENCES t_training_sessions(id)
+    )
+    """
+    
     with get_connection() as conn:
         # Create settings table
         conn.execute(text(settings_table))
@@ -157,6 +255,13 @@ def create_tables():
         conn.execute(text(selected_terrains_table))
         # Create subject_responses table
         conn.execute(text(subject_responses_table))
+        
+        # Create trailing session tables
+        conn.execute(text(t_sessions_table))
+        conn.execute(text(t_selected_terrains_table))
+        conn.execute(text(t_selected_purposes_table))
+        conn.execute(text(t_distractions_table))
+        
         conn.commit()
         
         print("Database tables created successfully")
@@ -165,6 +270,12 @@ def create_tables():
 def drop_tables():
     """Drop all tables (use with caution!)"""
     with get_connection() as conn:
+        # Drop trailing tables first (they have foreign keys)
+        conn.execute(text("DROP TABLE IF EXISTS t_distractions"))
+        conn.execute(text("DROP TABLE IF EXISTS t_selected_purposes"))
+        conn.execute(text("DROP TABLE IF EXISTS t_selected_terrains"))
+        conn.execute(text("DROP TABLE IF EXISTS t_training_sessions"))
+        # Drop airscenting tables
         conn.execute(text("DROP TABLE IF EXISTS subject_responses"))
         conn.execute(text("DROP TABLE IF EXISTS selected_terrains"))
         conn.execute(text("DROP TABLE IF EXISTS training_sessions"))

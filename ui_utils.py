@@ -69,6 +69,7 @@ def get_secondary_json_folder(create_if_missing=False):
     if backup_path:
         backup_root = Path(backup_path)
         if not backup_root.exists():
+            print(f"get_secondary_json_folder: backup_root does not exist: {backup_root}")
             return None
         json_folder = backup_root / "JSON"
         if create_if_missing and not json_folder.exists():
@@ -80,6 +81,10 @@ def get_secondary_json_folder(create_if_missing=False):
                 return None
         if json_folder.exists():
             return json_folder
+        else:
+            print(f"get_secondary_json_folder: JSON folder does not exist: {json_folder}")
+    else:
+        print(f"get_secondary_json_folder: sv.backup_folder is empty")
     return None
 
 

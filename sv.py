@@ -72,6 +72,64 @@ class Stringvars:
         # Note: This holds structured data for subject responses
         self.subject_responses = []
         
+        # ===== TRAILING SESSION INFORMATION =====
+        self.t_date = tk.StringVar(master=master, value=datetime.now().strftime("%Y-%m-%d"))
+        self.t_session = tk.StringVar(master=master, value="1")
+        self.t_handler = tk.StringVar(master=master)
+        self.t_dog = tk.StringVar(master=master)
+        self.t_field_support = tk.StringVar(master=master)
+        self.t_purpose = tk.StringVar(master=master)  # Current dropdown selection
+        self.t_status = tk.StringVar(master=master, value="Ready")
+        
+        # ===== TRAILING TRAIL DETAILS =====
+        self.t_location = tk.StringVar(master=master)
+        self.t_terrain = tk.StringVar(master=master)  # Current dropdown selection
+        self.t_start_time = tk.StringVar(master=master)
+        self.t_finish_time = tk.StringVar(master=master)
+        self.t_trail_age = tk.StringVar(master=master)
+        self.t_trail_length = tk.StringVar(master=master)
+        self.t_difficulty = tk.StringVar(master=master)
+        self.t_trail_layer = tk.StringVar(master=master)
+        self.t_cross_track_layer = tk.StringVar(master=master, value="None")
+        self.t_cross_track_age = tk.StringVar(master=master)
+        
+        # ===== TRAILING WEATHER WHEN LAYING =====
+        self.t_weather_laying = tk.StringVar(master=master)
+        self.t_temp_laying = tk.StringVar(master=master)
+        self.t_wind_laying = tk.StringVar(master=master)
+        self.t_wind_direction_laying = tk.StringVar(master=master)
+        self.t_humidity_laying = tk.StringVar(master=master)
+        
+        # ===== TRAILING WEATHER WHEN RUNNING =====
+        self.t_weather_running = tk.StringVar(master=master)
+        self.t_temp_running = tk.StringVar(master=master)
+        self.t_wind_running = tk.StringVar(master=master)
+        self.t_wind_direction_running = tk.StringVar(master=master)
+        self.t_humidity_running = tk.StringVar(master=master)
+        
+        # ===== TRAILING DOG BEHAVIOR =====
+        self.t_start_behavior = tk.StringVar(master=master)
+        self.t_consistency = tk.StringVar(master=master)
+        self.t_head_pos = tk.StringVar(master=master)  # Hidden but kept for compatibility
+        self.t_pace = tk.StringVar(master=master)
+        self.t_indication = tk.StringVar(master=master)
+        self.t_time = tk.StringVar(master=master)  # Time to complete
+        self.t_success = tk.StringVar(master=master)  # Hidden but kept for compatibility
+        
+        # ===== TRAILING DISTRACTIONS =====
+        self.t_distractions = tk.StringVar(master=master)  # Current dropdown selection
+        self.t_distraction_response = tk.StringVar(master=master)
+        self.t_accumulated_distractions = tk.StringVar(master=master)  # Display string
+        
+        # ===== TRAILING IMPRESSION =====
+        self.t_impression = tk.StringVar(master=master)
+        
+        # ===== TRAILING LISTS (non-StringVar data) =====
+        self.t_purpose_list = []  # Accumulated session purposes
+        self.t_terrain_list = []  # Accumulated terrain types
+        self.t_distractions_list = []  # List of {type, response} dicts
+        self.t_map_files_list = []  # List of trail map file paths
+        
         # ===== SETUP TAB - PATHS =====
         self.db_path = tk.StringVar(master=master)
         self.trail_maps_folder = tk.StringVar(master=master)
@@ -164,6 +222,76 @@ class Stringvars:
         self.new_dog.set("")
         self.new_terrain.set("")
         self.new_distraction.set("")
+    
+    def clear_trailing_session_fields(self, keep_handler=True, keep_dog=True):
+        """
+        Clear all trailing session entry fields
+        
+        Args:
+            keep_handler: If True, preserve handler name (default: True)
+            keep_dog: If True, preserve dog selection (default: True)
+        """
+        self.t_date.set(datetime.now().strftime("%Y-%m-%d"))
+        self.t_session.set("")
+        
+        if not keep_handler:
+            self.t_handler.set("")
+        
+        if not keep_dog:
+            self.t_dog.set("")
+        
+        # Session details
+        self.t_field_support.set("")
+        self.t_purpose.set("")
+        
+        # Trail details
+        self.t_location.set("")
+        self.t_terrain.set("")
+        self.t_start_time.set("")
+        self.t_finish_time.set("")
+        self.t_trail_age.set("")
+        self.t_trail_length.set("")
+        self.t_difficulty.set("")
+        self.t_trail_layer.set("")
+        self.t_cross_track_layer.set("None")
+        self.t_cross_track_age.set("")
+        
+        # Weather laying
+        self.t_weather_laying.set("")
+        self.t_temp_laying.set("")
+        self.t_wind_laying.set("")
+        self.t_wind_direction_laying.set("")
+        self.t_humidity_laying.set("")
+        
+        # Weather running
+        self.t_weather_running.set("")
+        self.t_temp_running.set("")
+        self.t_wind_running.set("")
+        self.t_wind_direction_running.set("")
+        self.t_humidity_running.set("")
+        
+        # Behavior
+        self.t_start_behavior.set("")
+        self.t_consistency.set("")
+        self.t_head_pos.set("")
+        self.t_pace.set("")
+        self.t_indication.set("")
+        self.t_time.set("")
+        self.t_success.set("")
+        
+        # Distractions
+        self.t_distractions.set("")
+        self.t_distraction_response.set("")
+        self.t_accumulated_distractions.set("")
+        
+        # Impression
+        self.t_impression.set("")
+        
+        # Lists
+        self.t_purpose_list.clear()
+        self.t_terrain_list.clear()
+        self.t_distractions_list.clear()
+        self.t_map_files_list.clear()
     
     # ========================================
     # EXPORT/IMPORT METHODS
@@ -260,6 +388,126 @@ class Stringvars:
         self.subject_responses = data.get('subject_responses', []).copy()
     
     # ========================================
+    # TRAILING SESSION EXPORT/IMPORT
+    # ========================================
+    
+    def to_trailing_dict(self):
+        """
+        Export all trailing session data as dictionary
+        
+        Returns:
+            dict: All trailing session field values
+        """
+        return {
+            # Session info
+            't_date': self.t_date.get(),
+            't_session_number': self.t_session.get(),
+            't_handler': self.t_handler.get(),
+            't_dog_name': self.t_dog.get(),
+            't_field_support': self.t_field_support.get(),
+            
+            # Trail details
+            't_location': self.t_location.get(),
+            't_start_time': self.t_start_time.get(),
+            't_finish_time': self.t_finish_time.get(),
+            't_trail_age': self.t_trail_age.get(),
+            't_trail_length': self.t_trail_length.get(),
+            't_difficulty': self.t_difficulty.get(),
+            't_trail_layer': self.t_trail_layer.get(),
+            't_cross_track_layer': self.t_cross_track_layer.get(),
+            't_cross_track_age': self.t_cross_track_age.get(),
+            
+            # Weather laying
+            't_weather_laying': self.t_weather_laying.get(),
+            't_temperature_laying': self.t_temp_laying.get(),
+            't_wind_speed_laying': self.t_wind_laying.get(),
+            't_wind_direction_laying': self.t_wind_direction_laying.get(),
+            't_humidity_laying': self.t_humidity_laying.get(),
+            
+            # Weather running
+            't_weather_running': self.t_weather_running.get(),
+            't_temperature_running': self.t_temp_running.get(),
+            't_wind_speed_running': self.t_wind_running.get(),
+            't_wind_direction_running': self.t_wind_direction_running.get(),
+            't_humidity_running': self.t_humidity_running.get(),
+            
+            # Behavior
+            't_start_behavior': self.t_start_behavior.get(),
+            't_consistency': self.t_consistency.get(),
+            't_head_position': self.t_head_pos.get(),
+            't_pace': self.t_pace.get(),
+            't_indication': self.t_indication.get(),
+            't_time_to_complete': self.t_time.get(),
+            't_success_rate': self.t_success.get(),
+            
+            # Impression
+            't_impression': self.t_impression.get(),
+            
+            # Lists
+            't_purpose_list': self.t_purpose_list.copy(),
+            't_terrain_list': self.t_terrain_list.copy(),
+            't_distractions_list': self.t_distractions_list.copy(),
+            't_map_files': self.t_map_files_list.copy(),
+        }
+    
+    def from_trailing_dict(self, data):
+        """
+        Import trailing session data from dictionary
+        
+        Args:
+            data: Dictionary with trailing session field values
+        """
+        # Session info
+        self.t_date.set(data.get('t_date', ''))
+        self.t_session.set(str(data.get('t_session_number', '')))
+        self.t_handler.set(data.get('t_handler', ''))
+        self.t_dog.set(data.get('t_dog_name', ''))
+        self.t_field_support.set(data.get('t_field_support', ''))
+        
+        # Trail details
+        self.t_location.set(data.get('t_location', ''))
+        self.t_start_time.set(data.get('t_start_time', ''))
+        self.t_finish_time.set(data.get('t_finish_time', ''))
+        self.t_trail_age.set(data.get('t_trail_age', ''))
+        self.t_trail_length.set(data.get('t_trail_length', ''))
+        self.t_difficulty.set(data.get('t_difficulty', ''))
+        self.t_trail_layer.set(data.get('t_trail_layer', ''))
+        self.t_cross_track_layer.set(data.get('t_cross_track_layer', 'None'))
+        self.t_cross_track_age.set(data.get('t_cross_track_age', ''))
+        
+        # Weather laying
+        self.t_weather_laying.set(data.get('t_weather_laying', ''))
+        self.t_temp_laying.set(data.get('t_temperature_laying', ''))
+        self.t_wind_laying.set(data.get('t_wind_speed_laying', ''))
+        self.t_wind_direction_laying.set(data.get('t_wind_direction_laying', ''))
+        self.t_humidity_laying.set(data.get('t_humidity_laying', ''))
+        
+        # Weather running
+        self.t_weather_running.set(data.get('t_weather_running', ''))
+        self.t_temp_running.set(data.get('t_temperature_running', ''))
+        self.t_wind_running.set(data.get('t_wind_speed_running', ''))
+        self.t_wind_direction_running.set(data.get('t_wind_direction_running', ''))
+        self.t_humidity_running.set(data.get('t_humidity_running', ''))
+        
+        # Behavior
+        self.t_start_behavior.set(data.get('t_start_behavior', ''))
+        self.t_consistency.set(data.get('t_consistency', ''))
+        self.t_head_pos.set(data.get('t_head_position', ''))
+        self.t_pace.set(data.get('t_pace', ''))
+        self.t_indication.set(data.get('t_indication', ''))
+        self.t_time.set(data.get('t_time_to_complete', ''))
+        self.t_success.set(data.get('t_success_rate', ''))
+        
+        # Impression
+        self.t_impression.set(data.get('t_impression', ''))
+        
+        # Lists
+        self.t_purpose_list = data.get('t_purpose_list', []).copy()
+        self.t_terrain_list = data.get('t_terrain_list', []).copy()
+        self.t_distractions_list = data.get('t_distractions_list', []).copy()
+        self.t_map_files_list = data.get('t_map_files', []).copy()
+    
+    # ========================================
     # VALIDATION METHODS
     # ========================================
     
@@ -284,6 +532,31 @@ class Stringvars:
             return False, "Session number must be a valid number"
         
         if not self.dog.get():
+            return False, "Dog name is required"
+        
+        return True, ""
+    
+    def validate_trailing_session_data(self):
+        """
+        Validate that required trailing session fields are filled
+        
+        Returns:
+            tuple: (is_valid, error_message)
+        """
+        if not self.t_date.get():
+            return False, "Date is required"
+        
+        if not self.t_session.get():
+            return False, "Session number is required"
+        
+        try:
+            session_num = int(self.t_session.get())
+            if session_num < 1:
+                return False, "Session number must be at least 1"
+        except ValueError:
+            return False, "Session number must be a valid number"
+        
+        if not self.t_dog.get():
             return False, "Dog name is required"
         
         return True, ""
@@ -314,6 +587,29 @@ class Stringvars:
             bool: True if state has changed
         """
         return self.get_state_string() != snapshot
+    
+    def get_trailing_state_string(self):
+        """
+        Get string representation of current trailing state for comparison
+        
+        Returns:
+            str: Pipe-separated values for change detection
+        """
+        data = self.to_trailing_dict()
+        parts = [str(data.get(key, '')) for key in sorted(data.keys())]
+        return "|".join(parts)
+    
+    def has_trailing_changes_from(self, snapshot):
+        """
+        Check if current trailing state differs from snapshot
+        
+        Args:
+            snapshot: Previously saved state string from get_trailing_state_string()
+        
+        Returns:
+            bool: True if state has changed
+        """
+        return self.get_trailing_state_string() != snapshot
     
     # ========================================
     # CONFIGURATION METHODS
@@ -452,7 +748,7 @@ if __name__ == "__main__":
     # Example 5: Change detection
     print("\nExample 5: Change detection")
     snapshot = sv.get_state_string()
-    sv.temperature.set("72°F")
+    sv.temperature.set("72Â°F")
     has_changes = sv.has_changes_from(snapshot)
     print(f"Has changes: {has_changes}")
     

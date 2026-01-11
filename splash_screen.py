@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Splash Screen for Mantrailing Training Tracker
+Splash Screen for Training Tracker Applications
 Copyright (C) 2025 Al Gelders
 
 This program is free software: you can redistribute it and/or modify
@@ -13,11 +13,17 @@ import tkinter as tk
 from tkinter import ttk
 import time
 
+# Default values for airscenting (backward compatible)
+DEFAULT_APP_TITLE = "Air-scent Training Tracker"
+DEFAULT_GITHUB_URL = "github.com/agelders2021/airscent_tracker"
+
 class SplashScreen:
     """Display a splash screen while the application loads"""
     
-    def __init__(self, parent, version="1.0.0-alpha"):
+    def __init__(self, parent, version="1.0.0-alpha", app_title=None, github_url=None):
         self.version = version
+        self.app_title = app_title or DEFAULT_APP_TITLE
+        self.github_url = github_url or DEFAULT_GITHUB_URL
         self.start_time = time.time()
         self.root = tk.Toplevel(parent)
         self.root.title("Loading...")
@@ -49,7 +55,7 @@ class SplashScreen:
         # Title
         title_label = tk.Label(
             frame, 
-            text="Air-scent Training Tracker",
+            text=self.app_title,
             font=('Arial', 20, 'bold'),
             bg='white',
             fg='#2c3e50'
@@ -69,7 +75,7 @@ class SplashScreen:
         # Copyright
         copyright_label = tk.Label(
             frame,
-            text="© 2025 Al Gelders",
+            text="Â© 2025 Al Gelders",
             font=('Arial', 11),
             bg='white',
             fg='#34495e'
@@ -95,7 +101,7 @@ class SplashScreen:
         # GitHub repository
         github_label = tk.Label(
             frame,
-            text="github.com/agelders2021/airscent_tracker",
+            text=self.github_url,
             font=('Arial', 8),
             bg='white',
             fg='#95a5a6',
