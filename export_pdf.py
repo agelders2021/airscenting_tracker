@@ -10,7 +10,7 @@ import os
 import json
 
 
-def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup_folder, trail_maps_folder):
+def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup_folder, trail_maps_folder, status_var=None):
     """
     Show export dialog for selecting sessions to export
     
@@ -21,6 +21,7 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
         get_connection_func: Function to get database connection
         backup_folder: Path to backup folder
         trail_maps_folder: Path to trail maps folder
+        status_var: Optional StringVar for status bar messages
     """
     # Create dialog window
     dialog = tk.Toplevel(parent)
@@ -188,6 +189,9 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
     button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
     
     def do_export():
+        # Capture status_var from outer scope for export function
+        status_var_external = status_var
+        
         # Validate dog selection
         if not current_dog:
             messagebox.showwarning("No Dog Selected", "Please select a dog first")
@@ -252,14 +256,15 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
             sort_order=sort_var.get(),
             get_connection_func=get_connection_func,
             trail_maps_folder=trail_maps_folder,
-            status_filter=status_var.get()
+            status_filter=status_var.get(),
+            status_msg_var=status_var_external
         )
     
     tk.Button(button_frame, text="Export to PDF", command=do_export, bg="#4CAF50", fg="white", width=15).pack(side=tk.LEFT, padx=5)
     tk.Button(button_frame, text="Cancel", command=dialog.destroy, width=10).pack(side=tk.LEFT, padx=5)
 
 
-def export_to_pdf(filepath, dog_name, range_type, start_value, end_value, sort_order, get_connection_func, trail_maps_folder, status_filter="active"):
+def export_to_pdf(filepath, dog_name, range_type, start_value, end_value, sort_order, get_connection_func, trail_maps_folder, status_filter="active", status_msg_var=None):
     """Export sessions to PDF"""
     try:
         # Fetch sessions from database
@@ -274,7 +279,22 @@ def export_to_pdf(filepath, dog_name, range_type, start_value, end_value, sort_o
         # Generate PDF
         generate_pdf(filepath, dog_name, sessions, trail_maps_folder)
         
-        messagebox.showinfo("Success", f"Exported {len(sessions)} session(s) to:\n{filepath}")
+        # Send success message to status bar instead of popup
+        if status_msg_var:
+            status_msg_var.set(f"Exported {len(sessions)} session(s) to: {filepath}")
+        else:
+            print(f"Exported {len(sessions)} session(s) to: {filepath}")
+        
+        # Ask to open the PDF
+        if messagebox.askyesno("Open File?", "Would you like to open the exported PDF?"):
+            import subprocess
+            import platform
+            if platform.system() == 'Windows':
+                os.startfile(filepath)
+            elif platform.system() == 'Darwin':
+                subprocess.run(['open', filepath])
+            else:
+                subprocess.run(['xdg-open', filepath])
         
     except Exception as e:
         messagebox.showerror("Export Error", f"Failed to export PDF:\n{str(e)}")
@@ -443,6 +463,15 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
     story.append(title)
     story.append(Spacer(1, 0.2*inch))
     
+    # Helper to create field row
+    def make_field(label, value):
+        if value and str(value).strip():
+            return [
+                Paragraph(f"<b>{label}:</b>", label_style),
+                Paragraph(str(value), value_style)
+            ]
+        return None
+    
     # Process each session
     for idx, session in enumerate(sessions):
         if idx > 0:
@@ -462,128 +491,112 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
         story.append(session_header)
         story.append(Spacer(1, 0.1*inch))
         
-        # Session information section
+        # Session Information section
         session_info_data = []
-        
-        def add_field(label, value):
-            if value and str(value).strip():
-                session_info_data.append([
-                    Paragraph(f"<b>{label}:</b>", label_style),
-                    Paragraph(str(value), value_style)
-                ])
-        
-        add_field("Handler", session['handler'])
-        add_field("Session Purpose", session['session_purpose'])
-        add_field("Field Support", session['field_support'])
+        for label, key in [
+            ("Handler", 'handler'),
+            ("Session Purpose", 'session_purpose'),
+            ("Field Support", 'field_support'),
+        ]:
+            row = make_field(label, session.get(key))
+            if row:
+                session_info_data.append(row)
         
         if session_info_data:
-            info_table = Table(session_info_data, colWidths=[1.5*inch, 5*inch])
+            info_table = Table(session_info_data, colWidths=[1.5*inch, 5.5*inch])
             info_table.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'TOP'),
-                ('LEFTPADDING', (0,0), (-1,-1), 0),
-                ('RIGHTPADDING', (0,0), (-1,-1), 6),
+                ('TOPPADDING', (0,0), (-1,-1), 2),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 2),
             ]))
             story.append(info_table)
             story.append(Spacer(1, 0.1*inch))
         
-        # Search parameters section
+        # Search Parameters section (including weather)
         story.append(Paragraph("<b>Search Parameters</b>", heading_style))
         search_data = []
         
-        add_field("Location", session['location'])
-        add_field("Search Area Size", session['search_area_size'])
-        add_field("Number of Subjects", session['num_subjects'])
-        add_field("Handler Knowledge", session['handler_knowledge'])
-        add_field("Search Type", session['search_type'])
+        for label, key in [
+            ("Location", 'location'),
+            ("Search Area Size", 'search_area_size'),
+            ("Number of Subjects", 'num_subjects'),
+            ("Handler Knowledge", 'handler_knowledge'),
+            ("Search Type", 'search_type'),
+            ("Weather", 'weather'),
+            ("Temperature", 'temperature'),
+            ("Wind Direction", 'wind_direction'),
+            ("Wind Speed", 'wind_speed'),
+        ]:
+            row = make_field(label, session.get(key))
+            if row:
+                search_data.append(row)
         
         # Add terrain types
-        if session['terrains']:
+        if session.get('terrains'):
             terrain_text = ", ".join(session['terrains'])
-            add_field("Terrain Types", terrain_text)
+            row = make_field("Terrain Types", terrain_text)
+            if row:
+                search_data.append(row)
         
         if search_data:
-            search_table = Table(search_data, colWidths=[1.5*inch, 5*inch])
+            search_table = Table(search_data, colWidths=[1.5*inch, 5.5*inch])
             search_table.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'TOP'),
-                ('LEFTPADDING', (0,0), (-1,-1), 0),
-                ('RIGHTPADDING', (0,0), (-1,-1), 6),
+                ('TOPPADDING', (0,0), (-1,-1), 2),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 2),
             ]))
             story.append(search_table)
             story.append(Spacer(1, 0.1*inch))
         
-        # Weather conditions section
-        story.append(Paragraph("<b>Weather Conditions</b>", heading_style))
-        weather_data = []
-        
-        add_field("Weather", session['weather'])
-        add_field("Temperature", session['temperature'])
-        add_field("Wind Direction", session['wind_direction'])
-        add_field("Wind Speed", session['wind_speed'])
-        
-        if weather_data:
-            weather_table = Table(weather_data, colWidths=[1.5*inch, 5*inch])
-            weather_table.setStyle(TableStyle([
-                ('VALIGN', (0,0), (-1,-1), 'TOP'),
-                ('LEFTPADDING', (0,0), (-1,-1), 0),
-                ('RIGHTPADDING', (0,0), (-1,-1), 6),
-            ]))
-            story.append(weather_table)
-            story.append(Spacer(1, 0.1*inch))
-        
-        # Search results section
+        # Search Results section (including subject responses and narrative)
         story.append(Paragraph("<b>Search Results</b>", heading_style))
         results_data = []
         
-        add_field("Drive Level", session['drive_level'])
-        add_field("Subjects Found", session['subjects_found'])
+        for label, key in [
+            ("Drive Level", 'drive_level'),
+            ("Subjects Found", 'subjects_found'),
+        ]:
+            row = make_field(label, session.get(key))
+            if row:
+                results_data.append(row)
+        
+        # Add subject responses inline
+        if session.get('subject_responses'):
+            response_lines = []
+            for subj_num, tfr, refind in session['subject_responses']:
+                parts = [f"Subject {subj_num}:"]
+                if tfr:
+                    parts.append(f"TFR={tfr}")
+                if refind:
+                    parts.append(f"Re-find={refind}")
+                response_lines.append(" ".join(parts))
+            if response_lines:
+                responses_text = "; ".join(response_lines)
+                row = make_field("Subject Responses", responses_text)
+                if row:
+                    results_data.append(row)
+        
+        # Add narrative (comments)
+        if session.get('comments') and str(session['comments']).strip():
+            narrative_text = str(session['comments']).replace('\n', '<br/>')
+            row = [
+                Paragraph(f"<b>Narrative:</b>", label_style),
+                Paragraph(narrative_text, value_style)
+            ]
+            results_data.append(row)
         
         if results_data:
-            results_table = Table(results_data, colWidths=[1.5*inch, 5*inch])
+            results_table = Table(results_data, colWidths=[1.5*inch, 5.5*inch])
             results_table.setStyle(TableStyle([
                 ('VALIGN', (0,0), (-1,-1), 'TOP'),
-                ('LEFTPADDING', (0,0), (-1,-1), 0),
-                ('RIGHTPADDING', (0,0), (-1,-1), 6),
+                ('TOPPADDING', (0,0), (-1,-1), 2),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 2),
             ]))
             story.append(results_table)
             story.append(Spacer(1, 0.1*inch))
         
-        # Subject responses section
-        if session['subject_responses']:
-            story.append(Paragraph("<b>Subject Responses</b>", heading_style))
-            
-            # Create table for subject responses
-            subject_table_data = [["Subject #", "TFR", "Re-find"]]  # Header row
-            for subj_num, tfr, refind in session['subject_responses']:
-                subject_table_data.append([
-                    str(subj_num),
-                    str(tfr) if tfr else "",
-                    str(refind) if refind else ""
-                ])
-            
-            subject_table = Table(subject_table_data, colWidths=[1.5*inch, 2.5*inch, 2.5*inch])
-            subject_table.setStyle(TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#E0E0E0')),
-                ('TEXTCOLOR', (0,0), (-1,0), colors.black),
-                ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0,0), (-1,0), 10),
-                ('BOTTOMPADDING', (0,0), (-1,0), 8),
-                ('TOPPADDING', (0,0), (-1,0), 8),
-                ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ]))
-            story.append(subject_table)
-            story.append(Spacer(1, 0.1*inch))
-        
-        # Comments section
-        if session['comments'] and str(session['comments']).strip():
-            story.append(Paragraph("<b>Comments</b>", heading_style))
-            comments_text = str(session['comments']).replace('\n', '<br/>')
-            story.append(Paragraph(comments_text, value_style))
-            story.append(Spacer(1, 0.1*inch))
-        
         # Maps and images section
-        if session['image_files'] and trail_maps_folder:
+        if session.get('image_files') and trail_maps_folder:
             story.append(Paragraph("<b>Maps and Images</b>", heading_style))
             
             for image_file in session['image_files']:

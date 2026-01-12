@@ -315,10 +315,6 @@ class TrailingEntryTab:
         tk.Label(trail_frame, text="Start Time:").grid(row=0, column=6, sticky="w", padx=5, pady=2)
         tk.Entry(trail_frame, textvariable=sv.t_start_time, width=time_location_width).grid(row=0, column=7, sticky="w", padx=5, pady=2)
         
-        # Finish time
-        tk.Label(trail_frame, text="Finish Time:").grid(row=0, column=8, sticky="w", padx=5, pady=2)
-        tk.Entry(trail_frame, textvariable=sv.t_finish_time, width=time_location_width).grid(row=0, column=9, sticky="w", padx=5, pady=2)
-        
         # Row 1: Trail Age, Trail Length, Trail Difficulty
         tk.Label(trail_frame, text="Trail Age (hours):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         tk.Entry(trail_frame, textvariable=sv.t_trail_age, width=entry_location_width).grid(row=1, column=1, sticky="w", padx=5, pady=2)
@@ -598,15 +594,23 @@ class TrailingEntryTab:
         button_frame = tk.Frame(frame)
         button_frame.grid(row=6, column=0, columnspan=2, pady=10)
         
-        tk.Button(button_frame, text="Save Session", command=self._save_session,
+        self.save_btn = tk.Button(button_frame, text="Save Session", command=self._save_session,
                  bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold"),
-                 width=25, height=2).pack(side="left", padx=10)
+                 width=25, height=2)
+        self.save_btn.pack(side="left", padx=10)
         
         tk.Button(button_frame, text="Clear Form", command=self._clear_form_with_check,
                  width=15).pack(side="left", padx=10)
         
         tk.Button(button_frame, text="Quit", command=self._quit,
                  width=10).pack(side="left", padx=10)
+    
+    def update_save_button_text(self):
+        """Update save button text based on editing mode"""
+        if self.editing_session:
+            self.save_btn.config(text="Update Session")
+        else:
+            self.save_btn.config(text="Save Session")
     
     # =========================================================================
     # Default data providers
@@ -1026,7 +1030,7 @@ class TrailingEntryTab:
         """Add map files to the list and copy to Images folders.
         
         Copies files to both primary and secondary Images folders with
-        unique naming: t_{dog}_{session}_{timestamp}_{original}.ext
+        unique naming: t_{dog}_session{session}_{timestamp}_{original}.ext
         """
         import re
         from ui_utils import get_primary_images_folder, get_secondary_images_folder
@@ -1060,30 +1064,32 @@ class TrailingEntryTab:
         for filepath in filepaths:
             filepath = Path(filepath)
             if filepath.exists():
-                # Create unique filename: t_{dog}_{session}_{timestamp}_{original}
-                original_name = filepath.name
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                unique_name = f"t_{safe_dog_name}_session{session_number}_{timestamp}_{original_name}"
-                
-                # Copy to primary Images folder
-                try:
-                    primary_dest = primary_folder / unique_name
-                    shutil.copy2(str(filepath), str(primary_dest))
-                    copied_files.append(str(primary_dest))  # Store full path
-                    print(f"Copied to primary: {primary_dest}")
+                ext = filepath.suffix.lower()
+                if ext in ['.pdf', '.jpg', '.jpeg', '.png']:
+                    # Create unique filename: t_{dog}_session{session}_{timestamp}_{original}
+                    original_name = filepath.name
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    unique_name = f"t_{safe_dog_name}_session{session_number}_{timestamp}_{original_name}"
                     
-                    # Mirror to secondary Images folder
-                    if secondary_folder:
-                        try:
-                            secondary_dest = secondary_folder / unique_name
-                            shutil.copy2(str(filepath), str(secondary_dest))
-                            print(f"Mirrored to secondary: {secondary_dest}")
-                        except Exception as e:
-                            print(f"Warning: Failed to mirror to secondary: {e}")
-                            
-                except Exception as e:
-                    print(f"Error copying {filepath}: {e}")
-                    messagebox.showerror("Copy Error", f"Failed to copy {filepath.name}:\n{e}")
+                    # Copy to primary Images folder
+                    try:
+                        primary_dest = primary_folder / unique_name
+                        shutil.copy2(str(filepath), str(primary_dest))
+                        copied_files.append(unique_name)  # Store just filename, not full path
+                        print(f"Copied to primary: {primary_dest}")
+                        
+                        # Mirror to secondary Images folder
+                        if secondary_folder:
+                            try:
+                                secondary_dest = secondary_folder / unique_name
+                                shutil.copy2(str(filepath), str(secondary_dest))
+                                print(f"Mirrored to secondary: {secondary_dest}")
+                            except Exception as e:
+                                print(f"Warning: Failed to mirror to secondary: {e}")
+                                
+                    except Exception as e:
+                        print(f"Error copying {filepath}: {e}")
+                        messagebox.showerror("Copy Error", f"Failed to copy {filepath.name}:\n{e}")
         
         if copied_files:
             sv.t_map_files_list.extend(copied_files)
@@ -1092,8 +1098,8 @@ class TrailingEntryTab:
             sv.t_map_files_list = [x for x in sv.t_map_files_list if not (x in seen or seen.add(x))]
             
             self.map_listbox.delete(0, tk.END)
-            for fpath in sv.t_map_files_list:
-                self.map_listbox.insert(tk.END, os.path.basename(fpath))
+            for fname in sv.t_map_files_list:
+                self.map_listbox.insert(tk.END, fname)
             
             self.view_trail_map_button.config(state=tk.NORMAL)
             self.delete_trail_map_button.config(state=tk.NORMAL)
@@ -1109,11 +1115,21 @@ class TrailingEntryTab:
         
         selected_index = selection[0]
         if selected_index < len(sv.t_map_files_list):
-            filepath = sv.t_map_files_list[selected_index]
+            filename = sv.t_map_files_list[selected_index]
+            
+            # Build full path from trail maps folder
+            trail_maps_folder = sv.trail_maps_folder.get().strip()
+            if trail_maps_folder and not os.path.isabs(filename):
+                filepath = os.path.join(trail_maps_folder, filename)
+            else:
+                filepath = filename
+            
             self._open_external_file(filepath)
     
     def _delete_selected_trail_map(self):
-        """Remove the selected trail map from the list"""
+        """Remove the selected trail map from the list and delete from both primary and secondary folders"""
+        from ui_utils import get_secondary_images_folder
+        
         selection = self.map_listbox.curselection()
         if not selection:
             messagebox.showinfo("No Selection", "Please select a file from the list to remove")
@@ -1123,17 +1139,48 @@ class TrailingEntryTab:
         if selected_index >= len(sv.t_map_files_list):
             return
         
-        filename = self.map_listbox.get(selected_index)
+        filename = sv.t_map_files_list[selected_index]
         
         result = messagebox.askokcancel(
-            "Remove Trail Map",
-            f"Remove '{filename}' from the list?",
+            "Delete Trail Map",
+            f"Are you sure you want to delete '{filename}'?\n\nThis will delete from both primary and secondary storage.\nThis operation cannot be reversed.",
             icon='warning'
         )
         
         if not result:
             return
         
+        # Delete the actual file from primary Images folder
+        try:
+            trail_maps_folder = sv.trail_maps_folder.get().strip()
+            if trail_maps_folder:
+                full_path = os.path.join(trail_maps_folder, filename)
+            else:
+                full_path = filename
+            
+            if os.path.exists(full_path):
+                os.remove(full_path)
+                print(f"Deleted from primary: {full_path}")
+                sv.t_status.set(f"Deleted file: {filename}")
+            else:
+                sv.t_status.set(f"Removed from list (file not found): {filename}")
+            
+            # Also delete from secondary Images folder if it exists there
+            secondary_folder = get_secondary_images_folder()
+            if secondary_folder:
+                secondary_path = secondary_folder / filename
+                if secondary_path.exists():
+                    try:
+                        secondary_path.unlink()
+                        print(f"Deleted from secondary: {secondary_path}")
+                    except Exception as e:
+                        print(f"Warning: Failed to delete from secondary: {e}")
+                        
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to delete file:\n{str(e)}")
+            return
+        
+        # Remove from list and listbox
         sv.t_map_files_list.pop(selected_index)
         self.map_listbox.delete(selected_index)
         
@@ -1143,7 +1190,19 @@ class TrailingEntryTab:
     
     def _open_external_file(self, file_path):
         """Open a file with the system's default application"""
-        if not file_path or not os.path.exists(file_path):
+        if not file_path:
+            messagebox.showwarning("No File", "No file path specified")
+            return
+        
+        # If not an absolute path, try trail maps folder
+        if not os.path.isabs(file_path) and not os.path.exists(file_path):
+            trail_maps_folder = sv.trail_maps_folder.get().strip()
+            if trail_maps_folder:
+                potential_path = os.path.join(trail_maps_folder, file_path)
+                if os.path.exists(potential_path):
+                    file_path = potential_path
+        
+        if not os.path.exists(file_path):
             messagebox.showerror("File Not Found", f"Could not find file:\n{file_path}")
             return
         
@@ -1356,6 +1415,7 @@ class TrailingEntryTab:
         # Reset editing mode
         self.editing_session = False
         self.editing_row = None
+        self.update_save_button_text()  # Change button back to "Save Session"
         
         # Reset navigation state
         self.dog_sessions_list = []

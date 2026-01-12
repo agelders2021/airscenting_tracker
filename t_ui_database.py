@@ -815,8 +815,62 @@ class DatabaseManager:
                 
                 sessions = []
                 for row in result.fetchall():
+                    session_id = row[0]
+                    
+                    # Fetch session purposes
+                    try:
+                        purpose_result = conn.execute(
+                            text("SELECT purpose_name FROM t_selected_purposes WHERE t_session_id = :session_id ORDER BY purpose_name"),
+                            {"session_id": session_id}
+                        )
+                        purposes = [p[0] for p in purpose_result.fetchall()]
+                    except Exception:
+                        purposes = []
+                    
+                    # Fetch terrains
+                    try:
+                        terrain_result = conn.execute(
+                            text("SELECT terrain_name FROM t_selected_terrains WHERE t_session_id = :session_id ORDER BY terrain_name"),
+                            {"session_id": session_id}
+                        )
+                        terrains = [t[0] for t in terrain_result.fetchall()]
+                    except Exception:
+                        terrains = []
+                    
+                    # Fetch distractions
+                    try:
+                        distraction_result = conn.execute(
+                            text("SELECT distraction_data FROM t_distractions WHERE t_session_id = :session_id"),
+                            {"session_id": session_id}
+                        )
+                        distraction_rows = distraction_result.fetchall()
+                        distractions = []
+                        for d_row in distraction_rows:
+                            if d_row[0]:
+                                try:
+                                    import json
+                                    d_data = json.loads(d_row[0])
+                                    if isinstance(d_data, list):
+                                        distractions.extend(d_data)
+                                    else:
+                                        distractions.append(d_data)
+                                except (json.JSONDecodeError, ValueError):
+                                    # Try ast.literal_eval for Python dict strings (single quotes)
+                                    try:
+                                        import ast
+                                        d_data = ast.literal_eval(d_row[0])
+                                        if isinstance(d_data, list):
+                                            distractions.extend(d_data)
+                                        else:
+                                            distractions.append(d_data)
+                                    except (ValueError, SyntaxError):
+                                        # Just append the raw string
+                                        distractions.append(d_row[0])
+                    except Exception:
+                        distractions = []
+                    
                     session = {
-                        'id': row[0],
+                        'id': session_id,
                         't_session_number': row[1],
                         't_dog_name': row[2],
                         't_date': row[3],
@@ -852,7 +906,10 @@ class DatabaseManager:
                         't_map_files': row[33],
                         'uuid': row[34],
                         'update_time': row[35],
-                        'status': row[36]
+                        'status': row[36],
+                        'purposes': purposes,
+                        'terrains': terrains,
+                        'distractions': distractions
                     }
                     sessions.append(session)
             

@@ -93,6 +93,7 @@ class TrailingUI:
         
         self.root.geometry(f"{window_width}x{window_height}+{x_position}+{y_position}")
         self.root.minsize(window_width, 800)
+        self.root.minsize(window_height,950)
         
         # Create menu bar
         self.create_menu_bar()
@@ -100,6 +101,10 @@ class TrailingUI:
         # Create notebook (tabbed interface)
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Bind to tab change event
+        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
+        self.previous_tab_index = 0  # Track which tab we're coming from
         
         # Create tabs
         self.setup_tab = ttk.Frame(self.notebook)
@@ -138,7 +143,7 @@ class TrailingUI:
         # Message history for status bar
         self.status_message_history = []
         self.status_message_index = -1
-        self.max_status_messages = 5
+        self.max_status_messages = 20     # Keep last 20 messages (configurable)
         
         # Error handling flags
         self.error_showing = False
@@ -415,6 +420,7 @@ class TrailingUI:
                 # If editing, reset editing mode but keep current session displayed
                 self.trailing_entry.editing_session = False
                 self.trailing_entry.editing_row = None
+                self.trailing_entry.update_save_button_text()  # Change button back to "Save Session"
             
             # Save last handler and dog to config
             current_handler = sv.t_handler.get()
@@ -485,7 +491,9 @@ class TrailingUI:
                     print(f"Warning: Could not update backup info in DB: {e}")
                 
         except Exception as e:
+            error_msg = f"Backup failed: {str(e)}"
             print(f"Warning: Failed to save trailing session to JSON: {e}")
+            self.show_status_message(error_msg, "error")
     
     def _update_trailing_backup_info(self, session_number, dog_name, checksum, primary_ts, secondary_ts):
         """Update checksum and timestamps in database for a trailing session."""
@@ -719,6 +727,7 @@ class TrailingUI:
         self.trailing_entry.set_session_data(session_data)
         self.trailing_entry.editing_session = True
         self.trailing_entry.editing_row = session_data.get('id')
+        self.trailing_entry.update_save_button_text()  # Change button to "Update Session"
         
         # Load related data (terrains, purposes, distractions)
         session_id = session_data.get('id')
@@ -920,12 +929,13 @@ class TrailingUI:
         tk.Button(button_frame, text="Cancel", command=dialog.destroy, width=10).pack(side=tk.LEFT, padx=5)
     
     def _export_trailing_sessions_to_pdf(self, filepath, dog_name, range_type, start_value, end_value, sort_order, status_filter):
-        """Export multiple trailing sessions to PDF file"""
+        """Export multiple trailing sessions to PDF file - comprehensive export like airscenting"""
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import letter
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.units import inch
+        from reportlab.lib.enums import TA_LEFT, TA_CENTER
         
         try:
             # Fetch sessions
@@ -938,68 +948,372 @@ class TrailingUI:
                 messagebox.showinfo("No Sessions", "No sessions found matching the specified criteria")
                 return
             
+            # Get trail maps folder for images
+            trail_maps_folder = sv.trail_maps_folder.get().strip()
+            
             doc = SimpleDocTemplate(filepath, pagesize=letter, 
                                     rightMargin=0.5*inch, leftMargin=0.5*inch,
                                     topMargin=0.5*inch, bottomMargin=0.5*inch)
             
             styles = getSampleStyleSheet()
-            title_style = ParagraphStyle('Title', parent=styles['Heading1'], alignment=1, spaceAfter=20)
-            heading_style = ParagraphStyle('Heading', parent=styles['Heading2'], spaceAfter=10, spaceBefore=15)
+            
+            # Custom styles matching airscenting
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=18,
+                textColor=colors.HexColor('#2E4057'),
+                spaceAfter=20,
+                alignment=TA_CENTER
+            )
+            
+            heading_style = ParagraphStyle(
+                'CustomHeading',
+                parent=styles['Heading2'],
+                fontSize=12,
+                textColor=colors.HexColor('#4CAF50'),
+                spaceAfter=6,
+                spaceBefore=6
+            )
+            
+            label_style = ParagraphStyle(
+                'Label',
+                parent=styles['Normal'],
+                fontSize=9,
+                textColor=colors.HexColor('#666666'),
+                spaceAfter=2
+            )
+            
+            value_style = ParagraphStyle(
+                'Value',
+                parent=styles['Normal'],
+                fontSize=10,
+                spaceAfter=8
+            )
             
             elements = []
             
+            # Title
+            elements.append(Paragraph(f"Trailing Training Log for {dog_name}", title_style))
+            elements.append(Spacer(1, 0.2*inch))
+            
             for i, session_data in enumerate(sessions):
                 if i > 0:
-                    elements.append(PageBreak())
+                    # Page break after every 2 sessions
+                    if i % 2 == 0:
+                        elements.append(PageBreak())
+                    else:
+                        # Separator line
+                        elements.append(Spacer(1, 0.15*inch))
+                        elements.append(Table([['']], colWidths=[7*inch], 
+                                         style=[('LINEABOVE', (0,0), (-1,-1), 1, colors.grey)]))
+                        elements.append(Spacer(1, 0.15*inch))
                 
-                # Title
+                # Session header
                 session_num = session_data.get('t_session_number', '?')
-                elements.append(Paragraph(f"Trailing Session Report", title_style))
-                elements.append(Paragraph(f"{dog_name} - Session #{session_num}", styles['Heading2']))
-                elements.append(Spacer(1, 0.2*inch))
+                date_str = str(session_data.get('t_date', '')) if session_data.get('t_date') else ''
+                elements.append(Paragraph(f"<b>Session #{session_num}</b> - {date_str}", heading_style))
+                elements.append(Spacer(1, 0.1*inch))
+                
+                # Helper function to add fields to table
+                def add_field(label, value):
+                    if value and str(value).strip():
+                        return [Paragraph(f"<b>{label}:</b>", label_style), 
+                                Paragraph(str(value), value_style)]
+                    return None
                 
                 # Session Information
-                elements.append(Paragraph("Session Information", heading_style))
-                session_info = [
-                    ['Date:', str(session_data.get('t_date', '')), 'Handler:', session_data.get('t_handler', '')],
-                    ['Location:', session_data.get('t_location', ''), 'Field Support:', session_data.get('t_field_support', '')],
-                    ['Start Time:', session_data.get('t_start_time', ''), 'Finish Time:', session_data.get('t_finish_time', '')],
-                ]
-                t = Table(session_info, colWidths=[1.2*inch, 2.3*inch, 1.2*inch, 2.3*inch])
-                t.setStyle(TableStyle([
-                    ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 10),
-                    ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-                    ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                ]))
-                elements.append(t)
+                elements.append(Paragraph("<b>Session Information</b>", heading_style))
+                session_info_data = []
                 
-                # Trail Information
-                elements.append(Paragraph("Trail Information", heading_style))
-                trail_info = [
-                    ['Trail Age:', session_data.get('t_trail_age', ''), 'Trail Length:', session_data.get('t_trail_length', '')],
-                    ['Difficulty:', session_data.get('t_difficulty', ''), 'Trail Layer:', session_data.get('t_trail_layer', '')],
+                fields = [
+                    ('Handler', session_data.get('t_handler')),
+                    ('Field Support', session_data.get('t_field_support')),
+                    ('Location', session_data.get('t_location')),
+                    ('Start Time', session_data.get('t_start_time')),
                 ]
-                t = Table(trail_info, colWidths=[1.2*inch, 2.3*inch, 1.2*inch, 2.3*inch])
-                t.setStyle(TableStyle([
-                    ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 10),
-                    ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-                    ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                ]))
-                elements.append(t)
+                for label, value in fields:
+                    row = add_field(label, value)
+                    if row:
+                        session_info_data.append(row)
                 
-                # Impression
+                # Add session purposes (comma-separated if multiple)
+                purposes = session_data.get('purposes', [])
+                if purposes:
+                    purposes_str = ', '.join(purposes) if isinstance(purposes, list) else str(purposes)
+                    row = add_field('Session Purposes', purposes_str)
+                    if row:
+                        session_info_data.append(row)
+                
+                if session_info_data:
+                    table = Table(session_info_data, colWidths=[1.5*inch, 5.5*inch])
+                    table.setStyle(TableStyle([
+                        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                        ('TOPPADDING', (0,0), (-1,-1), 2),
+                        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                    ]))
+                    elements.append(table)
+                elements.append(Spacer(1, 0.1*inch))
+                
+                # Trail Details (renamed from Trail Information)
+                elements.append(Paragraph("<b>Trail Details</b>", heading_style))
+                trail_info_data = []
+                
+                fields = [
+                    ('Trail Age', session_data.get('t_trail_age')),
+                    ('Trail Length', session_data.get('t_trail_length')),
+                    ('Difficulty', session_data.get('t_difficulty')),
+                    ('Trail Layer', session_data.get('t_trail_layer')),
+                    ('Cross-Track Layer', session_data.get('t_cross_track_layer')),
+                    ('Cross-Track Age', session_data.get('t_cross_track_age')),
+                ]
+                for label, value in fields:
+                    row = add_field(label, value)
+                    if row:
+                        trail_info_data.append(row)
+                
+                # Add terrain types
+                terrains = session_data.get('terrains', [])
+                if terrains:
+                    terrain_text = ", ".join(terrains)
+                    row = add_field('Terrain Types', terrain_text)
+                    if row:
+                        trail_info_data.append(row)
+                
+                if trail_info_data:
+                    table = Table(trail_info_data, colWidths=[1.5*inch, 5.5*inch])
+                    table.setStyle(TableStyle([
+                        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                        ('TOPPADDING', (0,0), (-1,-1), 2),
+                        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                    ]))
+                    elements.append(table)
+                elements.append(Spacer(1, 0.1*inch))
+                
+                # Weather Conditions - Laying
+                laying_weather = []
+                fields = [
+                    ('Weather', session_data.get('t_weather_laying')),
+                    ('Temperature', session_data.get('t_temperature_laying')),
+                    ('Wind Speed', session_data.get('t_wind_speed_laying')),
+                    ('Wind Direction', session_data.get('t_wind_direction_laying')),
+                    ('Humidity', session_data.get('t_humidity_laying')),
+                ]
+                for label, value in fields:
+                    row = add_field(label, value)
+                    if row:
+                        laying_weather.append(row)
+                
+                if laying_weather:
+                    elements.append(Paragraph("<b>Weather Conditions (Laying)</b>", heading_style))
+                    table = Table(laying_weather, colWidths=[1.5*inch, 5.5*inch])
+                    table.setStyle(TableStyle([
+                        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                        ('TOPPADDING', (0,0), (-1,-1), 2),
+                        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                    ]))
+                    elements.append(table)
+                    elements.append(Spacer(1, 0.1*inch))
+                
+                # Weather Conditions - Running
+                running_weather = []
+                fields = [
+                    ('Weather', session_data.get('t_weather_running')),
+                    ('Temperature', session_data.get('t_temperature_running')),
+                    ('Wind Speed', session_data.get('t_wind_speed_running')),
+                    ('Wind Direction', session_data.get('t_wind_direction_running')),
+                    ('Humidity', session_data.get('t_humidity_running')),
+                ]
+                for label, value in fields:
+                    row = add_field(label, value)
+                    if row:
+                        running_weather.append(row)
+                
+                if running_weather:
+                    elements.append(Paragraph("<b>Weather Conditions (Running)</b>", heading_style))
+                    table = Table(running_weather, colWidths=[1.5*inch, 5.5*inch])
+                    table.setStyle(TableStyle([
+                        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                        ('TOPPADDING', (0,0), (-1,-1), 2),
+                        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                    ]))
+                    elements.append(table)
+                    elements.append(Spacer(1, 0.1*inch))
+                
+                # Dog Behavior
+                behavior_data = []
+                fields = [
+                    ('Start Behavior', session_data.get('t_start_behavior')),
+                    ('Consistency', session_data.get('t_consistency')),
+                    ('Head Position', session_data.get('t_head_position')),
+                    ('Pace', session_data.get('t_pace')),
+                    ('Indication', session_data.get('t_indication')),
+                    ('Time to Complete', session_data.get('t_time_to_complete')),
+                ]
+                for label, value in fields:
+                    row = add_field(label, value)
+                    if row:
+                        behavior_data.append(row)
+                
+                # Parse distractions for inclusion in Dog Behavior
+                distractions = session_data.get('distractions', [])
+                distraction_table_data = []
+                if distractions:
+                    for d in distractions:
+                        if d:
+                            distraction_type = ''
+                            response = ''
+                            
+                            # Handle different data formats
+                            if isinstance(d, dict):
+                                # Already a dictionary
+                                distraction_type = d.get('type', '') or d.get('distraction', '')
+                                response = d.get('response', '') or d.get('dog_response', '')
+                            elif isinstance(d, str):
+                                # Try JSON first
+                                try:
+                                    import json
+                                    parsed = json.loads(d)
+                                    if isinstance(parsed, dict):
+                                        distraction_type = parsed.get('type', '') or parsed.get('distraction', '')
+                                        response = parsed.get('response', '') or parsed.get('dog_response', '')
+                                except (json.JSONDecodeError, ValueError):
+                                    # Try ast.literal_eval for Python dict strings
+                                    try:
+                                        import ast
+                                        parsed = ast.literal_eval(d)
+                                        if isinstance(parsed, dict):
+                                            distraction_type = parsed.get('type', '') or parsed.get('distraction', '')
+                                            response = parsed.get('response', '') or parsed.get('dog_response', '')
+                                    except (ValueError, SyntaxError):
+                                        # Just use the string as-is
+                                        distraction_type = str(d)
+                            
+                            if distraction_type or response:
+                                distraction_table_data.append([str(distraction_type), str(response)])
+                
+                # Check if we have behavior data or distractions
+                has_behavior = bool(behavior_data)
+                has_distractions = bool(distraction_table_data)
+                
+                if has_behavior or has_distractions:
+                    elements.append(Paragraph("<b>Dog Behavior</b>", heading_style))
+                    
+                    # Add behavior fields
+                    if has_behavior:
+                        table = Table(behavior_data, colWidths=[1.5*inch, 5.5*inch])
+                        table.setStyle(TableStyle([
+                            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                            ('TOPPADDING', (0,0), (-1,-1), 2),
+                            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                        ]))
+                        elements.append(table)
+                    
+                    # Add distractions as a row with table - only if there are distractions
+                    if has_distractions:
+                        # Create distractions table with headers
+                        distraction_header = [['Distraction', 'Response']]
+                        full_distraction_table = distraction_header + distraction_table_data
+                        
+                        # Distractions data table
+                        d_table = Table(full_distraction_table, colWidths=[2*inch, 3*inch])
+                        d_table.setStyle(TableStyle([
+                            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#E0E0E0')),
+                            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                            ('FONTSIZE', (0,0), (-1,-1), 9),
+                            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+                            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+                            ('TOPPADDING', (0,0), (-1,-1), 4),
+                            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+                            ('LEFTPADDING', (0,0), (-1,-1), 4),
+                        ]))
+                        
+                        # Add as a row matching behavior_data format: "Distractions:" | table
+                        distraction_row = [
+                            Paragraph(f"<b>Distractions:</b>", label_style),
+                            d_table
+                        ]
+                        distraction_wrapper = Table([distraction_row], colWidths=[1.5*inch, 5.5*inch])
+                        distraction_wrapper.setStyle(TableStyle([
+                            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                            ('TOPPADDING', (0,0), (-1,-1), 2),
+                            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                        ]))
+                        elements.append(distraction_wrapper)
+                    
+                    elements.append(Spacer(1, 0.1*inch))
+                
+                # Impression/Comments
                 impression = session_data.get('t_impression', '')
-                if impression:
-                    elements.append(Paragraph("Overall Impression", heading_style))
-                    elements.append(Paragraph(str(impression), styles['Normal']))
+                if impression and str(impression).strip():
+                    elements.append(Paragraph("<b>Overall Impression</b>", heading_style))
+                    impression_text = str(impression).replace('\n', '<br/>')
+                    elements.append(Paragraph(impression_text, value_style))
+                    elements.append(Spacer(1, 0.1*inch))
+                
+                # Maps and Images
+                map_files_str = session_data.get('t_map_files', '')
+                if map_files_str and trail_maps_folder:
+                    # Parse image files - stored as JSON list
+                    image_files = []
+                    if map_files_str:
+                        try:
+                            import json
+                            # Try to parse as JSON first (new format)
+                            parsed = json.loads(map_files_str)
+                            if isinstance(parsed, list):
+                                image_files = [f.strip() for f in parsed if f and f.strip()]
+                            else:
+                                image_files = [str(parsed).strip()] if parsed else []
+                        except (json.JSONDecodeError, TypeError):
+                            # Fallback to comma/semicolon separated (legacy format)
+                            image_files = [f.strip() for f in map_files_str.replace(';', ',').split(',') if f.strip()]
+                    
+                    if image_files:
+                        elements.append(Paragraph("<b>Maps and Images</b>", heading_style))
+                        
+                        for image_file in image_files:
+                            if image_file:
+                                # Handle both full paths and just filenames
+                                if os.path.isabs(image_file):
+                                    image_path = image_file
+                                else:
+                                    image_path = os.path.join(trail_maps_folder, image_file)
+                                
+                                if os.path.exists(image_path):
+                                    try:
+                                        file_ext = os.path.splitext(image_file)[1].lower()
+                                        
+                                        if file_ext in ['.jpg', '.jpeg', '.png']:
+                                            img = Image(image_path, width=6.5*inch, height=6.5*inch, kind='proportional')
+                                            elements.append(img)
+                                            elements.append(Spacer(1, 0.05*inch))
+                                            # Show just filename in caption
+                                            display_name = os.path.basename(image_file)
+                                            caption = Paragraph(f"<i>{display_name}</i>", label_style)
+                                            elements.append(caption)
+                                            elements.append(Spacer(1, 0.1*inch))
+                                        elif file_ext == '.pdf':
+                                            display_name = os.path.basename(image_file)
+                                            note_text = f"<i>{display_name}</i><br/><font color='blue'>PDF file (not embedded)</font>"
+                                            elements.append(Paragraph(note_text, value_style))
+                                            elements.append(Spacer(1, 0.1*inch))
+                                    except Exception as e:
+                                        display_name = os.path.basename(image_file)
+                                        error_text = f"<i>{display_name}</i><br/><font color='red'>Error loading image: {str(e)}</font>"
+                                        elements.append(Paragraph(error_text, value_style))
+                                        elements.append(Spacer(1, 0.1*inch))
+                                else:
+                                    display_name = os.path.basename(image_file)
+                                    error_text = f"<i>{display_name}</i><br/><font color='red'>File not found: {image_path}</font>"
+                                    elements.append(Paragraph(error_text, value_style))
+                                    elements.append(Spacer(1, 0.1*inch))
             
             doc.build(elements)
             
-            messagebox.showinfo("Success", f"Exported {len(sessions)} session(s) to:\n{filepath}")
+            # Send success message to status bar instead of popup
+            self.show_status_message(f"Exported {len(sessions)} session(s) to: {filepath}", "info")
             
             # Ask to open
             if messagebox.askyesno("Open File?", "Would you like to open the exported PDF?"):
@@ -1548,6 +1862,79 @@ class TrailingUI:
                 message, msg_type = self.status_message_history[-1]
                 sv.t_status.set(message)
             self._update_arrow_states()
+    
+    def on_tab_changed(self, event):
+        """Handle tab change event - check for setup requirements"""
+        current_tab_index = self.notebook.index(self.notebook.select())
+        
+        # Check if we're leaving the Setup tab (index 0)
+        if self.previous_tab_index == 0 and current_tab_index != 0:
+            # Check if database exists before allowing tab switch
+            if not self.check_setup_requirements():
+                # Requirements not met - stay on Setup tab
+                self.notebook.select(self.setup_tab)
+                self.previous_tab_index = 0
+                return
+        
+        # Update previous tab index
+        self.previous_tab_index = current_tab_index
+    
+    def check_setup_requirements(self):
+        """Check if database exists before leaving Setup tab"""
+        db_type = sv.db_type.get()
+        
+        # For SQLite, check if database file exists
+        if db_type == "sqlite":
+            import config as config_module
+            db_url = config_module.DB_CONFIG.get("sqlite", {}).get("url", "")
+            db_path = db_url.replace("sqlite:///", "")
+            if not db_path or not os.path.exists(db_path):
+                messagebox.showwarning(
+                    "Database Required",
+                    "Please create or select a database before continuing.\n\n"
+                    "Use the 'Create Database' button to create a new database,\n"
+                    "or browse to select an existing database file."
+                )
+                return False
+            
+            # Check if tables exist
+            try:
+                from sqlalchemy import text
+                from database import get_connection
+                with get_connection() as conn:
+                    result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='t_training_sessions'"))
+                    if not result.fetchone():
+                        messagebox.showwarning(
+                            "Database Not Initialized",
+                            "The database exists but has not been initialized.\n\n"
+                            "Please click 'Create Database' to initialize the database tables."
+                        )
+                        return False
+            except Exception as e:
+                messagebox.showwarning(
+                    "Database Error",
+                    f"Could not verify database: {str(e)}\n\n"
+                    "Please check your database configuration."
+                )
+                return False
+        
+        # For network databases, check connection
+        elif db_type in ["postgres", "supabase", "mysql"]:
+            try:
+                from sqlalchemy import text
+                from database import get_connection
+                with get_connection() as conn:
+                    conn.execute(text("SELECT 1"))
+            except Exception as e:
+                messagebox.showwarning(
+                    "Database Connection Failed",
+                    f"Could not connect to the database.\n\n"
+                    f"Error: {str(e)}\n\n"
+                    "Please check your database configuration and credentials."
+                )
+                return False
+        
+        return True
     
     def _update_arrow_states(self):
         """Update arrow button states based on history position"""

@@ -877,42 +877,48 @@ class MiscDataOperations:
         import re
         from ui_utils import save_json_mirrored, get_secondary_json_folder
         
-        # Get session info for filename (session_number from DB, not calculated)
-        session_num = session_data.get('session_number')
-        dog_name = session_data.get('dog_name', 'unknown')
-        user_name = session_data.get('user_name', '')
-        
-        # Sanitize names for filename (remove special characters)
-        safe_user_name = re.sub(r'[^\w\-]', '_', user_name) if user_name else 'unknown'
-        safe_dog_name = re.sub(r'[^\w\-]', '_', dog_name)
-        
-        # Consistent naming convention: a_{user}_{dog}_{session}.json
-        filename = f"a_{safe_user_name}_{safe_dog_name}_{session_num}.json"
-        
-        # Add timestamp to data
-        session_data['update_time'] = datetime.now().isoformat()
-        
-        # Save to both primary and secondary (returns checksum and timestamps)
-        primary, secondary, checksum, primary_ts, secondary_ts = save_json_mirrored(filename, session_data)
-        
-        if primary:
-            print(f"Session backup saved: {primary}")
-        if secondary:
-            print(f"Session backup mirrored: {secondary}")
-        
-        # Update database with checksum and timestamps
-        if checksum:
-            try:
-                self._update_session_backup_info(session_num, dog_name, checksum, primary_ts, secondary_ts)
-            except Exception as e:
-                print(f"Warning: Could not update backup info in DB: {e}")
-        
-        # Check if secondary backup was configured but unavailable
-        # Notify user once per session via status bar
-        if not secondary and sv.backup_folder.get().strip():
-            if not sv.secondary_unavailable_notified:
-                sv.secondary_unavailable_notified = True
-                sv.status.set("Warning: Secondary backup folder unavailable - backup saved to primary only")
+        try:
+            # Get session info for filename (session_number from DB, not calculated)
+            session_num = session_data.get('session_number')
+            dog_name = session_data.get('dog_name', 'unknown')
+            user_name = session_data.get('user_name', '')
+            
+            # Sanitize names for filename (remove special characters)
+            safe_user_name = re.sub(r'[^\w\-]', '_', user_name) if user_name else 'unknown'
+            safe_dog_name = re.sub(r'[^\w\-]', '_', dog_name)
+            
+            # Consistent naming convention: a_{user}_{dog}_{session}.json
+            filename = f"a_{safe_user_name}_{safe_dog_name}_{session_num}.json"
+            
+            # Add timestamp to data
+            session_data['update_time'] = datetime.now().isoformat()
+            
+            # Save to both primary and secondary (returns checksum and timestamps)
+            primary, secondary, checksum, primary_ts, secondary_ts = save_json_mirrored(filename, session_data)
+            
+            if primary:
+                print(f"Session backup saved: {primary}")
+            if secondary:
+                print(f"Session backup mirrored: {secondary}")
+            
+            # Update database with checksum and timestamps
+            if checksum:
+                try:
+                    self._update_session_backup_info(session_num, dog_name, checksum, primary_ts, secondary_ts)
+                except Exception as e:
+                    print(f"Warning: Could not update backup info in DB: {e}")
+            
+            # Check if secondary backup was configured but unavailable
+            # Notify user once per session via status bar
+            if not secondary and sv.backup_folder.get().strip():
+                if not sv.secondary_unavailable_notified:
+                    sv.secondary_unavailable_notified = True
+                    sv.status.set("Warning: Secondary backup folder unavailable - backup saved to primary only")
+                    
+        except Exception as e:
+            error_msg = f"Backup failed: {str(e)}"
+            print(f"Warning: Failed to save session to JSON: {e}")
+            self.ui.show_status_message(error_msg, "error")
     
     def _update_session_backup_info(self, session_number, dog_name, checksum, primary_ts, secondary_ts):
         """Update checksum and timestamps in database for a session."""

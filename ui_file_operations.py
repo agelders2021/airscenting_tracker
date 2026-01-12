@@ -125,12 +125,12 @@ class FileOperations:
             if os.path.exists(filepath):
                 ext = os.path.splitext(filepath)[1].lower()
                 if ext in ['.pdf', '.jpg', '.jpeg', '.png']:
-                    # Create unique filename: {dog}_{session}_{timestamp}_{original}
+                    # Create unique filename: a_{dog}_session{session}_{timestamp}_{original}
                     original_name = os.path.basename(filepath)
                     # Sanitize dog name for filename
                     safe_dog_name = re.sub(r'[^\w\-]', '_', dog_name)
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    unique_name = f"{safe_dog_name}_session{session_number}_{timestamp}_{original_name}"
+                    unique_name = f"a_{safe_dog_name}_session{session_number}_{timestamp}_{original_name}"
                     
                     # Copy file to primary Images folder
                     dest_path = os.path.join(trail_maps_folder, unique_name)
