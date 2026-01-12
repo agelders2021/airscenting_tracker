@@ -1167,6 +1167,10 @@ class SetupTab:
             # Update combobox
             if hasattr(self.ui, 'a_location_combo') and self.ui.a_location_combo:
                 self.ui.a_location_combo['values'] = locations
+            
+            # Update trailing location combo if available
+            if hasattr(self.ui, 'trailing_entry') and hasattr(self.ui.trailing_entry, 'update_location_list'):
+                self.ui.trailing_entry.update_location_list(locations)
                 
         except Exception as e:
             # Restore original DB_TYPE on error
@@ -1582,7 +1586,11 @@ class SetupTab:
             # Update combobox
             if hasattr(self.ui, 'a_dog_combo') and self.ui.a_dog_combo:
                 self.ui.a_dog_combo['values'] = dogs
-                # print(f"DEBUG refresh_dog_list: Updated dog_combo with {len(dogs)} dogs")  # DEBUG
+            
+            # Update trailing dog combo if available
+            if hasattr(self.ui, 'trailing_entry') and self.ui.trailing_entry:
+                if hasattr(self.ui.trailing_entry, 'update_dog_list'):
+                    self.ui.trailing_entry.update_dog_list(dogs)
             
             # Also update Setup tab listbox
             self.s_dog_listbox.delete(0, tk.END)
@@ -1664,9 +1672,8 @@ class SetupTab:
                 # Update listbox
                 self.s_dog_listbox.insert(tk.END, dog_name)
                 
-                # Update dog combobox in Entry tab if it exists
-                if hasattr(self.ui, 'a_dog_combo') and self.ui.a_dog_combo:
-                    self.refresh_dog_list()
+                # Refresh dog lists in all tabs (airscenting and trailing)
+                self.refresh_dog_list()
                 
                 # Select the newly added dog in the combobox
                 sv.dog.set(dog_name)

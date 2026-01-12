@@ -12,7 +12,9 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkcalendar import DateEntry
 from datetime import datetime
+from pathlib import Path
 import os
+import shutil
 import sv  # Import sv module for centralized StringVars
 
 
@@ -200,8 +202,9 @@ class TrailingEntryTab:
         self.session_entry.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         tk.Button(session_frame, text="New", command=self._new_session).grid(row=0, column=4, padx=5)
         
-        tk.Button(session_frame, text="View/Edit/Hide Prior Session(s)", 
-                 command=self._load_prior_session, bg="#4169E1", fg="white").grid(row=0, column=5,sticky='e', padx=5, pady=2)
+        self.view_edit_hide_btn = tk.Button(session_frame, text="View/Edit/Hide Prior Session(s)", 
+                 command=self._load_prior_session, bg="#4169E1", fg="white")
+        self.view_edit_hide_btn.grid(row=0, column=5, sticky='e', padx=5, pady=2)
         
         # Navigation buttons
         self.prev_session_btn = tk.Button(session_frame, text="◀ Previous", bg="#FF8C00", fg="white", 
@@ -213,8 +216,9 @@ class TrailingEntryTab:
         self.next_session_btn.grid(row=0, column=7, padx=2, pady=2)
         
         # Export PDF button
-        tk.Button(session_frame, text="Export PDF", bg="#9370DB", fg="white", 
-                 width=12, command=self._export_pdf).grid(row=0, column=8, padx=2, pady=2)
+        self.export_pdf_btn = tk.Button(session_frame, text="Export PDF", bg="#9370DB", fg="white", 
+                 width=12, command=self._export_pdf)
+        self.export_pdf_btn.grid(row=0, column=8, padx=2, pady=2)
         
         # Row 1: Handler, Add Session Purpose + accumulator
         tk.Label(session_frame, text="Handler:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
@@ -1019,20 +1023,82 @@ class TrailingEntryTab:
             self._add_map_files(list(filepaths))
     
     def _add_map_files(self, filepaths):
-        """Add map files to the list"""
-        sv.t_map_files_list.extend(filepaths)
-        # Remove duplicates while preserving order
-        seen = set()
-        sv.t_map_files_list = [x for x in sv.t_map_files_list if not (x in seen or seen.add(x))]
+        """Add map files to the list and copy to Images folders.
         
-        self.map_listbox.delete(0, tk.END)
-        for filepath in sv.t_map_files_list:
-            self.map_listbox.insert(tk.END, os.path.basename(filepath))
+        Copies files to both primary and secondary Images folders with
+        unique naming: t_{dog}_{session}_{timestamp}_{original}.ext
+        """
+        import re
+        from ui_utils import get_primary_images_folder, get_secondary_images_folder
         
-        self.view_trail_map_button.config(state=tk.NORMAL)
-        self.delete_trail_map_button.config(state=tk.NORMAL)
+        dog_name = sv.t_dog.get()
+        session_number = sv.t_session.get() or '0'
         
-        sv.t_status.set(f"{len(filepaths)} trail map(s) added")
+        if not dog_name:
+            messagebox.showwarning(
+                "No Dog Selected",
+                "Please select a dog before adding trail maps.\n\n"
+                "The dog name is used to organize files."
+            )
+            return
+        
+        # Get primary and secondary Images folders
+        primary_folder = get_primary_images_folder()
+        secondary_folder = get_secondary_images_folder(create_if_missing=True)
+        
+        if not primary_folder:
+            messagebox.showerror(
+                "Images Folder Not Set",
+                "Primary storage folder not properly initialized.\n\n"
+                "Please use 'Initialize Data Structures' in the Setup tab first."
+            )
+            return
+        
+        copied_files = []
+        safe_dog_name = re.sub(r'[^\w\-]', '_', dog_name)
+        
+        for filepath in filepaths:
+            filepath = Path(filepath)
+            if filepath.exists():
+                # Create unique filename: t_{dog}_{session}_{timestamp}_{original}
+                original_name = filepath.name
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                unique_name = f"t_{safe_dog_name}_session{session_number}_{timestamp}_{original_name}"
+                
+                # Copy to primary Images folder
+                try:
+                    primary_dest = primary_folder / unique_name
+                    shutil.copy2(str(filepath), str(primary_dest))
+                    copied_files.append(str(primary_dest))  # Store full path
+                    print(f"Copied to primary: {primary_dest}")
+                    
+                    # Mirror to secondary Images folder
+                    if secondary_folder:
+                        try:
+                            secondary_dest = secondary_folder / unique_name
+                            shutil.copy2(str(filepath), str(secondary_dest))
+                            print(f"Mirrored to secondary: {secondary_dest}")
+                        except Exception as e:
+                            print(f"Warning: Failed to mirror to secondary: {e}")
+                            
+                except Exception as e:
+                    print(f"Error copying {filepath}: {e}")
+                    messagebox.showerror("Copy Error", f"Failed to copy {filepath.name}:\n{e}")
+        
+        if copied_files:
+            sv.t_map_files_list.extend(copied_files)
+            # Remove duplicates while preserving order
+            seen = set()
+            sv.t_map_files_list = [x for x in sv.t_map_files_list if not (x in seen or seen.add(x))]
+            
+            self.map_listbox.delete(0, tk.END)
+            for fpath in sv.t_map_files_list:
+                self.map_listbox.insert(tk.END, os.path.basename(fpath))
+            
+            self.view_trail_map_button.config(state=tk.NORMAL)
+            self.delete_trail_map_button.config(state=tk.NORMAL)
+            
+            sv.t_status.set(f"{len(copied_files)} trail map(s) added and copied to backup")
     
     def _view_selected_trail_map(self):
         """Open the selected trail map file"""

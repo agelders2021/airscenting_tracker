@@ -122,6 +122,9 @@ def create_tables():
         update_time TIMESTAMP,
         uuid TEXT,
         status TEXT DEFAULT 'active',
+        checksum TEXT,
+        primary_timestamp TIMESTAMP,
+        secondary_timestamp TIMESTAMP,
         UNIQUE(session_number, dog_name)
     )
     """
@@ -198,6 +201,9 @@ def create_tables():
         update_time TIMESTAMP,
         uuid TEXT,
         status TEXT DEFAULT 'active',
+        checksum TEXT,
+        primary_timestamp TIMESTAMP,
+        secondary_timestamp TIMESTAMP,
         UNIQUE(t_session_number, t_dog_name)
     )
     """
@@ -307,7 +313,10 @@ def migrate_add_backup_columns():
         ("entry_type", "TEXT"),
         ("update_time", "TIMESTAMP"),
         ("uuid", "TEXT"),
-        ("status", "TEXT DEFAULT 'active'")
+        ("status", "TEXT DEFAULT 'active'"),
+        ("checksum", "TEXT"),
+        ("primary_timestamp", "TIMESTAMP"),
+        ("secondary_timestamp", "TIMESTAMP")
     ]
     
     added_columns = []
@@ -341,6 +350,71 @@ def migrate_add_backup_columns():
             # Set existing rows to 'active' status if status column was just added
             if "status" in added_columns:
                 conn.execute(text("UPDATE training_sessions SET status = 'active' WHERE status IS NULL"))
+            
+            conn.commit()
+        
+        # Build result message
+        messages = []
+        if added_columns:
+            messages.append(f"Added columns: {', '.join(added_columns)}")
+        if already_exists:
+            messages.append(f"Already existed: {', '.join(already_exists)}")
+        
+        return True, "; ".join(messages) if messages else "No changes needed"
+        
+    except Exception as e:
+        return False, f"Migration error: {e}"
+
+
+def add_missing_columns_to_t_training_sessions():
+    """
+    Add missing columns to t_training_sessions table for backward compatibility.
+    This allows older databases to work with newer code that expects these columns.
+    
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    columns_to_add = [
+        ("entry_type", "TEXT"),
+        ("update_time", "TIMESTAMP"),
+        ("uuid", "TEXT"),
+        ("status", "TEXT DEFAULT 'active'"),
+        ("checksum", "TEXT"),
+        ("primary_timestamp", "TIMESTAMP"),
+        ("secondary_timestamp", "TIMESTAMP")
+    ]
+    
+    added_columns = []
+    already_exists = []
+    
+    try:
+        with get_connection() as conn:
+            # Check which columns already exist
+            if DB_TYPE == "sqlite":
+                result = conn.execute(text("PRAGMA table_info(t_training_sessions)"))
+                existing_columns = {row[1] for row in result.fetchall()}
+            else:
+                # PostgreSQL/MySQL - query information_schema
+                result = conn.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 't_training_sessions'
+                """))
+                existing_columns = {row[0] for row in result.fetchall()}
+            
+            # Add missing columns
+            for col_name, col_type in columns_to_add:
+                if col_name in existing_columns:
+                    already_exists.append(col_name)
+                else:
+                    # Add the column
+                    alter_sql = f"ALTER TABLE t_training_sessions ADD COLUMN {col_name} {col_type}"
+                    conn.execute(text(alter_sql))
+                    added_columns.append(col_name)
+            
+            # Set existing rows to 'active' status if status column was just added
+            if "status" in added_columns:
+                conn.execute(text("UPDATE t_training_sessions SET status = 'active' WHERE status IS NULL"))
             
             conn.commit()
         

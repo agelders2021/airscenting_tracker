@@ -122,15 +122,30 @@ def save_json_mirrored(filename, data, indent=2):
     Creates secondary JSON folder if it doesn't exist.
     
     Args:
-        filename: Name of the JSON file (e.g., "session_1_20250106.json")
+        filename: Name of the JSON file (e.g., "a_Fido_1.json")
         data: Dictionary to save as JSON
         indent: JSON indentation (default 2)
         
     Returns:
-        tuple: (primary_path, secondary_path) - paths where files were saved, None if not saved
+        tuple: (primary_path, secondary_path, checksum, primary_ts, secondary_ts)
+               - paths where files were saved (None if not saved)
+               - SHA-256 checksum of data
+               - file timestamps (datetime or None)
     """
+    import hashlib
+    from datetime import datetime
+    
     primary_path = None
     secondary_path = None
+    primary_ts = None
+    secondary_ts = None
+    
+    # Compute checksum BEFORE saving (excludes checksum/timestamp fields from data)
+    # Create a copy without internal tracking fields for consistent hashing
+    data_for_hash = {k: v for k, v in data.items() 
+                     if k not in ('checksum', 'primary_timestamp', 'secondary_timestamp')}
+    json_str = json.dumps(data_for_hash, sort_keys=True, default=str)
+    checksum = hashlib.sha256(json_str.encode('utf-8')).hexdigest()
     
     # Save to primary
     primary_folder = get_primary_json_folder()
@@ -140,6 +155,7 @@ def save_json_mirrored(filename, data, indent=2):
             with open(primary_file, 'w') as f:
                 json.dump(data, f, indent=indent, default=str)
             primary_path = primary_file
+            primary_ts = datetime.fromtimestamp(primary_file.stat().st_mtime)
             print(f"Saved to primary: {primary_file}")
         except Exception as e:
             print(f"Warning: Failed to save to primary JSON folder: {e}")
@@ -152,11 +168,12 @@ def save_json_mirrored(filename, data, indent=2):
             with open(secondary_file, 'w') as f:
                 json.dump(data, f, indent=indent, default=str)
             secondary_path = secondary_file
+            secondary_ts = datetime.fromtimestamp(secondary_file.stat().st_mtime)
             print(f"Mirrored to secondary: {secondary_file}")
         except Exception as e:
             print(f"Warning: Failed to mirror to secondary JSON folder: {e}")
     
-    return primary_path, secondary_path
+    return primary_path, secondary_path, checksum, primary_ts, secondary_ts
 
 
 def copy_file_mirrored(source_path, filename):

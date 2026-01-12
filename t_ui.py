@@ -436,34 +436,81 @@ class TrailingUI:
             return False
     
     def save_session_to_json(self, session_data, terrains, purposes, distractions):
-        """Save trailing session to JSON backup file"""
+        """Save trailing session to JSON backup file.
+        
+        Uses consistent naming: t_{user}_{dog}_{session_number}.json
+        Updates database with checksum and file timestamps.
+        """
+        import re
         from ui_utils import save_json_mirrored
         
         try:
+            # Get user_name for filename and data
+            user_name = get_username()
+            
             # Build the backup data
             backup_data = {
                 **session_data,
                 "selected_terrains": terrains,
                 "selected_purposes": purposes,
                 "distractions": distractions,
-                "user_name": get_username(),
-                "backup_time": datetime.now().isoformat()
+                "user_name": user_name,
+                "update_time": datetime.now().isoformat()
             }
             
-            # Create filename: t_session_<dog>_<session>.json
-            dog_name = session_data.get('t_dog_name', 'unknown').replace(' ', '_')
+            # Get session info for filename (session_number from DB, not calculated)
+            dog_name = session_data.get('t_dog_name', 'unknown')
             session_num = session_data.get('t_session_number', '0')
-            filename = f"t_session_{dog_name}_{session_num}.json"
             
-            primary, secondary = save_json_mirrored(filename, backup_data)
+            # Sanitize names for filename
+            safe_user_name = re.sub(r'[^\w\-]', '_', user_name) if user_name else 'unknown'
+            safe_dog_name = re.sub(r'[^\w\-]', '_', dog_name)
+            
+            # Consistent naming convention: t_{user}_{dog}_{session}.json
+            filename = f"t_{safe_user_name}_{safe_dog_name}_{session_num}.json"
+            
+            # Save to both primary and secondary (returns checksum and timestamps)
+            primary, secondary, checksum, primary_ts, secondary_ts = save_json_mirrored(filename, backup_data)
             
             if primary:
                 print(f"Trailing session saved to JSON: {primary}")
             if secondary:
                 print(f"Trailing session mirrored to: {secondary}")
+            
+            # Update database with checksum and timestamps
+            if checksum:
+                try:
+                    self._update_trailing_backup_info(session_num, dog_name, checksum, primary_ts, secondary_ts)
+                except Exception as e:
+                    print(f"Warning: Could not update backup info in DB: {e}")
                 
         except Exception as e:
             print(f"Warning: Failed to save trailing session to JSON: {e}")
+    
+    def _update_trailing_backup_info(self, session_number, dog_name, checksum, primary_ts, secondary_ts):
+        """Update checksum and timestamps in database for a trailing session."""
+        try:
+            from sqlalchemy import text
+            from database import get_connection
+            
+            with get_connection() as conn:
+                conn.execute(text("""
+                    UPDATE t_training_sessions SET
+                        checksum = :checksum,
+                        primary_timestamp = :primary_ts,
+                        secondary_timestamp = :secondary_ts
+                    WHERE t_session_number = :session_number AND t_dog_name = :dog_name
+                """), {
+                    'checksum': checksum,
+                    'primary_ts': primary_ts,
+                    'secondary_ts': secondary_ts,
+                    'session_number': session_number,
+                    'dog_name': dog_name
+                })
+                conn.commit()
+                print(f"Updated trailing backup info: checksum={checksum[:16]}...")
+        except Exception as e:
+            print(f"Error updating trailing session backup info: {e}")
     
     def get_next_session_number(self, dog_name):
         """Get next session number for a dog"""
@@ -731,44 +778,238 @@ class TrailingUI:
             self._update_navigation_buttons()
     
     def on_export_pdf(self):
-        """Export current session to PDF"""
-        from tkinter import filedialog
+        """Export sessions to PDF with range and status options"""
+        from tkinter import Toplevel
+        from tkcalendar import DateEntry
         
-        # Check if a session is loaded
-        if not sv.t_session.get() or sv.t_session.get() == "":
-            messagebox.showwarning("No Session", "Please load a session to export.")
-            return
-        
-        # Get current session data from form
-        session_data = self.trailing_entry.get_session_data()
         dog_name = sv.t_dog.get()
-        session_num = sv.t_session.get()
-        
-        # Ask for save location
-        default_filename = f"trailing_session_{dog_name}_{session_num}.pdf"
-        filepath = filedialog.asksaveasfilename(
-            defaultextension=".pdf",
-            filetypes=[("PDF files", "*.pdf")],
-            initialfile=default_filename,
-            title="Export Session to PDF"
-        )
-        
-        if not filepath:
+        if not dog_name:
+            messagebox.showwarning("No Dog Selected", "Please select a dog first.")
             return
+        
+        # Create dialog
+        dialog = Toplevel(self.root)
+        dialog.title("Export Sessions to PDF")
+        dialog.geometry("500x420")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        frame = tk.Frame(dialog, padx=20, pady=20)
+        frame.pack(fill="both", expand=True)
+        
+        # Dog display
+        tk.Label(frame, text="Dog:", font=("Helvetica", 10, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 10))
+        tk.Label(frame, text=dog_name, font=("Helvetica", 10)).grid(row=0, column=1, sticky="w", pady=(0, 10))
+        
+        # Range type selection
+        tk.Label(frame, text="Export Range:", font=("Helvetica", 10, "bold")).grid(row=1, column=0, sticky="w", pady=(10, 5))
+        
+        range_type_var = tk.StringVar(value="Date")
+        tk.Radiobutton(frame, text="Date Range", variable=range_type_var, value="Date").grid(row=2, column=0, sticky="w", padx=(20, 0))
+        tk.Radiobutton(frame, text="Session Number Range", variable=range_type_var, value="Session").grid(row=3, column=0, sticky="w", padx=(20, 0))
+        
+        # Range inputs frame
+        input_frame = tk.Frame(frame)
+        input_frame.grid(row=2, column=1, rowspan=2, sticky="w", padx=(20, 0))
+        
+        # Get min/max values
+        db_ops = DatabaseOperations(self)
+        
+        def get_dog_ranges():
+            try:
+                from database import get_connection
+                from sqlalchemy import text
+                with get_connection() as conn:
+                    result = conn.execute(text("""
+                        SELECT MIN(t_date), MAX(t_date), MIN(t_session_number), MAX(t_session_number)
+                        FROM t_training_sessions WHERE t_dog_name = :dog_name
+                    """), {"dog_name": dog_name})
+                    row = result.fetchone()
+                    return row[0], row[1], row[2], row[3]
+            except:
+                return None, None, None, None
+        
+        min_date, max_date, min_session, max_session = get_dog_ranges()
+        
+        # Labels
+        tk.Label(input_frame, text="Start:").grid(row=0, column=0, sticky="e", padx=5)
+        tk.Label(input_frame, text="End:").grid(row=1, column=0, sticky="e", padx=5)
+        
+        # Date pickers
+        start_date = DateEntry(input_frame, width=14, date_pattern='yyyy-mm-dd')
+        start_date.grid(row=0, column=1, padx=5, pady=2)
+        end_date = DateEntry(input_frame, width=14, date_pattern='yyyy-mm-dd')
+        end_date.grid(row=1, column=1, padx=5, pady=2)
+        
+        # Session entries
+        start_var = tk.StringVar(value=str(min_session) if min_session else "1")
+        end_var = tk.StringVar(value=str(max_session) if max_session else "1")
+        start_entry = tk.Entry(input_frame, textvariable=start_var, width=15)
+        end_entry = tk.Entry(input_frame, textvariable=end_var, width=15)
+        
+        def update_input_widgets(*args):
+            if range_type_var.get() == "Date":
+                start_date.grid(row=0, column=1, padx=5, pady=2)
+                end_date.grid(row=1, column=1, padx=5, pady=2)
+                start_entry.grid_remove()
+                end_entry.grid_remove()
+            else:
+                start_entry.grid(row=0, column=1, padx=5, pady=2)
+                end_entry.grid(row=1, column=1, padx=5, pady=2)
+                start_date.grid_remove()
+                end_date.grid_remove()
+        
+        range_type_var.trace("w", update_input_widgets)
+        update_input_widgets()
+        
+        # Status filter
+        tk.Label(frame, text="Session Status:", font=("Helvetica", 10, "bold")).grid(row=4, column=0, sticky="w", pady=(15, 5))
+        status_frame = tk.Frame(frame)
+        status_frame.grid(row=4, column=1, sticky="w", pady=(15, 5))
+        
+        status_var = tk.StringVar(value="active")
+        tk.Radiobutton(status_frame, text="Active", variable=status_var, value="active").pack(side=tk.LEFT, padx=5)
+        tk.Radiobutton(status_frame, text="Hidden", variable=status_var, value="deleted").pack(side=tk.LEFT, padx=5)
+        tk.Radiobutton(status_frame, text="Both", variable=status_var, value="both").pack(side=tk.LEFT, padx=5)
+        
+        # Sort order
+        tk.Label(frame, text="Sort Order:", font=("Helvetica", 10, "bold")).grid(row=5, column=0, sticky="w", pady=(15, 5))
+        sort_var = tk.StringVar(value="Ascending")
+        ttk.Combobox(frame, textvariable=sort_var, width=20, state="readonly", 
+                     values=["Ascending", "Descending"]).grid(row=5, column=1, sticky="w", pady=(15, 5))
+        
+        # Buttons
+        button_frame = tk.Frame(frame)
+        button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
+        
+        def do_export():
+            # Get range values
+            if range_type_var.get() == "Date":
+                start_value = start_date.get_date().strftime("%Y-%m-%d")
+                end_value = end_date.get_date().strftime("%Y-%m-%d")
+            else:
+                start_value = start_var.get()
+                end_value = end_var.get()
+            
+            if not start_value or not end_value:
+                messagebox.showwarning("Invalid Range", "Please enter both start and end values")
+                return
+            
+            # Get file save location
+            default_filename = f"Trailing_Log_{dog_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+            filepath = filedialog.asksaveasfilename(
+                title="Save PDF As",
+                defaultextension=".pdf",
+                initialfile=default_filename,
+                filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
+            )
+            
+            if not filepath:
+                return
+            
+            dialog.destroy()
+            
+            # Export
+            self._export_trailing_sessions_to_pdf(
+                filepath, dog_name, range_type_var.get(),
+                start_value, end_value, sort_var.get(), status_var.get()
+            )
+        
+        tk.Button(button_frame, text="Export to PDF", command=do_export, bg="#4CAF50", fg="white", width=15).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="Cancel", command=dialog.destroy, width=10).pack(side=tk.LEFT, padx=5)
+    
+    def _export_trailing_sessions_to_pdf(self, filepath, dog_name, range_type, start_value, end_value, sort_order, status_filter):
+        """Export multiple trailing sessions to PDF file"""
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
         
         try:
-            self._export_session_to_pdf(filepath, session_data)
-            self.show_status_message(f"PDF exported: {filepath}", "info")
+            # Fetch sessions
+            db_ops = DatabaseOperations(self)
+            sessions = db_ops.get_trailing_sessions_for_export(
+                dog_name, range_type, start_value, end_value, sort_order, status_filter
+            )
             
-            # Ask if user wants to open the file
-            if messagebox.askyesno("Export Complete", "PDF exported successfully!\n\nWould you like to open it?"):
+            if not sessions:
+                messagebox.showinfo("No Sessions", "No sessions found matching the specified criteria")
+                return
+            
+            doc = SimpleDocTemplate(filepath, pagesize=letter, 
+                                    rightMargin=0.5*inch, leftMargin=0.5*inch,
+                                    topMargin=0.5*inch, bottomMargin=0.5*inch)
+            
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle('Title', parent=styles['Heading1'], alignment=1, spaceAfter=20)
+            heading_style = ParagraphStyle('Heading', parent=styles['Heading2'], spaceAfter=10, spaceBefore=15)
+            
+            elements = []
+            
+            for i, session_data in enumerate(sessions):
+                if i > 0:
+                    elements.append(PageBreak())
+                
+                # Title
+                session_num = session_data.get('t_session_number', '?')
+                elements.append(Paragraph(f"Trailing Session Report", title_style))
+                elements.append(Paragraph(f"{dog_name} - Session #{session_num}", styles['Heading2']))
+                elements.append(Spacer(1, 0.2*inch))
+                
+                # Session Information
+                elements.append(Paragraph("Session Information", heading_style))
+                session_info = [
+                    ['Date:', str(session_data.get('t_date', '')), 'Handler:', session_data.get('t_handler', '')],
+                    ['Location:', session_data.get('t_location', ''), 'Field Support:', session_data.get('t_field_support', '')],
+                    ['Start Time:', session_data.get('t_start_time', ''), 'Finish Time:', session_data.get('t_finish_time', '')],
+                ]
+                t = Table(session_info, colWidths=[1.2*inch, 2.3*inch, 1.2*inch, 2.3*inch])
+                t.setStyle(TableStyle([
+                    ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 10),
+                    ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                    ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ]))
+                elements.append(t)
+                
+                # Trail Information
+                elements.append(Paragraph("Trail Information", heading_style))
+                trail_info = [
+                    ['Trail Age:', session_data.get('t_trail_age', ''), 'Trail Length:', session_data.get('t_trail_length', '')],
+                    ['Difficulty:', session_data.get('t_difficulty', ''), 'Trail Layer:', session_data.get('t_trail_layer', '')],
+                ]
+                t = Table(trail_info, colWidths=[1.2*inch, 2.3*inch, 1.2*inch, 2.3*inch])
+                t.setStyle(TableStyle([
+                    ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 10),
+                    ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                    ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ]))
+                elements.append(t)
+                
+                # Impression
+                impression = session_data.get('t_impression', '')
+                if impression:
+                    elements.append(Paragraph("Overall Impression", heading_style))
+                    elements.append(Paragraph(str(impression), styles['Normal']))
+            
+            doc.build(elements)
+            
+            messagebox.showinfo("Success", f"Exported {len(sessions)} session(s) to:\n{filepath}")
+            
+            # Ask to open
+            if messagebox.askyesno("Open File?", "Would you like to open the exported PDF?"):
                 import subprocess
                 import platform
                 if platform.system() == 'Windows':
                     os.startfile(filepath)
-                elif platform.system() == 'Darwin':  # macOS
+                elif platform.system() == 'Darwin':
                     subprocess.run(['open', filepath])
-                else:  # Linux
+                else:
                     subprocess.run(['xdg-open', filepath])
                     
         except Exception as e:
@@ -776,126 +1017,6 @@ class TrailingUI:
             print(f"PDF export error: {e}")
             import traceback
             traceback.print_exc()
-    
-    def _export_session_to_pdf(self, filepath, session_data):
-        """Export a trailing session to PDF file"""
-        from reportlab.lib import colors
-        from reportlab.lib.pagesizes import letter
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import inch
-        
-        doc = SimpleDocTemplate(filepath, pagesize=letter, 
-                                rightMargin=0.5*inch, leftMargin=0.5*inch,
-                                topMargin=0.5*inch, bottomMargin=0.5*inch)
-        
-        styles = getSampleStyleSheet()
-        title_style = ParagraphStyle('Title', parent=styles['Heading1'], alignment=1, spaceAfter=20)
-        heading_style = ParagraphStyle('Heading', parent=styles['Heading2'], spaceAfter=10, spaceBefore=15)
-        
-        elements = []
-        
-        # Title
-        dog_name = session_data.get('t_dog_name', 'Unknown')
-        session_num = session_data.get('t_session_number', '?')
-        elements.append(Paragraph(f"Trailing Session Report", title_style))
-        elements.append(Paragraph(f"{dog_name} - Session #{session_num}", styles['Heading2']))
-        elements.append(Spacer(1, 0.2*inch))
-        
-        # Session Information
-        elements.append(Paragraph("Session Information", heading_style))
-        session_info = [
-            ['Date:', session_data.get('t_date', ''), 'Handler:', session_data.get('t_handler', '')],
-            ['Location:', session_data.get('t_location', ''), 'Field Support:', session_data.get('t_field_support', '')],
-            ['Start Time:', session_data.get('t_start_time', ''), 'Finish Time:', session_data.get('t_finish_time', '')],
-        ]
-        t = Table(session_info, colWidths=[1.2*inch, 2.3*inch, 1.2*inch, 2.3*inch])
-        t.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ]))
-        elements.append(t)
-        
-        # Trail Information
-        elements.append(Paragraph("Trail Information", heading_style))
-        trail_info = [
-            ['Trail Age:', session_data.get('t_trail_age', ''), 'Trail Length:', session_data.get('t_trail_length', '')],
-            ['Difficulty:', session_data.get('t_difficulty', ''), 'Trail Layer:', session_data.get('t_trail_layer', '')],
-            ['Cross Track:', session_data.get('t_cross_track_layer', ''), 'Cross Track Age:', session_data.get('t_cross_track_age', '')],
-        ]
-        t = Table(trail_info, colWidths=[1.2*inch, 2.3*inch, 1.2*inch, 2.3*inch])
-        t.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ]))
-        elements.append(t)
-        
-        # Weather - Laying Trail
-        elements.append(Paragraph("Weather When Laying Trail", heading_style))
-        weather_laying = [
-            ['Weather:', session_data.get('t_weather_laying', ''), 'Temperature:', session_data.get('t_temperature_laying', '')],
-            ['Wind Speed:', session_data.get('t_wind_speed_laying', ''), 'Wind Direction:', session_data.get('t_wind_direction_laying', '')],
-            ['Humidity:', session_data.get('t_humidity_laying', ''), '', ''],
-        ]
-        t = Table(weather_laying, colWidths=[1.2*inch, 2.3*inch, 1.2*inch, 2.3*inch])
-        t.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ]))
-        elements.append(t)
-        
-        # Weather - Running Trail
-        elements.append(Paragraph("Weather When Running Trail", heading_style))
-        weather_running = [
-            ['Weather:', session_data.get('t_weather_running', ''), 'Temperature:', session_data.get('t_temperature_running', '')],
-            ['Wind Speed:', session_data.get('t_wind_speed_running', ''), 'Wind Direction:', session_data.get('t_wind_direction_running', '')],
-            ['Humidity:', session_data.get('t_humidity_running', ''), '', ''],
-        ]
-        t = Table(weather_running, colWidths=[1.2*inch, 2.3*inch, 1.2*inch, 2.3*inch])
-        t.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ]))
-        elements.append(t)
-        
-        # Behavior/Performance
-        elements.append(Paragraph("Behavior & Performance", heading_style))
-        behavior = [
-            ['Start Behavior:', session_data.get('t_start_behavior', ''), 'Consistency:', session_data.get('t_consistency', '')],
-            ['Head Position:', session_data.get('t_head_position', ''), 'Pace:', session_data.get('t_pace', '')],
-            ['Indication:', session_data.get('t_indication', ''), '', ''],
-            ['Time to Complete:', session_data.get('t_time_to_complete', ''), 'Success Rate:', session_data.get('t_success_rate', '')],
-        ]
-        t = Table(behavior, colWidths=[1.2*inch, 2.3*inch, 1.2*inch, 2.3*inch])
-        t.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ]))
-        elements.append(t)
-        
-        # Overall Impression
-        impression = session_data.get('t_impression', '')
-        if impression:
-            elements.append(Paragraph("Overall Impression", heading_style))
-            elements.append(Paragraph(impression, styles['Normal']))
-        
-        # Build PDF
-        doc.build(elements)
     
     def load_initial_data(self):
         """Load initial data after UI is ready"""
@@ -938,6 +1059,21 @@ class TrailingUI:
                 print(f"Secondary JSON folder: {secondary_json} (does not exist)")
         
         print("=" * 60)
+        
+        # Disable View/Edit/Hide and Export PDF buttons until startup is complete
+        self._disable_sync_sensitive_buttons()
+        
+        # Check if database is healthy before deciding sync strategy
+        db_healthy = self._check_db_health()
+        
+        if db_healthy:
+            # DB is healthy - run sync in background thread
+            self._start_startup_sync_thread()
+        else:
+            # DB is damaged - run sync synchronously to rebuild
+            print("Database appears damaged - running synchronous rebuild...")
+            self._perform_startup_sync()
+            self._enable_sync_sensitive_buttons()
         
         # Load terrain types
         terrain_types = self.config.get("terrain_types", get_default_terrain_types())
@@ -992,7 +1128,7 @@ class TrailingUI:
             next_session = self.get_next_session_number(last_dog)
             sv.t_session.set(str(next_session))
         
-        sv.t_status.set("Ready")
+        sv.t_status.set("Ready" if not sv.sync_in_progress else "Synchronizing backups...")
         
         # Select Entry tab if database exists, otherwise stay on Setup tab
         if self.machine_db_path:
@@ -1000,13 +1136,175 @@ class TrailingUI:
             if db_file.exists():
                 self.notebook.select(self.entry_tab)
                 print("Database found - starting on Entry tab")
+    
+    def _check_db_health(self) -> bool:
+        """Check if database is accessible and has required tables."""
+        try:
+            from sqlalchemy import text
+            from database import get_connection
+            with get_connection() as conn:
+                conn.execute(text("SELECT COUNT(*) FROM training_sessions"))
+                conn.execute(text("SELECT COUNT(*) FROM t_training_sessions"))
+            return True
+        except Exception as e:
+            print(f"Database health check failed: {e}")
+            return False
+    
+    def _disable_sync_sensitive_buttons(self):
+        """Disable buttons that shouldn't be used during sync."""
+        sv.sync_in_progress = True
+        if hasattr(self, 'trailing_entry'):
+            if hasattr(self.trailing_entry, 'view_edit_hide_btn'):
+                self.trailing_entry.view_edit_hide_btn.config(state=tk.DISABLED)
+            if hasattr(self.trailing_entry, 'export_pdf_btn'):
+                self.trailing_entry.export_pdf_btn.config(state=tk.DISABLED)
+    
+    def _enable_sync_sensitive_buttons(self):
+        """Re-enable buttons after sync completes."""
+        sv.sync_in_progress = False
+        if hasattr(self, 'trailing_entry'):
+            if hasattr(self.trailing_entry, 'view_edit_hide_btn'):
+                self.trailing_entry.view_edit_hide_btn.config(state=tk.NORMAL)
+            if hasattr(self.trailing_entry, 'export_pdf_btn'):
+                self.trailing_entry.export_pdf_btn.config(state=tk.NORMAL)
+    
+    def _start_startup_sync_thread(self):
+        """Start startup sync in a background thread."""
+        import threading
+        from ui_utils import get_primary_json_folder, get_secondary_json_folder
+        
+        db_type = sv.db_type.get()
+        primary_folder = get_primary_json_folder()
+        secondary_folder = get_secondary_json_folder()
+        
+        if not primary_folder:
+            print("Startup sync: No primary JSON folder configured, skipping")
+            self._enable_sync_sensitive_buttons()
+            return
+        
+        def do_sync():
+            """Run sync in background thread"""
+            try:
+                from backup_sync import BackupSyncManager
                 
-                # Start background sync
-                self.root.after(500, self._start_background_sync)
+                sync_manager = BackupSyncManager(
+                    db_type=db_type,
+                    primary_folder=primary_folder,
+                    secondary_folder=secondary_folder
+                )
+                
+                def status_callback(message):
+                    def update():
+                        sv.t_status.set(message)
+                    self.root.after(0, update)
+                
+                results = sync_manager.perform_full_sync(status_callback=status_callback)
+                
+                def on_complete():
+                    # Re-enable buttons
+                    self._enable_sync_sensitive_buttons()
+                    
+                    # Update session number if DB was updated
+                    db_updates = results.get('db_updates', 0)
+                    if db_updates > 0:
+                        dog_name = sv.t_dog.get()
+                        if dog_name:
+                            try:
+                                next_session = self.get_next_session_number(dog_name)
+                                sv.t_session.set(str(next_session))
+                                print(f"Startup sync: Updated session number to {next_session} for {dog_name}")
+                            except Exception as e:
+                                print(f"Startup sync: Error updating session number: {e}")
+                    
+                    # Update status
+                    total_changes = (
+                        db_updates +
+                        results.get('primary_writes', 0) +
+                        results.get('secondary_writes', 0) +
+                        results.get('renames', 0)
+                    )
+                    
+                    if total_changes > 0:
+                        self.show_status_message(f"Sync complete: {total_changes} file(s) synchronized", "info")
+                    else:
+                        sv.t_status.set("Ready")
+                
+                self.root.after(0, on_complete)
+                
+            except Exception as e:
+                print(f"Startup sync error: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                def reset():
+                    self._enable_sync_sensitive_buttons()
+                    sv.t_status.set("Ready")
+                self.root.after(0, reset)
+        
+        # Start sync thread
+        sync_thread = threading.Thread(target=do_sync, daemon=True)
+        sync_thread.start()
+        print("Startup sync: Started in background thread")
+    
+    def _perform_startup_sync(self):
+        """Perform startup sync to ensure DB, primary, and secondary backups agree."""
+        try:
+            from backup_sync import BackupSyncManager
+            from ui_utils import get_primary_json_folder, get_secondary_json_folder
+            
+            db_type = sv.db_type.get()
+            primary_folder = get_primary_json_folder()
+            secondary_folder = get_secondary_json_folder()
+            
+            if not primary_folder:
+                print("Startup sync: No primary JSON folder configured, skipping")
+                return
+            
+            print("Startup sync: Beginning synchronization...")
+            sv.t_status.set("Synchronizing backups...")
+            self.root.update_idletasks()
+            
+            sync_manager = BackupSyncManager(
+                db_type=db_type,
+                primary_folder=primary_folder,
+                secondary_folder=secondary_folder
+            )
+            
+            def status_callback(message):
+                print(f"  {message}")
+                sv.t_status.set(message)
+                self.root.update_idletasks()
+            
+            results = sync_manager.perform_full_sync(status_callback=status_callback)
+            
+            total_changes = (
+                results.get('db_updates', 0) +
+                results.get('primary_writes', 0) +
+                results.get('secondary_writes', 0) +
+                results.get('renames', 0)
+            )
+            
+            if total_changes > 0:
+                print(f"Startup sync complete: {total_changes} change(s)")
+                sv.t_status.set(f"Sync complete: {total_changes} file(s) synchronized")
+            else:
+                print("Startup sync complete: All backups already in sync")
+                sv.t_status.set("All backups synchronized")
+            
+        except ImportError:
+            print("Startup sync: backup_sync module not available, using legacy sync")
+            # Fall back to legacy sync if new module not available
+        except Exception as e:
+            print(f"Startup sync error: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _start_background_sync(self):
-        """Start background sync between database and JSON backup folders."""
-        from backup_management import get_sync_manager
+        """Start background sync between database and JSON backup folders.
+        
+        Uses the new backup_sync module for comprehensive synchronization.
+        """
+        import threading
         from ui_utils import get_primary_json_folder, get_secondary_json_folder
         
         try:
@@ -1018,54 +1316,73 @@ class TrailingUI:
                 print("Sync: No primary JSON folder configured, skipping sync")
                 return
             
-            sync_manager = get_sync_manager()
+            # Disable buttons during sync
+            self._disable_sync_sensitive_buttons()
             
-            # Set flag to block operations during sync
-            sv.sync_in_progress = True
-            
-            def on_sync_complete(results):
-                """Called when sync finishes (on background thread)"""
-                def update_ui():
-                    sv.sync_in_progress = False
+            def do_sync():
+                """Run sync in background thread"""
+                try:
+                    from backup_sync import BackupSyncManager
                     
-                    # Build status message
-                    total_changes = (
-                        results.get("db_to_json", 0) +
-                        results.get("json_to_db", 0) +
-                        results.get("primary_to_secondary", 0) +
-                        results.get("secondary_to_primary", 0)
+                    sync_manager = BackupSyncManager(
+                        db_type=db_type,
+                        primary_folder=primary_folder,
+                        secondary_folder=secondary_folder
                     )
                     
-                    if total_changes > 0:
-                        self.show_status_message(f"Sync complete: {total_changes} file(s) synchronized", "info")
-                    else:
-                        sv.t_status.set("Sync complete: All backups up to date")
+                    def status_callback(message):
+                        def update():
+                            sv.t_status.set(message)
+                        self.root.after(0, update)
                     
-                    if results.get("errors"):
-                        print(f"Sync errors: {results['errors']}")
-                
-                self.root.after(0, update_ui)
+                    results = sync_manager.perform_full_sync(status_callback=status_callback)
+                    
+                    def update_ui():
+                        # Re-enable buttons
+                        self._enable_sync_sensitive_buttons()
+                        
+                        # Update session number if DB was updated
+                        db_updates = results.get('db_updates', 0)
+                        if db_updates > 0:
+                            dog_name = sv.t_dog.get()
+                            if dog_name:
+                                try:
+                                    next_session = self.get_next_session_number(dog_name)
+                                    sv.t_session.set(str(next_session))
+                                except Exception as e:
+                                    print(f"Sync: Error updating session number: {e}")
+                        
+                        total_changes = (
+                            db_updates +
+                            results.get('primary_writes', 0) +
+                            results.get('secondary_writes', 0)
+                        )
+                        
+                        if total_changes > 0:
+                            self.show_status_message(f"Sync complete: {total_changes} file(s) synchronized", "info")
+                        else:
+                            sv.t_status.set("Sync complete: All backups up to date")
+                        
+                        if results.get('errors'):
+                            print(f"Sync errors: {results['errors']}")
+                    
+                    self.root.after(0, update_ui)
+                    
+                except Exception as e:
+                    print(f"Background sync error: {e}")
+                    def reset():
+                        self._enable_sync_sensitive_buttons()
+                    self.root.after(0, reset)
             
-            def status_callback(message):
-                """Update status bar during sync"""
-                def update():
-                    sv.t_status.set(message)
-                self.root.after(0, update)
-            
-            # Start sync
-            sync_manager.start_background_sync(
-                db_type=db_type,
-                primary_folder=str(primary_folder) if primary_folder else None,
-                secondary_folder=str(secondary_folder) if secondary_folder else None,
-                on_complete=on_sync_complete,
-                status_callback=status_callback
-            )
+            # Start sync thread
+            sync_thread = threading.Thread(target=do_sync, daemon=True)
+            sync_thread.start()
             
             print("Sync: Background sync started")
             
         except Exception as e:
             print(f"Error starting background sync: {e}")
-            sv.sync_in_progress = False
+            self._enable_sync_sensitive_buttons()
     
     # Config provider methods for ui_trailing.py compatibility
     def get_handler_name(self):

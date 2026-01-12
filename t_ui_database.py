@@ -384,7 +384,7 @@ class DatabaseManager:
         
         Args:
             dog_name: Name of dog
-            status_filter: "Active", "Hidden", or "All"
+            status_filter: "Active", "Deleted", "All", or "Both"
             entry_type: "Trailing" (ignored, kept for API compatibility)
             
         Returns:
@@ -397,7 +397,10 @@ class DatabaseManager:
             old_db_type = self._switch_db_context()
             
             with get_connection() as conn:
-                if status_filter == "Active":
+                # Normalize status_filter
+                filter_lower = status_filter.lower() if status_filter else "active"
+                
+                if filter_lower == "active":
                     result = conn.execute(
                         text("""
                             SELECT id, t_session_number, t_dog_name, t_date, t_handler, t_field_support,
@@ -409,12 +412,12 @@ class DatabaseManager:
                                    t_time_to_complete, t_success_rate, t_impression, t_map_files,
                                    uuid, update_time, status
                             FROM t_training_sessions
-                            WHERE t_dog_name = :dog_name AND status = 'active'
+                            WHERE t_dog_name = :dog_name AND (status = 'active' OR status IS NULL)
                             ORDER BY t_session_number
                         """),
                         {"dog_name": dog_name}
                     )
-                elif status_filter == "Hidden":
+                elif filter_lower in ("deleted", "hidden"):
                     result = conn.execute(
                         text("""
                             SELECT id, t_session_number, t_dog_name, t_date, t_handler, t_field_support,
@@ -431,7 +434,7 @@ class DatabaseManager:
                         """),
                         {"dog_name": dog_name}
                     )
-                else:  # "All"
+                else:  # "All" or "Both"
                     result = conn.execute(
                         text("""
                             SELECT id, t_session_number, t_dog_name, t_date, t_handler, t_field_support,
@@ -730,6 +733,137 @@ class DatabaseManager:
             print(f"Error updating session status: {e}")
             traceback.print_exc()
             return False
+    
+    def get_trailing_sessions_for_export(self, dog_name, range_type, start_value, end_value, sort_order, status_filter):
+        """
+        Get trailing sessions for PDF export.
+        
+        Args:
+            dog_name: Name of dog
+            range_type: "Date" or "Session"
+            start_value: Start date or session number
+            end_value: End date or session number
+            sort_order: "Ascending" or "Descending"
+            status_filter: "active", "deleted", or "both"
+            
+        Returns:
+            list of session dictionaries
+        """
+        if not self._db_exists() or not dog_name:
+            return []
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            # Build status filter clause
+            if status_filter == "active":
+                status_clause = " AND (status = 'active' OR status IS NULL)"
+            elif status_filter == "deleted":
+                status_clause = " AND status = 'deleted'"
+            else:  # "both"
+                status_clause = ""
+            
+            # Build order clause
+            if range_type == "Date":
+                order_clause = "t_date ASC, t_session_number ASC" if sort_order == "Ascending" else "t_date DESC, t_session_number DESC"
+            else:
+                order_clause = "t_session_number ASC" if sort_order == "Ascending" else "t_session_number DESC"
+            
+            with get_connection() as conn:
+                if range_type == "Date":
+                    query = text(f"""
+                        SELECT id, t_session_number, t_dog_name, t_date, t_handler, t_field_support,
+                               t_location, t_start_time, t_finish_time, t_trail_age, t_trail_length,
+                               t_difficulty, t_trail_layer, t_cross_track_layer, t_cross_track_age,
+                               t_weather_laying, t_temperature_laying, t_wind_speed_laying, t_wind_direction_laying, t_humidity_laying,
+                               t_weather_running, t_temperature_running, t_wind_speed_running, t_wind_direction_running, t_humidity_running,
+                               t_start_behavior, t_consistency, t_head_position, t_pace, t_indication,
+                               t_time_to_complete, t_success_rate, t_impression, t_map_files,
+                               uuid, update_time, status
+                        FROM t_training_sessions
+                        WHERE t_dog_name = :dog_name
+                          AND t_date >= :start_value
+                          AND t_date <= :end_value{status_clause}
+                        ORDER BY {order_clause}
+                    """)
+                    result = conn.execute(query, {
+                        "dog_name": dog_name,
+                        "start_value": start_value,
+                        "end_value": end_value
+                    })
+                else:  # Session
+                    query = text(f"""
+                        SELECT id, t_session_number, t_dog_name, t_date, t_handler, t_field_support,
+                               t_location, t_start_time, t_finish_time, t_trail_age, t_trail_length,
+                               t_difficulty, t_trail_layer, t_cross_track_layer, t_cross_track_age,
+                               t_weather_laying, t_temperature_laying, t_wind_speed_laying, t_wind_direction_laying, t_humidity_laying,
+                               t_weather_running, t_temperature_running, t_wind_speed_running, t_wind_direction_running, t_humidity_running,
+                               t_start_behavior, t_consistency, t_head_position, t_pace, t_indication,
+                               t_time_to_complete, t_success_rate, t_impression, t_map_files,
+                               uuid, update_time, status
+                        FROM t_training_sessions
+                        WHERE t_dog_name = :dog_name
+                          AND t_session_number >= :start_value
+                          AND t_session_number <= :end_value{status_clause}
+                        ORDER BY {order_clause}
+                    """)
+                    result = conn.execute(query, {
+                        "dog_name": dog_name,
+                        "start_value": int(start_value),
+                        "end_value": int(end_value)
+                    })
+                
+                sessions = []
+                for row in result.fetchall():
+                    session = {
+                        'id': row[0],
+                        't_session_number': row[1],
+                        't_dog_name': row[2],
+                        't_date': row[3],
+                        't_handler': row[4],
+                        't_field_support': row[5],
+                        't_location': row[6],
+                        't_start_time': row[7],
+                        't_finish_time': row[8],
+                        't_trail_age': row[9],
+                        't_trail_length': row[10],
+                        't_difficulty': row[11],
+                        't_trail_layer': row[12],
+                        't_cross_track_layer': row[13],
+                        't_cross_track_age': row[14],
+                        't_weather_laying': row[15],
+                        't_temperature_laying': row[16],
+                        't_wind_speed_laying': row[17],
+                        't_wind_direction_laying': row[18],
+                        't_humidity_laying': row[19],
+                        't_weather_running': row[20],
+                        't_temperature_running': row[21],
+                        't_wind_speed_running': row[22],
+                        't_wind_direction_running': row[23],
+                        't_humidity_running': row[24],
+                        't_start_behavior': row[25],
+                        't_consistency': row[26],
+                        't_head_position': row[27],
+                        't_pace': row[28],
+                        't_indication': row[29],
+                        't_time_to_complete': row[30],
+                        't_success_rate': row[31],
+                        't_impression': row[32],
+                        't_map_files': row[33],
+                        'uuid': row[34],
+                        'update_time': row[35],
+                        'status': row[36]
+                    }
+                    sessions.append(session)
+            
+            self._restore_db_context(old_db_type)
+            return sessions
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error getting sessions for export: {e}")
+            traceback.print_exc()
+            return []
 
 
 # Singleton database manager
@@ -809,3 +943,9 @@ class DatabaseOperations:
     def update_session_status(self, session_number, dog_name, new_status):
         """Update session status (active/deleted)"""
         return self.db_manager.update_session_status(session_number, dog_name, new_status)
+    
+    def get_trailing_sessions_for_export(self, dog_name, range_type, start_value, end_value, sort_order, status_filter):
+        """Get sessions for PDF export"""
+        return self.db_manager.get_trailing_sessions_for_export(
+            dog_name, range_type, start_value, end_value, sort_order, status_filter
+        )

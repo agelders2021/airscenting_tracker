@@ -167,15 +167,25 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
         else:
             return start_var.get(), end_var.get()
     
+    # Status filter
+    tk.Label(frame, text="Session Status:", font=("Helvetica", 10, "bold")).grid(row=4, column=0, sticky="w", pady=(15, 5))
+    status_frame = tk.Frame(frame)
+    status_frame.grid(row=4, column=1, sticky="w", pady=(15, 5))
+    
+    status_var = tk.StringVar(value="active")
+    tk.Radiobutton(status_frame, text="Active", variable=status_var, value="active").pack(side=tk.LEFT, padx=5)
+    tk.Radiobutton(status_frame, text="Hidden", variable=status_var, value="deleted").pack(side=tk.LEFT, padx=5)
+    tk.Radiobutton(status_frame, text="Both", variable=status_var, value="both").pack(side=tk.LEFT, padx=5)
+    
     # Sort order
-    tk.Label(frame, text="Sort Order:", font=("Helvetica", 10, "bold")).grid(row=4, column=0, sticky="w", pady=(15, 5))
+    tk.Label(frame, text="Sort Order:", font=("Helvetica", 10, "bold")).grid(row=5, column=0, sticky="w", pady=(15, 5))
     sort_var = tk.StringVar(value="Ascending")
     sort_combo = ttk.Combobox(frame, textvariable=sort_var, width=25, state="readonly", values=["Ascending", "Descending"])
-    sort_combo.grid(row=4, column=1, sticky="w", pady=(15, 5))
+    sort_combo.grid(row=5, column=1, sticky="w", pady=(15, 5))
     
     # Buttons
     button_frame = tk.Frame(frame)
-    button_frame.grid(row=5, column=0, columnspan=2, pady=(20, 0))
+    button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
     
     def do_export():
         # Validate dog selection
@@ -241,19 +251,20 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
             end_value=end_value,
             sort_order=sort_var.get(),
             get_connection_func=get_connection_func,
-            trail_maps_folder=trail_maps_folder
+            trail_maps_folder=trail_maps_folder,
+            status_filter=status_var.get()
         )
     
     tk.Button(button_frame, text="Export to PDF", command=do_export, bg="#4CAF50", fg="white", width=15).pack(side=tk.LEFT, padx=5)
     tk.Button(button_frame, text="Cancel", command=dialog.destroy, width=10).pack(side=tk.LEFT, padx=5)
 
 
-def export_to_pdf(filepath, dog_name, range_type, start_value, end_value, sort_order, get_connection_func, trail_maps_folder):
+def export_to_pdf(filepath, dog_name, range_type, start_value, end_value, sort_order, get_connection_func, trail_maps_folder, status_filter="active"):
     """Export sessions to PDF"""
     try:
         # Fetch sessions from database
         sessions = fetch_sessions_for_export(
-            dog_name, range_type, start_value, end_value, sort_order, get_connection_func
+            dog_name, range_type, start_value, end_value, sort_order, get_connection_func, status_filter
         )
         
         if not sessions:
@@ -271,11 +282,19 @@ def export_to_pdf(filepath, dog_name, range_type, start_value, end_value, sort_o
         traceback.print_exc()
 
 
-def fetch_sessions_for_export(dog_name, range_type, start_value, end_value, sort_order, get_connection_func):
+def fetch_sessions_for_export(dog_name, range_type, start_value, end_value, sort_order, get_connection_func, status_filter="active"):
     """Fetch sessions from database based on criteria"""
     from sqlalchemy import text
     
     sessions = []
+    
+    # Build status filter clause
+    if status_filter == "active":
+        status_clause = " AND (status = 'active' OR status IS NULL)"
+    elif status_filter == "deleted":
+        status_clause = " AND status = 'deleted'"
+    else:  # "both"
+        status_clause = ""
     
     with get_connection_func() as conn:
         # Build query based on range type
@@ -288,7 +307,7 @@ def fetch_sessions_for_export(dog_name, range_type, start_value, end_value, sort
                 FROM training_sessions
                 WHERE dog_name = :dog_name
                   AND date >= :start_value
-                  AND date <= :end_value
+                  AND date <= :end_value""" + status_clause + """
                 ORDER BY """ + ("date ASC, session_number ASC" if sort_order == "Ascending" else "date DESC, session_number DESC"))
             
             result = conn.execute(query, {
@@ -305,7 +324,7 @@ def fetch_sessions_for_export(dog_name, range_type, start_value, end_value, sort
                 FROM training_sessions
                 WHERE dog_name = :dog_name
                   AND session_number >= :start_value
-                  AND session_number <= :end_value
+                  AND session_number <= :end_value""" + status_clause + """
                 ORDER BY """ + ("session_number ASC" if sort_order == "Ascending" else "session_number DESC"))
             
             result = conn.execute(query, {

@@ -417,6 +417,9 @@ class MiscDataOperations:
         # Use chained after() calls to let event loop run between operations
         # This keeps splash countdown and progress bars animating
         
+        # Disable View/Edit/Hide and Export PDF buttons until startup is complete
+        self._disable_sync_sensitive_buttons()
+        
         def step0():
             # First validate the database exists and is valid
             # This will offer to rebuild from JSON if needed
@@ -424,7 +427,21 @@ class MiscDataOperations:
                 # Database not valid and couldn't be rebuilt
                 # Skip loading data, user needs to set up
                 sv.status.set("Database not configured - please complete Setup")
+                self._enable_sync_sensitive_buttons()  # Re-enable since we're done
                 return
+            
+            # Check if database is healthy before deciding sync strategy
+            db_healthy = self._check_db_health()
+            
+            if db_healthy:
+                # DB is healthy - start sync in background thread
+                self._start_startup_sync_thread()
+            else:
+                # DB appears damaged - run sync synchronously to rebuild
+                print("Database appears damaged - running synchronous rebuild...")
+                self._perform_synchronous_startup_sync()
+                self._enable_sync_sensitive_buttons()
+            
             self.ui.root.after(50, step1)
         
         def step1():
@@ -485,8 +502,8 @@ class MiscDataOperations:
             self.ui.root.after(100, step10)
         
         def step10():
-            # Start background sync between DB and JSON folders
-            self._start_background_sync()
+            # Sync was already started in step0
+            # Buttons will be re-enabled when sync thread completes
             
             # Select Entry tab since database is valid
             # (We only get here if validate_database_at_startup returned True)
@@ -497,44 +514,76 @@ class MiscDataOperations:
         # Start the chain with database validation
         step0()
     
-    def _start_background_sync(self):
-        """Start background sync between database and JSON backup folders."""
-        from backup_management import get_sync_manager
-        from ui_utils import get_primary_json_folder, get_secondary_json_folder
+    def _disable_sync_sensitive_buttons(self):
+        """Disable buttons that shouldn't be used during sync."""
         import tkinter as tk
-        
+        sv.sync_in_progress = True
+        if hasattr(self.ui, 'a_edit_delete_btn'):
+            self.ui.a_edit_delete_btn.config(state=tk.DISABLED)
+        if hasattr(self.ui, 'a_export_pdf_btn'):
+            self.ui.a_export_pdf_btn.config(state=tk.DISABLED)
+    
+    def _enable_sync_sensitive_buttons(self):
+        """Re-enable buttons after sync completes."""
+        import tkinter as tk
+        sv.sync_in_progress = False
+        if hasattr(self.ui, 'a_edit_delete_btn'):
+            self.ui.a_edit_delete_btn.config(state=tk.NORMAL)
+        if hasattr(self.ui, 'a_export_pdf_btn'):
+            self.ui.a_export_pdf_btn.config(state=tk.NORMAL)
+    
+    def _check_db_health(self) -> bool:
+        """Check if database is accessible and has required tables."""
         try:
-            db_type = sv.db_type.get()
-            primary_folder = get_primary_json_folder()
-            secondary_folder = get_secondary_json_folder()
-            
-            if not primary_folder:
-                print("Sync: No primary JSON folder configured, skipping sync")
-                return
-            
-            sync_manager = get_sync_manager()
-            
-            # Set flag to block Edit/Delete during sync
-            sv.sync_in_progress = True
-            
-            # Disable buttons during sync
-            if hasattr(self.ui, 'a_save_session_btn'):
-                self.ui.a_save_session_btn.config(state=tk.DISABLED)
-            if hasattr(self.ui, 'a_edit_delete_btn'):
-                self.ui.a_edit_delete_btn.config(state=tk.DISABLED)
-            if hasattr(self.ui, 'a_export_pdf_btn'):
-                self.ui.a_export_pdf_btn.config(state=tk.DISABLED)
-            
-            def on_sync_complete(results):
-                """Called when sync finishes (on background thread)"""
-                # Schedule UI update on main thread
-                def update_ui():
-                    sv.sync_in_progress = False
+            from sqlalchemy import text
+            from database import get_connection
+            with get_connection() as conn:
+                conn.execute(text("SELECT COUNT(*) FROM training_sessions"))
+                conn.execute(text("SELECT COUNT(*) FROM t_training_sessions"))
+            return True
+        except Exception as e:
+            print(f"Database health check failed: {e}")
+            return False
+    
+    def _start_startup_sync_thread(self):
+        """Start startup sync in a background thread."""
+        import threading
+        from ui_utils import get_primary_json_folder, get_secondary_json_folder
+        
+        db_type = sv.db_type.get()
+        primary_folder = get_primary_json_folder()
+        secondary_folder = get_secondary_json_folder()
+        
+        if not primary_folder:
+            print("Startup sync: No primary JSON folder configured, skipping")
+            self._enable_sync_sensitive_buttons()
+            return
+        
+        def do_sync():
+            """Run sync in background thread"""
+            try:
+                from backup_sync import BackupSyncManager
+                
+                sync_manager = BackupSyncManager(
+                    db_type=db_type,
+                    primary_folder=primary_folder,
+                    secondary_folder=secondary_folder
+                )
+                
+                def status_callback(message):
+                    def update():
+                        sv.status.set(message)
+                    self.ui.root.after(0, update)
+                
+                results = sync_manager.perform_full_sync(status_callback=status_callback)
+                
+                def on_complete():
+                    # Re-enable buttons
+                    self._enable_sync_sensitive_buttons()
                     
-                    # Update session number if sessions were added
-                    json_to_db_count = results.get("json_to_db", 0)
-                    if json_to_db_count > 0:
-                        # Recalculate session number for current dog
+                    # Update session number if DB was updated
+                    db_updates = results.get('db_updates', 0)
+                    if db_updates > 0:
                         dog_name = sv.dog.get()
                         if dog_name:
                             try:
@@ -545,64 +594,188 @@ class MiscDataOperations:
                                 )
                                 next_computed = len(filtered_sessions) + 1
                                 sv.session_number.set(str(next_computed))
-                                print(f"Sync: Updated session number to {next_computed} for {dog_name}")
+                                print(f"Startup sync: Updated session number to {next_computed} for {dog_name}")
                             except Exception as e:
-                                print(f"Sync: Error updating session number: {e}")
+                                print(f"Startup sync: Error updating session number: {e}")
                     
-                    # Re-enable buttons
-                    if hasattr(self.ui, 'a_save_session_btn'):
-                        self.ui.a_save_session_btn.config(state=tk.NORMAL)
-                    if hasattr(self.ui, 'a_edit_delete_btn'):
-                        self.ui.a_edit_delete_btn.config(state=tk.NORMAL)
-                    if hasattr(self.ui, 'a_export_pdf_btn'):
-                        self.ui.a_export_pdf_btn.config(state=tk.NORMAL)
-                    
-                    # Build status message
+                    # Update status
                     total_changes = (
-                        results.get("db_to_json", 0) +
-                        json_to_db_count +
-                        results.get("primary_to_secondary", 0) +
-                        results.get("secondary_to_primary", 0)
+                        db_updates +
+                        results.get('primary_writes', 0) +
+                        results.get('secondary_writes', 0) +
+                        results.get('renames', 0)
                     )
                     
                     if total_changes > 0:
                         sv.status.set(f"Sync complete: {total_changes} file(s) synchronized")
                     else:
-                        sv.status.set("Sync complete: All backups up to date")
-                    
-                    if results.get("errors"):
-                        print(f"Sync errors: {results['errors']}")
+                        sv.status.set("Ready")
                 
-                self.ui.root.after(0, update_ui)
+                self.ui.root.after(0, on_complete)
+                
+            except Exception as e:
+                print(f"Startup sync error: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                def reset():
+                    self._enable_sync_sensitive_buttons()
+                    sv.status.set("Ready")
+                self.ui.root.after(0, reset)
+        
+        # Start sync thread
+        sync_thread = threading.Thread(target=do_sync, daemon=True)
+        sync_thread.start()
+        print("Startup sync: Started in background thread")
+    
+    def _perform_synchronous_startup_sync(self):
+        """Perform startup sync synchronously (blocking) for DB rebuild."""
+        try:
+            from backup_sync import BackupSyncManager
+            from ui_utils import get_primary_json_folder, get_secondary_json_folder
+            
+            db_type = sv.db_type.get()
+            primary_folder = get_primary_json_folder()
+            secondary_folder = get_secondary_json_folder()
+            
+            if not primary_folder:
+                print("Startup sync: No primary JSON folder configured, skipping")
+                return
+            
+            print("Startup sync: Beginning synchronous synchronization...")
+            sv.status.set("Rebuilding database from backups...")
+            self.ui.root.update_idletasks()
+            
+            sync_manager = BackupSyncManager(
+                db_type=db_type,
+                primary_folder=primary_folder,
+                secondary_folder=secondary_folder
+            )
             
             def status_callback(message):
-                """Update status bar during sync"""
-                def update():
-                    sv.status.set(message)
-                self.ui.root.after(0, update)
+                print(f"  {message}")
+                sv.status.set(message)
+                self.ui.root.update_idletasks()
             
-            # Start sync
-            sync_manager.start_background_sync(
-                db_type=db_type,
-                primary_folder=str(primary_folder) if primary_folder else None,
-                secondary_folder=str(secondary_folder) if secondary_folder else None,
-                on_complete=on_sync_complete,
-                status_callback=status_callback
+            results = sync_manager.perform_full_sync(status_callback=status_callback)
+            
+            total_changes = (
+                results.get('db_updates', 0) +
+                results.get('primary_writes', 0) +
+                results.get('secondary_writes', 0) +
+                results.get('renames', 0)
             )
+            
+            if total_changes > 0:
+                print(f"Startup sync complete: {total_changes} change(s)")
+                sv.status.set(f"Rebuild complete: {total_changes} file(s) synchronized")
+            else:
+                print("Startup sync complete: All backups already in sync")
+                sv.status.set("Ready")
+            
+        except Exception as e:
+            print(f"Startup sync error: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _start_background_sync(self):
+        """Start background sync between database and JSON backup folders.
+        
+        Uses the new backup_sync module for comprehensive synchronization
+        with checksum tracking and proper conflict resolution.
+        
+        Note: Buttons are already disabled by load_initial_database_data.
+        This method will re-enable them when sync completes.
+        """
+        import threading
+        from ui_utils import get_primary_json_folder, get_secondary_json_folder
+        
+        try:
+            db_type = sv.db_type.get()
+            primary_folder = get_primary_json_folder()
+            secondary_folder = get_secondary_json_folder()
+            
+            if not primary_folder:
+                print("Sync: No primary JSON folder configured, skipping sync")
+                self._enable_sync_sensitive_buttons()
+                return
+            
+            def do_sync():
+                """Run sync in background thread"""
+                try:
+                    from backup_sync import BackupSyncManager
+                    
+                    sync_manager = BackupSyncManager(
+                        db_type=db_type,
+                        primary_folder=primary_folder,
+                        secondary_folder=secondary_folder
+                    )
+                    
+                    def status_callback(message):
+                        def update():
+                            sv.status.set(message)
+                        self.ui.root.after(0, update)
+                    
+                    results = sync_manager.perform_full_sync(status_callback=status_callback)
+                    
+                    def update_ui():
+                        # Re-enable buttons
+                        self._enable_sync_sensitive_buttons()
+                        
+                        # Update session number if sessions were added
+                        db_updates = results.get("db_updates", 0)
+                        if db_updates > 0:
+                            # Recalculate session number for current dog
+                            dog_name = sv.dog.get()
+                            if dog_name:
+                                try:
+                                    from ui_database import DatabaseOperations
+                                    status_filter = sv.session_status_filter.get()
+                                    filtered_sessions = DatabaseOperations(self.ui).get_all_sessions_for_dog(
+                                        dog_name, status_filter, entry_type="Airscent"
+                                    )
+                                    next_computed = len(filtered_sessions) + 1
+                                    sv.session_number.set(str(next_computed))
+                                    print(f"Sync: Updated session number to {next_computed} for {dog_name}")
+                                except Exception as e:
+                                    print(f"Sync: Error updating session number: {e}")
+                        
+                        # Build status message
+                        total_changes = (
+                            db_updates +
+                            results.get('primary_writes', 0) +
+                            results.get('secondary_writes', 0) +
+                            results.get('renames', 0)
+                        )
+                        
+                        if total_changes > 0:
+                            sv.status.set(f"Sync complete: {total_changes} file(s) synchronized")
+                        else:
+                            sv.status.set("Sync complete: All backups up to date")
+                        
+                        if results.get('errors'):
+                            print(f"Sync errors: {results['errors']}")
+                    
+                    self.ui.root.after(0, update_ui)
+                    
+                except Exception as e:
+                    print(f"Background sync error: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    
+                    def reset_ui():
+                        self._enable_sync_sensitive_buttons()
+                    self.ui.root.after(0, reset_ui)
+            
+            # Start sync thread
+            sync_thread = threading.Thread(target=do_sync, daemon=True)
+            sync_thread.start()
             
             print("Sync: Background sync started")
             
         except Exception as e:
             print(f"Error starting background sync: {e}")
-            sv.sync_in_progress = False
-            # Re-enable buttons on error
-            import tkinter as tk
-            if hasattr(self.ui, 'a_save_session_btn'):
-                self.ui.a_save_session_btn.config(state=tk.NORMAL)
-            if hasattr(self.ui, 'a_edit_delete_btn'):
-                self.ui.a_edit_delete_btn.config(state=tk.NORMAL)
-            if hasattr(self.ui, 'a_export_pdf_btn'):
-                self.ui.a_export_pdf_btn.config(state=tk.NORMAL)
+            self._enable_sync_sensitive_buttons()
     
     def select_initial_tab(self):
         """Select initial tab based on database existence"""
@@ -696,30 +869,43 @@ class MiscDataOperations:
             self.ui.previous_tab_index = 0
     
     def save_session_to_json(self, session_data):
-        """Save session data to JSON backup file in both primary and secondary locations"""
+        """Save session data to JSON backup file in both primary and secondary locations.
+        
+        Uses consistent naming: a_{user}_{dog}_{session_number}.json
+        Updates database with checksum and file timestamps.
+        """
         import re
         from ui_utils import save_json_mirrored, get_secondary_json_folder
         
-        # Create filename: <dogname>_session_<number>_<date>.json
+        # Get session info for filename (session_number from DB, not calculated)
         session_num = session_data.get('session_number')
-        date_str = session_data.get('date', '').replace('-', '')
         dog_name = session_data.get('dog_name', 'unknown')
+        user_name = session_data.get('user_name', '')
         
-        # Sanitize dog name for filename (remove special characters)
+        # Sanitize names for filename (remove special characters)
+        safe_user_name = re.sub(r'[^\w\-]', '_', user_name) if user_name else 'unknown'
         safe_dog_name = re.sub(r'[^\w\-]', '_', dog_name)
         
-        filename = f"{safe_dog_name}_session_{session_num}_{date_str}.json"
+        # Consistent naming convention: a_{user}_{dog}_{session}.json
+        filename = f"a_{safe_user_name}_{safe_dog_name}_{session_num}.json"
         
-        # Add timestamp
-        session_data['backup_timestamp'] = datetime.now().isoformat()
+        # Add timestamp to data
+        session_data['update_time'] = datetime.now().isoformat()
         
-        # Save to both primary and secondary
-        primary, secondary = save_json_mirrored(filename, session_data)
+        # Save to both primary and secondary (returns checksum and timestamps)
+        primary, secondary, checksum, primary_ts, secondary_ts = save_json_mirrored(filename, session_data)
         
         if primary:
             print(f"Session backup saved: {primary}")
         if secondary:
             print(f"Session backup mirrored: {secondary}")
+        
+        # Update database with checksum and timestamps
+        if checksum:
+            try:
+                self._update_session_backup_info(session_num, dog_name, checksum, primary_ts, secondary_ts)
+            except Exception as e:
+                print(f"Warning: Could not update backup info in DB: {e}")
         
         # Check if secondary backup was configured but unavailable
         # Notify user once per session via status bar
@@ -727,6 +913,31 @@ class MiscDataOperations:
             if not sv.secondary_unavailable_notified:
                 sv.secondary_unavailable_notified = True
                 sv.status.set("Warning: Secondary backup folder unavailable - backup saved to primary only")
+    
+    def _update_session_backup_info(self, session_number, dog_name, checksum, primary_ts, secondary_ts):
+        """Update checksum and timestamps in database for a session."""
+        try:
+            from sqlalchemy import text
+            from database import get_connection
+            
+            with get_connection() as conn:
+                conn.execute(text("""
+                    UPDATE training_sessions SET
+                        checksum = :checksum,
+                        primary_timestamp = :primary_ts,
+                        secondary_timestamp = :secondary_ts
+                    WHERE session_number = :session_number AND dog_name = :dog_name
+                """), {
+                    'checksum': checksum,
+                    'primary_ts': primary_ts,
+                    'secondary_ts': secondary_ts,
+                    'session_number': session_number,
+                    'dog_name': dog_name
+                })
+                conn.commit()
+                print(f"Updated backup info: checksum={checksum[:16]}..., primary_ts={primary_ts}, secondary_ts={secondary_ts}")
+        except Exception as e:
+            print(f"Error updating session backup info: {e}")
     
     def save_settings_backup(self):
         """Save settings to JSON backup file in both primary and secondary locations.

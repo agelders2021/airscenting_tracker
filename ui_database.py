@@ -380,6 +380,9 @@ class DatabaseManager:
                         base_query += " AND (status = 'active' OR status IS NULL)"
                     elif status_filter == 'deleted':
                         base_query += " AND status = 'deleted'"
+                    elif status_filter == 'both':
+                        # No filter - show all records (active, deleted, and NULL)
+                        pass
                     else:
                         base_query += " AND (status = :status OR status IS NULL)"
                         params["status"] = status_filter
@@ -1170,7 +1173,7 @@ class DatabaseOperations:
             session_dict["drive_level"],    # row[14]
             session_dict["subjects_found"], # row[15]
             session_dict["image_files"],    # row[16]
-            session_dict["comments"]        # row[17] â† ADDED!
+            session_dict["comments"]        # row[17] Ã¢â€ Â ADDED!
         )
     
     def get_session_with_related_data(self, session_number, dog_name):

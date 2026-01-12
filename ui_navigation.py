@@ -524,9 +524,9 @@ class Navigation:
         instructions = tk.Label(
             dialog, 
             text="Select sessions to navigate:\n"
-                 "• Click to select one session\n"
-                 "• Ctrl+Click to select multiple sessions\n"
-                 "• Shift+Click to select a range\n"
+                 "â€¢ Click to select one session\n"
+                 "â€¢ Ctrl+Click to select multiple sessions\n"
+                 "â€¢ Shift+Click to select a range\n"
                  "Use Previous/Next buttons to navigate through selected sessions",
             justify="left",
             padx=10,

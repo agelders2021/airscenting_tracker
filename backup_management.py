@@ -248,7 +248,7 @@ def scan_json_folder(folder_path):
         folder_path: Path to JSON folder
         
     Returns:
-        dict: {uuid: {"update_time": datetime, "filepath": Path, "data": dict}}
+        dict: {uuid: {"update_time": datetime, "file_mtime": datetime, "filepath": Path, "data": dict}}
               Sessions without UUID are indexed by filename
     """
     result = {}
@@ -265,7 +265,7 @@ def scan_json_folder(folder_path):
             session_uuid = data.get("uuid")
             update_time_str = data.get("update_time")
             
-            # Parse update_time
+            # Parse update_time from JSON
             update_time = None
             if update_time_str:
                 try:
@@ -273,11 +273,19 @@ def scan_json_folder(folder_path):
                 except:
                     pass
             
+            # Get file modification time as fallback
+            file_mtime = datetime.fromtimestamp(json_file.stat().st_mtime)
+            
+            # If no update_time in JSON, use file modification time
+            if update_time is None:
+                update_time = file_mtime
+            
             # Use UUID as key if available, otherwise use filename
             key = session_uuid if session_uuid else json_file.stem
             
             result[key] = {
                 "update_time": update_time,
+                "file_mtime": file_mtime,
                 "filepath": json_file,
                 "data": data,
                 "has_uuid": bool(session_uuid)
@@ -292,6 +300,7 @@ def scan_json_folder(folder_path):
 def get_db_sessions_for_sync(db_type):
     """
     Get all sessions from database with UUID and update_time.
+    Includes both airscenting (training_sessions) and trailing (t_training_sessions) tables.
     
     Returns:
         dict: {uuid: {"update_time": datetime, "session_number": int, "dog_name": str, "data": dict}}
@@ -315,6 +324,7 @@ def get_db_sessions_for_sync(db_type):
             reload(database)
         
         with database.get_connection() as conn:
+            # Get airscenting sessions
             query = text("""
                 SELECT id, session_number, dog_name, date, handler, session_purpose, 
                        field_support, location, search_area_size, num_subjects, 
@@ -364,6 +374,76 @@ def get_db_sessions_for_sync(db_type):
                             "uuid": session_uuid
                         }
                     }
+            
+            # Get trailing sessions
+            try:
+                t_query = text("""
+                    SELECT id, t_session_number, t_dog_name, t_date, t_handler, t_field_support,
+                           t_location, t_start_time, t_finish_time, t_trail_age, t_trail_length,
+                           t_difficulty, t_trail_layer, t_cross_track_layer, t_cross_track_age,
+                           t_weather_laying, t_temperature_laying, t_wind_speed_laying, t_wind_direction_laying, t_humidity_laying,
+                           t_weather_running, t_temperature_running, t_wind_speed_running, t_wind_direction_running, t_humidity_running,
+                           t_start_behavior, t_consistency, t_head_position, t_pace, t_indication,
+                           t_time_to_complete, t_success_rate, t_impression, t_map_files,
+                           update_time, uuid
+                    FROM t_training_sessions
+                    WHERE uuid IS NOT NULL AND uuid != ''
+                """)
+                t_rows = conn.execute(t_query).fetchall()
+                
+                for row in t_rows:
+                    session_uuid = row[35]  # uuid column
+                    update_time_raw = row[34]   # update_time column
+                    
+                    update_time = _parse_update_time(update_time_raw)
+                    
+                    if session_uuid:
+                        result[session_uuid] = {
+                            "update_time": update_time,
+                            "session_number": row[1],
+                            "dog_name": row[2],
+                            "data": {
+                                "id": row[0],
+                                "t_session_number": row[1],
+                                "t_dog_name": row[2],
+                                "t_date": str(row[3]) if row[3] else "",
+                                "t_handler": row[4] or "",
+                                "t_field_support": row[5] or "",
+                                "t_location": row[6] or "",
+                                "t_start_time": row[7] or "",
+                                "t_finish_time": row[8] or "",
+                                "t_trail_age": row[9] or "",
+                                "t_trail_length": row[10] or "",
+                                "t_difficulty": row[11] or "",
+                                "t_trail_layer": row[12] or "",
+                                "t_cross_track_layer": row[13] or "",
+                                "t_cross_track_age": row[14] or "",
+                                "t_weather_laying": row[15] or "",
+                                "t_temperature_laying": row[16] or "",
+                                "t_wind_speed_laying": row[17] or "",
+                                "t_wind_direction_laying": row[18] or "",
+                                "t_humidity_laying": row[19] or "",
+                                "t_weather_running": row[20] or "",
+                                "t_temperature_running": row[21] or "",
+                                "t_wind_speed_running": row[22] or "",
+                                "t_wind_direction_running": row[23] or "",
+                                "t_humidity_running": row[24] or "",
+                                "t_start_behavior": row[25] or "",
+                                "t_consistency": row[26] or "",
+                                "t_head_position": row[27] or "",
+                                "t_pace": row[28] or "",
+                                "t_indication": row[29] or "",
+                                "t_time_to_complete": row[30] or "",
+                                "t_success_rate": row[31] or "",
+                                "t_impression": row[32] or "",
+                                "t_map_files": row[33] or "",
+                                "update_time": _format_update_time(update_time),
+                                "uuid": session_uuid
+                            }
+                        }
+            except Exception as te:
+                # t_training_sessions table might not exist
+                print(f"Note: Could not query t_training_sessions: {te}")
         
         # Restore original DB type
         if old_db_type != db_type:
@@ -382,6 +462,7 @@ def get_db_sessions_for_sync(db_type):
 def sync_db_to_json(db_sessions, json_dict, json_folder, db_type):
     """
     Sync database to JSON - create/update JSON files for DB entries.
+    Uses file modification time for comparison (handles manual edits).
     
     Args:
         db_sessions: Dict from get_db_sessions_for_sync()
@@ -404,14 +485,15 @@ def sync_db_to_json(db_sessions, json_dict, json_folder, db_type):
             # Session not in JSON - create it
             should_write = True
             print(f"Sync: DB session {session_uuid} not in JSON, creating...")
-        elif db_info["update_time"] and json_info["update_time"]:
-            # Compare timestamps - parse both to datetime
+        else:
+            # Compare DB update time with JSON file modification time
             db_time = _parse_update_time(db_info["update_time"])
-            json_time = _parse_update_time(json_info["update_time"])
+            # Use file modification time (handles manual edits)
+            json_time = json_info.get("file_mtime") or _parse_update_time(json_info.get("update_time"))
             
             if db_time and json_time and db_time > json_time:
                 should_write = True
-                print(f"Sync: DB newer than JSON for {session_uuid}")
+                print(f"Sync: DB newer than JSON file for {session_uuid}")
         
         if should_write:
             try:
@@ -548,6 +630,7 @@ def load_full_session_from_db(session_number, dog_name, db_type):
 def sync_json_to_db(json_dict, db_sessions, db_type):
     """
     Sync JSON to database - create missing or update DB entries where JSON is newer.
+    Uses file modification time for comparison (handles manual edits).
     
     Returns:
         int: Number of DB records created/updated
@@ -569,13 +652,14 @@ def sync_json_to_db(json_dict, db_sessions, db_type):
                     count += 1
             except Exception as e:
                 print(f"Sync error inserting session from JSON: {e}")
-        elif json_info["update_time"] and db_info["update_time"]:
-            # Both exist - check if JSON is newer
+        else:
+            # Both exist - check if JSON file is newer (use file mtime for manual edits)
             db_time = _parse_update_time(db_info["update_time"])
-            json_time = _parse_update_time(json_info["update_time"])
+            # Use file modification time, falling back to update_time from JSON
+            json_time = json_info.get("file_mtime") or _parse_update_time(json_info.get("update_time"))
             
             if db_time and json_time and json_time > db_time:
-                print(f"Sync: JSON newer than DB for {session_uuid}, updating DB...")
+                print(f"Sync: JSON file newer than DB for {session_uuid}, updating DB...")
                 try:
                     if update_db_from_json(json_info["data"], db_type):
                         count += 1
@@ -583,10 +667,27 @@ def sync_json_to_db(json_dict, db_sessions, db_type):
                     print(f"Sync error updating DB from JSON: {e}")
     
     return count
+    
+    return count
 
 
 def insert_session_from_json(json_data, db_type):
-    """Insert a new session into database from JSON data."""
+    """Insert a new session into database from JSON data.
+    
+    Automatically detects whether it's an airscenting or trailing session
+    based on the presence of 't_session_number' key.
+    """
+    # Detect session type
+    is_trailing = 't_session_number' in json_data
+    
+    if is_trailing:
+        return insert_trailing_session_from_json(json_data, db_type)
+    else:
+        return insert_airscenting_session_from_json(json_data, db_type)
+
+
+def insert_airscenting_session_from_json(json_data, db_type):
+    """Insert a new airscenting session into database from JSON data."""
     try:
         import config
         from sqlalchemy import text
@@ -722,7 +823,7 @@ def insert_session_from_json(json_data, db_type):
                 )
             
             conn.commit()
-            print(f"Sync: Inserted/updated session {json_data.get('session_number')} for {json_data.get('dog_name')}")
+            print(f"Sync: Inserted/updated airscenting session {json_data.get('session_number')} for {json_data.get('dog_name')}")
         
         # Restore original DB type
         if old_db_type != db_type:
@@ -733,14 +834,227 @@ def insert_session_from_json(json_data, db_type):
         return True
         
     except Exception as e:
-        print(f"Error inserting session from JSON: {e}")
+        print(f"Error inserting airscenting session from JSON: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def insert_trailing_session_from_json(json_data, db_type):
+    """Insert a new trailing session into database from JSON data."""
+    try:
+        import config
+        from sqlalchemy import text
+        from ui_utils import get_username
+        
+        old_db_type = config.DB_TYPE
+        config.DB_TYPE = db_type
+        
+        from database import engine, get_connection
+        from importlib import reload
+        import database
+        
+        if old_db_type != db_type:
+            engine.dispose()
+            reload(database)
+        
+        with database.get_connection() as conn:
+            map_files = json_data.get("t_map_files", [])
+            if isinstance(map_files, list):
+                map_files_json = json.dumps(map_files)
+            else:
+                map_files_json = map_files or ""
+            
+            # Check if session already exists (by t_session_number + t_dog_name)
+            check_result = conn.execute(
+                text("""
+                    SELECT id FROM t_training_sessions 
+                    WHERE t_session_number = :session_number AND t_dog_name = :dog_name
+                """),
+                {
+                    "session_number": json_data.get("t_session_number"),
+                    "dog_name": json_data.get("t_dog_name")
+                }
+            )
+            existing = check_result.fetchone()
+            
+            if existing:
+                # Session exists - update it
+                print(f"Sync: Trailing session {json_data.get('t_session_number')}/{json_data.get('t_dog_name')} exists, updating...")
+                conn.execute(
+                    text("""
+                        UPDATE t_training_sessions SET
+                            t_date = :t_date,
+                            t_handler = :t_handler,
+                            t_field_support = :t_field_support,
+                            t_location = :t_location,
+                            t_start_time = :t_start_time,
+                            t_finish_time = :t_finish_time,
+                            t_trail_age = :t_trail_age,
+                            t_trail_length = :t_trail_length,
+                            t_difficulty = :t_difficulty,
+                            t_trail_layer = :t_trail_layer,
+                            t_cross_track_layer = :t_cross_track_layer,
+                            t_cross_track_age = :t_cross_track_age,
+                            t_weather_laying = :t_weather_laying,
+                            t_temperature_laying = :t_temperature_laying,
+                            t_wind_speed_laying = :t_wind_speed_laying,
+                            t_wind_direction_laying = :t_wind_direction_laying,
+                            t_humidity_laying = :t_humidity_laying,
+                            t_weather_running = :t_weather_running,
+                            t_temperature_running = :t_temperature_running,
+                            t_wind_speed_running = :t_wind_speed_running,
+                            t_wind_direction_running = :t_wind_direction_running,
+                            t_humidity_running = :t_humidity_running,
+                            t_start_behavior = :t_start_behavior,
+                            t_consistency = :t_consistency,
+                            t_head_position = :t_head_position,
+                            t_pace = :t_pace,
+                            t_indication = :t_indication,
+                            t_time_to_complete = :t_time_to_complete,
+                            t_success_rate = :t_success_rate,
+                            t_impression = :t_impression,
+                            t_map_files = :t_map_files,
+                            update_time = :update_time,
+                            uuid = :uuid
+                        WHERE t_session_number = :t_session_number AND t_dog_name = :t_dog_name
+                    """),
+                    {
+                        "t_date": json_data.get("t_date"),
+                        "t_handler": json_data.get("t_handler"),
+                        "t_field_support": json_data.get("t_field_support"),
+                        "t_location": json_data.get("t_location"),
+                        "t_start_time": json_data.get("t_start_time"),
+                        "t_finish_time": json_data.get("t_finish_time"),
+                        "t_trail_age": json_data.get("t_trail_age"),
+                        "t_trail_length": json_data.get("t_trail_length"),
+                        "t_difficulty": json_data.get("t_difficulty"),
+                        "t_trail_layer": json_data.get("t_trail_layer"),
+                        "t_cross_track_layer": json_data.get("t_cross_track_layer"),
+                        "t_cross_track_age": json_data.get("t_cross_track_age"),
+                        "t_weather_laying": json_data.get("t_weather_laying"),
+                        "t_temperature_laying": json_data.get("t_temperature_laying"),
+                        "t_wind_speed_laying": json_data.get("t_wind_speed_laying"),
+                        "t_wind_direction_laying": json_data.get("t_wind_direction_laying"),
+                        "t_humidity_laying": json_data.get("t_humidity_laying"),
+                        "t_weather_running": json_data.get("t_weather_running"),
+                        "t_temperature_running": json_data.get("t_temperature_running"),
+                        "t_wind_speed_running": json_data.get("t_wind_speed_running"),
+                        "t_wind_direction_running": json_data.get("t_wind_direction_running"),
+                        "t_humidity_running": json_data.get("t_humidity_running"),
+                        "t_start_behavior": json_data.get("t_start_behavior"),
+                        "t_consistency": json_data.get("t_consistency"),
+                        "t_head_position": json_data.get("t_head_position"),
+                        "t_pace": json_data.get("t_pace"),
+                        "t_indication": json_data.get("t_indication"),
+                        "t_time_to_complete": json_data.get("t_time_to_complete"),
+                        "t_success_rate": json_data.get("t_success_rate"),
+                        "t_impression": json_data.get("t_impression"),
+                        "t_map_files": map_files_json,
+                        "update_time": json_data.get("update_time"),
+                        "uuid": json_data.get("uuid"),
+                        "t_session_number": json_data.get("t_session_number"),
+                        "t_dog_name": json_data.get("t_dog_name")
+                    }
+                )
+            else:
+                # Insert new session
+                conn.execute(
+                    text("""
+                        INSERT INTO t_training_sessions 
+                        (t_session_number, t_dog_name, t_date, t_handler, t_field_support,
+                         t_location, t_start_time, t_finish_time, t_trail_age, t_trail_length,
+                         t_difficulty, t_trail_layer, t_cross_track_layer, t_cross_track_age,
+                         t_weather_laying, t_temperature_laying, t_wind_speed_laying, t_wind_direction_laying, t_humidity_laying,
+                         t_weather_running, t_temperature_running, t_wind_speed_running, t_wind_direction_running, t_humidity_running,
+                         t_start_behavior, t_consistency, t_head_position, t_pace, t_indication,
+                         t_time_to_complete, t_success_rate, t_impression, t_map_files,
+                         update_time, uuid, user_name, status)
+                        VALUES (:t_session_number, :t_dog_name, :t_date, :t_handler, :t_field_support,
+                                :t_location, :t_start_time, :t_finish_time, :t_trail_age, :t_trail_length,
+                                :t_difficulty, :t_trail_layer, :t_cross_track_layer, :t_cross_track_age,
+                                :t_weather_laying, :t_temperature_laying, :t_wind_speed_laying, :t_wind_direction_laying, :t_humidity_laying,
+                                :t_weather_running, :t_temperature_running, :t_wind_speed_running, :t_wind_direction_running, :t_humidity_running,
+                                :t_start_behavior, :t_consistency, :t_head_position, :t_pace, :t_indication,
+                                :t_time_to_complete, :t_success_rate, :t_impression, :t_map_files,
+                                :update_time, :uuid, :user_name, :status)
+                    """),
+                    {
+                        "t_session_number": json_data.get("t_session_number"),
+                        "t_dog_name": json_data.get("t_dog_name"),
+                        "t_date": json_data.get("t_date"),
+                        "t_handler": json_data.get("t_handler"),
+                        "t_field_support": json_data.get("t_field_support"),
+                        "t_location": json_data.get("t_location"),
+                        "t_start_time": json_data.get("t_start_time"),
+                        "t_finish_time": json_data.get("t_finish_time"),
+                        "t_trail_age": json_data.get("t_trail_age"),
+                        "t_trail_length": json_data.get("t_trail_length"),
+                        "t_difficulty": json_data.get("t_difficulty"),
+                        "t_trail_layer": json_data.get("t_trail_layer"),
+                        "t_cross_track_layer": json_data.get("t_cross_track_layer"),
+                        "t_cross_track_age": json_data.get("t_cross_track_age"),
+                        "t_weather_laying": json_data.get("t_weather_laying"),
+                        "t_temperature_laying": json_data.get("t_temperature_laying"),
+                        "t_wind_speed_laying": json_data.get("t_wind_speed_laying"),
+                        "t_wind_direction_laying": json_data.get("t_wind_direction_laying"),
+                        "t_humidity_laying": json_data.get("t_humidity_laying"),
+                        "t_weather_running": json_data.get("t_weather_running"),
+                        "t_temperature_running": json_data.get("t_temperature_running"),
+                        "t_wind_speed_running": json_data.get("t_wind_speed_running"),
+                        "t_wind_direction_running": json_data.get("t_wind_direction_running"),
+                        "t_humidity_running": json_data.get("t_humidity_running"),
+                        "t_start_behavior": json_data.get("t_start_behavior"),
+                        "t_consistency": json_data.get("t_consistency"),
+                        "t_head_position": json_data.get("t_head_position"),
+                        "t_pace": json_data.get("t_pace"),
+                        "t_indication": json_data.get("t_indication"),
+                        "t_time_to_complete": json_data.get("t_time_to_complete"),
+                        "t_success_rate": json_data.get("t_success_rate"),
+                        "t_impression": json_data.get("t_impression"),
+                        "t_map_files": map_files_json,
+                        "update_time": json_data.get("update_time"),
+                        "uuid": json_data.get("uuid"),
+                        "user_name": json_data.get("user_name", get_username()),
+                        "status": json_data.get("status", "active")
+                    }
+                )
+            
+            conn.commit()
+            print(f"Sync: Inserted/updated trailing session {json_data.get('t_session_number')} for {json_data.get('t_dog_name')}")
+        
+        # Restore original DB type
+        if old_db_type != db_type:
+            config.DB_TYPE = old_db_type
+            database.engine.dispose()
+            reload(database)
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error inserting trailing session from JSON: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def update_db_from_json(json_data, db_type):
-    """Update database record from JSON data."""
+    """Update database record from JSON data.
+    
+    Automatically detects whether it's an airscenting or trailing session
+    based on the presence of 't_session_number' key.
+    """
+    # Detect session type
+    is_trailing = 't_session_number' in json_data
+    
+    if is_trailing:
+        return update_trailing_db_from_json(json_data, db_type)
+    else:
+        return update_airscenting_db_from_json(json_data, db_type)
+
+
+def update_airscenting_db_from_json(json_data, db_type):
+    """Update airscenting database record from JSON data."""
     try:
         import config
         from sqlalchemy import text
@@ -822,7 +1136,123 @@ def update_db_from_json(json_data, db_type):
         return True
         
     except Exception as e:
-        print(f"Error updating DB from JSON: {e}")
+        print(f"Error updating airscenting DB from JSON: {e}")
+        return False
+
+
+def update_trailing_db_from_json(json_data, db_type):
+    """Update trailing database record from JSON data."""
+    try:
+        import config
+        from sqlalchemy import text
+        
+        old_db_type = config.DB_TYPE
+        config.DB_TYPE = db_type
+        
+        from database import engine, get_connection
+        from importlib import reload
+        import database
+        
+        if old_db_type != db_type:
+            engine.dispose()
+            reload(database)
+        
+        with database.get_connection() as conn:
+            # Handle map files
+            map_files = json_data.get("t_map_files", [])
+            if isinstance(map_files, list):
+                map_files_json = json.dumps(map_files)
+            else:
+                map_files_json = map_files or ""
+            
+            conn.execute(
+                text("""
+                    UPDATE t_training_sessions SET
+                        t_date = :t_date,
+                        t_handler = :t_handler,
+                        t_field_support = :t_field_support,
+                        t_location = :t_location,
+                        t_start_time = :t_start_time,
+                        t_finish_time = :t_finish_time,
+                        t_trail_age = :t_trail_age,
+                        t_trail_length = :t_trail_length,
+                        t_difficulty = :t_difficulty,
+                        t_trail_layer = :t_trail_layer,
+                        t_cross_track_layer = :t_cross_track_layer,
+                        t_cross_track_age = :t_cross_track_age,
+                        t_weather_laying = :t_weather_laying,
+                        t_temperature_laying = :t_temperature_laying,
+                        t_wind_speed_laying = :t_wind_speed_laying,
+                        t_wind_direction_laying = :t_wind_direction_laying,
+                        t_humidity_laying = :t_humidity_laying,
+                        t_weather_running = :t_weather_running,
+                        t_temperature_running = :t_temperature_running,
+                        t_wind_speed_running = :t_wind_speed_running,
+                        t_wind_direction_running = :t_wind_direction_running,
+                        t_humidity_running = :t_humidity_running,
+                        t_start_behavior = :t_start_behavior,
+                        t_consistency = :t_consistency,
+                        t_head_position = :t_head_position,
+                        t_pace = :t_pace,
+                        t_indication = :t_indication,
+                        t_time_to_complete = :t_time_to_complete,
+                        t_success_rate = :t_success_rate,
+                        t_impression = :t_impression,
+                        t_map_files = :t_map_files,
+                        update_time = :update_time
+                    WHERE uuid = :uuid
+                """),
+                {
+                    "t_date": json_data.get("t_date"),
+                    "t_handler": json_data.get("t_handler"),
+                    "t_field_support": json_data.get("t_field_support"),
+                    "t_location": json_data.get("t_location"),
+                    "t_start_time": json_data.get("t_start_time"),
+                    "t_finish_time": json_data.get("t_finish_time"),
+                    "t_trail_age": json_data.get("t_trail_age"),
+                    "t_trail_length": json_data.get("t_trail_length"),
+                    "t_difficulty": json_data.get("t_difficulty"),
+                    "t_trail_layer": json_data.get("t_trail_layer"),
+                    "t_cross_track_layer": json_data.get("t_cross_track_layer"),
+                    "t_cross_track_age": json_data.get("t_cross_track_age"),
+                    "t_weather_laying": json_data.get("t_weather_laying"),
+                    "t_temperature_laying": json_data.get("t_temperature_laying"),
+                    "t_wind_speed_laying": json_data.get("t_wind_speed_laying"),
+                    "t_wind_direction_laying": json_data.get("t_wind_direction_laying"),
+                    "t_humidity_laying": json_data.get("t_humidity_laying"),
+                    "t_weather_running": json_data.get("t_weather_running"),
+                    "t_temperature_running": json_data.get("t_temperature_running"),
+                    "t_wind_speed_running": json_data.get("t_wind_speed_running"),
+                    "t_wind_direction_running": json_data.get("t_wind_direction_running"),
+                    "t_humidity_running": json_data.get("t_humidity_running"),
+                    "t_start_behavior": json_data.get("t_start_behavior"),
+                    "t_consistency": json_data.get("t_consistency"),
+                    "t_head_position": json_data.get("t_head_position"),
+                    "t_pace": json_data.get("t_pace"),
+                    "t_indication": json_data.get("t_indication"),
+                    "t_time_to_complete": json_data.get("t_time_to_complete"),
+                    "t_success_rate": json_data.get("t_success_rate"),
+                    "t_impression": json_data.get("t_impression"),
+                    "t_map_files": map_files_json,
+                    "update_time": json_data.get("update_time"),
+                    "uuid": json_data.get("uuid")
+                }
+            )
+            conn.commit()
+            print(f"Sync: Updated trailing session {json_data.get('t_session_number')} from JSON")
+        
+        # Restore original DB type
+        if old_db_type != db_type:
+            config.DB_TYPE = old_db_type
+            database.engine.dispose()
+            reload(database)
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error updating trailing DB from JSON: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -848,6 +1278,7 @@ def sync_primary_to_secondary(primary_dict, secondary_dict, secondary_folder):
     """
     Sync primary JSON folder to secondary - copy newer/missing files.
     Only copies valid JSON files.
+    Uses file modification time for comparison (handles manual edits).
     
     Returns:
         int: Number of files copied
@@ -862,9 +1293,14 @@ def sync_primary_to_secondary(primary_dict, secondary_dict, secondary_folder):
         if not secondary_info:
             # File not in secondary
             should_copy = True
-        elif primary_info["update_time"] and secondary_info["update_time"]:
-            if primary_info["update_time"] > secondary_info["update_time"]:
-                should_copy = True
+        else:
+            # Use file modification time for comparison (more reliable for manual edits)
+            primary_mtime = primary_info.get("file_mtime") or primary_info.get("update_time")
+            secondary_mtime = secondary_info.get("file_mtime") or secondary_info.get("update_time")
+            
+            if primary_mtime and secondary_mtime:
+                if primary_mtime > secondary_mtime:
+                    should_copy = True
         
         if should_copy:
             try:
@@ -889,6 +1325,7 @@ def sync_secondary_to_primary(secondary_dict, primary_dict, primary_folder, db_t
     """
     Sync secondary JSON folder to primary - copy newer files and update DB.
     Only copies valid JSON files.
+    Uses file modification time for comparison (handles manual edits).
     
     Returns:
         int: Number of files copied
@@ -903,9 +1340,14 @@ def sync_secondary_to_primary(secondary_dict, primary_dict, primary_folder, db_t
         if not primary_info:
             # File not in primary
             should_copy = True
-        elif secondary_info["update_time"] and primary_info["update_time"]:
-            if secondary_info["update_time"] > primary_info["update_time"]:
-                should_copy = True
+        else:
+            # Use file modification time for comparison (more reliable for manual edits)
+            secondary_mtime = secondary_info.get("file_mtime") or secondary_info.get("update_time")
+            primary_mtime = primary_info.get("file_mtime") or primary_info.get("update_time")
+            
+            if secondary_mtime and primary_mtime:
+                if secondary_mtime > primary_mtime:
+                    should_copy = True
         
         if should_copy:
             try:
