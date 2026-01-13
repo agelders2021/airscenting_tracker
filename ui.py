@@ -1,4 +1,25 @@
 """
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Copyright (C) 2026 Al Gelders
+
+This file is part of the airscenting an trailing logging programs
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+"""
 UI Module for Air-Scenting Logger
 Contains all tkinter interface code
 """
@@ -104,7 +125,7 @@ class AirScentingUI:
         # Show splash screen IMMEDIATELY (before building UI)
         # This ensures user sees progress while UI is being constructed
         # Splash will auto-close after 15 seconds or user can close it manually
-        self.splash = SplashScreen(self.root, version="1.0.0-alpha")
+        self.splash = SplashScreen(self.root, version="1.0.3-alpha")
         
         # Set window properties and center horizontally
         self.root.title(APP_TITLE)
@@ -630,7 +651,7 @@ class AirScentingUI:
     
     def show_about_dialog(self):
         """Show the About dialog"""
-        show_about(self.root, version="1.0.0-alpha")
+        show_about(self.root, version="1.0.3-alpha")
     
     def get_json_config_path(self):
         """Get the path to config file in JSON folder (primary location)"""
