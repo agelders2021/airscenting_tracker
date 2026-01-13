@@ -208,92 +208,48 @@ class AirScentingUI:
         # Select initial tab based on database existence
         self.root.after(250,self.misc_data_ops.select_initial_tab)
         
-        # Message history for status bar
-        self.status_message_history = []  # List of (message, type) tuples
-        self.status_message_index = -1    # Current position in history (-1 = most recent)
-        self.max_status_messages = 5      # Keep last 5 messages
-        
-        # Error handling flags
-        self.error_showing = False    # True when error is displayed
-        self.is_flashing = False      # True when flash animation running
-        self.flash_after_id = None    # Store after() ID for flash cancellation
-        
         # Status bar frame at bottom
-
-        
         status_bar_frame = tk.Frame(self.root, bd=1, relief=tk.SUNKEN)
-
-        
         status_bar_frame.pack(side=tk.BOTTOM, fill=tk.X)
         
-        # Left arrow button for message history
-        self.status_left_arrow = tk.Button(status_bar_frame, text="â—€", 
-                                           width=2, state="disabled",
-                                           command=self.prev_status_message)
+        # Create status bar widgets with proper Unicode arrows
+        self.status_left_arrow = tk.Button(status_bar_frame, text="\u25C0", 
+                                           width=2, state="disabled")
         self.status_left_arrow.pack(side=tk.LEFT, padx=(2, 0))
         
-        # Right arrow button for message history
-        self.status_right_arrow = tk.Button(status_bar_frame, text="â–¶", 
-                                            width=2, state="disabled",
-                                            command=self.next_status_message)
+        self.status_right_arrow = tk.Button(status_bar_frame, text="\u25B6", 
+                                            width=2, state="disabled")
         self.status_right_arrow.pack(side=tk.LEFT, padx=(2, 0))
-        # Status message label (using sv.status)
-
         
-        self.status_label = tk.Label(status_bar_frame, textvariable=sv.status, 
-
-        
-                                     anchor=tk.W, padx=5, pady=2)
-
-        # Cancel button to dismiss message (visible X button)
         self.status_cancel_button = tk.Button(status_bar_frame, text="Cancel Msg", 
                                               width=10, 
-                                              command=self.dismiss_status_message,
                                               relief=tk.RAISED,
                                               cursor="hand2")
         self.status_cancel_button.pack(side=tk.LEFT, padx=(5, 2))
         
+        self.status_label = tk.Label(status_bar_frame, textvariable=sv.status, 
+                                     anchor=tk.W, padx=5, pady=2)
         self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        # Bind click to dismiss message
-        self.status_label.bind("<Button-1>", self.dismiss_status_message)
+        # Initialize StatusBarManager for 3-queue priority system
+        from status_bar import StatusBarManager
+        self.status_bar_mgr = StatusBarManager(
+            root=self.root,
+            status_var=sv.status,
+            status_label=self.status_label,
+            left_arrow=self.status_left_arrow,
+            right_arrow=self.status_right_arrow,
+            cancel_button=self.status_cancel_button
+        )
         
+        # Bind click on label to dismiss
+        self.status_label.bind("<Button-1>", self.status_bar_mgr.dismiss_message)
         
-        
-        # Cancel button to dismiss message (visible X button)
-        # self.status_cancel_button = tk.Button(status_bar_frame, text="âœ•", 
-        #                                       width=3, 
-        #                                       command=self.dismiss_status_message,
-        #                                       relief=tk.FLAT,
-        #                                       cursor="hand2")
-        # self.status_cancel_button.pack(side=tk.RIGHT, padx=(5, 2))
-        #         # DEBUG: Add 5 test messages for testing arrow cycling (remove later)
+        # Legacy flags kept for compatibility
+        self.error_showing = False
+        self.is_flashing = False
+        self.flash_after_id = None
         self.status_message_history = []
-        #     ("DEBUG: Test message 1 - Session saved successfully", "info"),
-        #     ("DEBUG: Test message 2 - Database connected", "info"),
-        #     ("DEBUG: Test message 3 - File uploaded to trail maps", "info"),
-        #     ("DEBUG: Test message 4 - Warning: Low disk space", "warning"),
-        #     ("DEBUG: Test message 5 - Error: Connection timeout", "error"),
-        # ]
-        # self.status_message_index = -1
-        # Show the most recent message
-        if self.status_message_history:
-            message, msg_type = self.status_message_history[-1]
-            # Set text first, then colors
-            sv.status.set(message)
-            # Set colors based on message type
-            if msg_type == "error":
-                self.error_showing = True
-                self.is_flashing = True
-                self.flash_state = False
-                # Start flashing after a short delay so UI is ready
-                self.root.after(100, self._flash_step)
-            elif msg_type == "warning":
-                self.status_label.config(fg="orange", bg="SystemButtonFace", font=("TkDefaultFont", 9, "normal"))
-            else:
-                self.status_label.config(fg="black", bg="SystemButtonFace", font=("TkDefaultFont", 9, "normal"))
-            self._update_arrow_states()
-        # END DEBUG
                 # Schedule session number update AFTER password is loaded (happens at 100ms)
         # This prevents database calls before authentication is ready
         # def update_initial_session():
@@ -352,140 +308,20 @@ class AirScentingUI:
 
 
     def dismiss_status_message(self, event=None):
-        """Clear the current status message and remove from history"""
-        from sv import sv
-        
-        
-        # Stop flashing if active
-        self._stop_flash()
-        self.error_showing = False
-        
-        # If viewing a message in history, remove it
-        if self.status_message_history and self.status_message_index >= 0:
-            # Remove the message we're currently viewing
-            actual_index = -(self.status_message_index + 1)
-            if -actual_index <= len(self.status_message_history):
-                self.status_message_history.pop(actual_index)
-                
-                # Adjust index after removal
-                if self.status_message_history:
-                    # Stay at same position or move to most recent
-                    if self.status_message_index >= len(self.status_message_history):
-                        self.status_message_index = len(self.status_message_history) - 1
-                    
-                    # Show the message at current position
-                    message, msg_type = self.status_message_history[-(self.status_message_index + 1)]
-                    sv.status.set(message)
-                else:
-                    # No more messages
-                    self.status_message_index = -1
-                    sv.status.set("")
-            else:
-                sv.status.set("")
-        elif self.status_message_history and self.status_message_index == -1:
-            # Viewing most recent message, remove it
-            self.status_message_history.pop()
-            if self.status_message_history:
-                message, msg_type = self.status_message_history[-1]
-                sv.status.set(message)
-            else:
-                sv.status.set("")
-        else:
-            # No history, just clear
-            sv.status.set("")
-        
-        self._update_arrow_states()
+        """Clear the current status message - wrapper for StatusBarManager"""
+        self.status_bar_mgr.dismiss_message(event)
+    
     def prev_status_message(self):
-        """Navigate to previous (older) status message"""
-        from sv import sv
-        
-        if not self.status_message_history:
-            return
-
-        
-        # Block cycling if error is showing
-        if self.error_showing and self.status_message_index == -1:
-            return  # Can't cycle away from error
-        
-        # Special case: if at most recent (-1), go to second-newest
-        if self.status_message_index == -1:
-            if len(self.status_message_history) >= 2:
-                self.status_message_index = 1  # Set to 1 so formula matches message
-                message, msg_type = self.status_message_history[-2]  # Second-newest
-                sv.status.set(message)
-                self._update_arrow_states()
-            return
-        
-        # Move backward (toward older messages)
-        if self.status_message_index < len(self.status_message_history) - 1:
-            self.status_message_index += 1
-            message, msg_type = self.status_message_history[-(self.status_message_index + 1)]
-            sv.status.set(message)
-            self._update_arrow_states()
-
+        """Navigate to previous (older) status message - wrapper for StatusBarManager"""
+        self.status_bar_mgr.prev_message()
     
     def next_status_message(self):
-        """Navigate to next (newer) status message"""
-        from sv import sv
-        
-        if not self.status_message_history:
-            return
-        
-        
-        # Block cycling if error is showing
-        if self.error_showing and self.status_message_index == -1:
-            return  # Can't cycle away from error
-        
-        # Move forward (toward newer messages)
-        if self.status_message_index > 0:
-            self.status_message_index -= 1
-            message, msg_type = self.status_message_history[-(self.status_message_index + 1)]
-            sv.status.set(message)
-            self._update_arrow_states()
-        elif self.status_message_index == 0:
-            # At second-to-last, go to most recent
-            self.status_message_index = -1
-            if self.status_message_history:
-                message, msg_type = self.status_message_history[-1]
-                sv.status.set(message)
-            self._update_arrow_states()
+        """Navigate to next (newer) status message - wrapper for StatusBarManager"""
+        self.status_bar_mgr.next_message()
+    
     def _update_arrow_states(self):
-        """Update arrow button states based on current position in history"""
-        if not self.status_message_history:
-            # No history - disable both arrows
-            self.status_left_arrow.config(state="disabled")
-            self.status_right_arrow.config(state="disabled")
-            return
-        
-        # Block arrows if error is showing at most recent
-        if self.error_showing and self.status_message_index == -1:
-            self.status_left_arrow.config(state="disabled")
-            self.status_right_arrow.config(state="disabled")
-            return
-        
-        history_len = len(self.status_message_history)
-        
-        # Left arrow (older messages) - enabled if not at oldest
-        if self.status_message_index == -1:
-            # At most recent - can go older if there are older messages
-            if history_len >= 2:
-                self.status_left_arrow.config(state="normal")
-            else:
-                self.status_left_arrow.config(state="disabled")
-        elif self.status_message_index < history_len - 1:
-            # Not at oldest - can go older
-            self.status_left_arrow.config(state="normal")
-        else:
-            # At oldest
-            self.status_left_arrow.config(state="disabled")
-        
-        # Right arrow (newer messages) - enabled if not at newest
-        if self.status_message_index == -1:
-            # At most recent - can't go newer
-            self.status_right_arrow.config(state="disabled")
-        else:
-            # Not at most recent - can go newer
-            self.status_right_arrow.config(state="normal")
+        """Update arrow button states - wrapper for StatusBarManager"""
+        self.status_bar_mgr._update_arrow_states()
     
     def show_status_message(self, message, msg_type="info"):
         """Display a status message with appropriate color and priority
@@ -494,85 +330,24 @@ class AirScentingUI:
             message: Message text to display
             msg_type: "info", "warning", or "error"
         
-        Error messages:
-            - Display in red with continuous flashing
-            - Stay on top (can't cycle away)
-            - Must be dismissed before viewing other messages
+        Uses StatusBarManager with 3 priority queues:
+            - Error: Red flashing, highest priority
+            - Warning: Orange text, medium priority
+            - Info: Black text, lowest priority
         """
-        from sv import sv
-        
-        # Add to history
-        self.status_message_history.append((message, msg_type))
-        
-        # Trim to max size
-        if len(self.status_message_history) > self.max_status_messages:
-            self.status_message_history.pop(0)
-        
-        # Reset to most recent
-        self.status_message_index = -1
-        
-        # Handle based on message type
-        if msg_type == "error":
-            # Error: Flash continuously until dismissed
-            self.error_showing = True
-            self._start_flash(message)
-            self._update_arrow_states()  # Disable arrows during error
-        elif msg_type == "warning":
-            # Warning: Orange text, no flash
-            self._stop_flash()
-            sv.status.set(message)
-            self.status_label.config(fg="orange", bg="SystemButtonFace", font=("TkDefaultFont", 9, "normal"))
-            self._update_arrow_states()
-        else:
-            # Info: Black text, normal display
-            self._stop_flash()
-            sv.status.set(message)
-            self.status_label.config(fg="black", bg="SystemButtonFace", font=("TkDefaultFont", 9, "normal"))
-            self._update_arrow_states()
+        self.status_bar_mgr.show_message(message, msg_type)
     
     def _start_flash(self, message):
-        """Start continuous red flashing until dismissed"""
-        from sv import sv
-        
-        # Display the message
-        sv.status.set(message)
-        
-        # Force GUI update before starting flash
-        self.root.update_idletasks()
-        
-        # Start continuous flash
-        self.is_flashing = True
-        self.flash_state = False  # Start with flash OFF
-        self._flash_step()
+        """Start flashing - handled by StatusBarManager"""
+        pass  # Now handled by StatusBarManager
     
     def _flash_step(self):
-        """Single step of flash animation - continues until stopped"""
-        if not self.is_flashing:
-            return  # Stop if flashing was cancelled
-        
-        if self.flash_state:
-            # Flash ON - red background, white text
-            self.status_label.config(bg="red", fg="white", font=("TkDefaultFont", 9, "bold"))
-        else:
-            # Flash OFF - normal background, red text
-            self.status_label.config(bg="SystemButtonFace", fg="red", font=("TkDefaultFont", 9, "bold"))
-        
-        self.flash_state = not self.flash_state
-        # Schedule next flash step (300ms interval)
-        self.flash_after_id = self.root.after(300, self._flash_step)
+        """Flash animation step - handled by StatusBarManager"""
+        pass  # Now handled by StatusBarManager
     
     def _stop_flash(self):
-        """Stop flash animation and reset colors"""
-        self.is_flashing = False
-        # Cancel pending flash if any
-        if self.flash_after_id:
-            try:
-                self.root.after_cancel(self.flash_after_id)
-            except:
-                pass
-            self.flash_after_id = None
-        # Reset colors
-        self.status_label.config(bg="SystemButtonFace", fg="black", font=("TkDefaultFont", 9, "normal"))
+        """Stop flash animation - handled by StatusBarManager"""
+        self.status_bar_mgr._stop_flash()
     
     
     def on_date_changed(self, event=None):
@@ -977,12 +752,12 @@ class AirScentingUI:
         tree_scrollbar = ttk.Scrollbar(tree_container, orient="vertical")
         tree_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Treeview - 3 visible rows (4th row requires scrolling)
+        # Treeview - 4 visible rows (5th row requires scrolling)
         self.a_subject_responses_tree = ttk.Treeview(
             tree_container,
             columns=('subject', 'tfr', 'refind'),
             show='headings',
-            height=3,
+            height=4,
             yscrollcommand=tree_scrollbar.set,
             selectmode='browse'
         )
@@ -1031,10 +806,13 @@ class AirScentingUI:
         self.tree_edit_item = None
         self.tree_edit_column = None
         
-        # Comments textbox (row 1, columns 0-3) - below Drive Level/Subjects Found, aligns with bottom of Subject Responses
-        self.a_comments_text = tk.Text(results_frame, width=60, height=3, wrap=tk.WORD)
-        self.a_comments_text.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=5, pady=(0, 5))
-        ToolTip(self.a_comments_text, "Enter comments about search here")
+        # Overall Impression (comments) - wrapped in LabelFrame
+        impression_frame = tk.LabelFrame(results_frame, text="Overall Impression", padx=5, pady=5)
+        impression_frame.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=5, pady=(0, 5))
+        
+        self.a_comments_text = tk.Text(impression_frame, width=56, height=4, wrap=tk.WORD)
+        self.a_comments_text.pack(fill=tk.BOTH, expand=True)
+        ToolTip(self.a_comments_text, "Enter overall impression of the search here")
         
         # Start Time and Finish Time (row 2, columns 0-3)
         tk.Label(results_frame, text="Start Time:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
@@ -1763,23 +1541,17 @@ class AirScentingUI:
         print(f"  backup exists on disk: {os.path.exists(backup_folder) if backup_folder else False}")
         print(f"  trail_maps exists on disk: {os.path.exists(trail_maps_folder) if trail_maps_folder else False}")
         
-        # Build error messages
+        # Build error messages (hard requirements)
         errors = []
         if not database_exists:
-            errors.append("â€¢ Database not created")
+            errors.append("• Database not created")
         
-        # Check both that folder is set AND exists on disk
-        if not backup_folder or not os.path.exists(backup_folder):
-            if not backup_folder:
-                errors.append("â€¢ Backup folder not selected")
-            else:
-                errors.append(f"â€¢ Backup folder does not exist: {backup_folder}")
-        
+        # Trail maps folder is still required for images
         if not trail_maps_folder or not os.path.exists(trail_maps_folder):
             if not trail_maps_folder:
-                errors.append("â€¢ Trail Maps Storage folder not selected")
+                errors.append("• Trail Maps Storage folder not selected")
             else:
-                errors.append(f"â€¢ Trail Maps Storage folder does not exist: {trail_maps_folder}")
+                errors.append(f"• Trail Maps Storage folder does not exist: {trail_maps_folder}")
         
         # Check if at least one dog is defined
         if database_exists:
@@ -1805,21 +1577,44 @@ class AirScentingUI:
                 reload(database)
                 
                 if dog_count == 0:
-                    errors.append("â€¢ At least one dog must be defined")
+                    errors.append("• At least one dog must be defined")
             except Exception as e:
                 print(f"Error checking dogs: {e}")
                 # Don't block if there's an error checking
         
-        # If there are errors, show message and prevent switching
+        # Check backup folder - this is a WARNING only, not a hard requirement
+        warnings = []
+        if not backup_folder or not os.path.exists(backup_folder):
+            if not backup_folder:
+                warnings.append("• Backup folder not selected")
+            else:
+                warnings.append(f"• Backup folder does not exist: {backup_folder}")
+        
+        # If there are hard errors (database, dogs), show message and prevent switching
         if errors:
             error_msg = "Setup Required\n\n"
             error_msg += "Before using the Entry tab, please complete:\n\n"
             error_msg += "\n".join(errors)
             error_msg += "\n\nPlease complete the setup on the Setup tab."
             
-            self.show_status_message("Setup Required", "warning")  # PHASE3A
+            self.show_status_message("Setup Required", "warning")
             messagebox.showwarning("Setup Required", error_msg)
             return False
+        
+        # If there are warnings (backup folder), show warning but allow continue
+        if warnings:
+            warning_msg = "Secondary Backup Warning\n\n"
+            warning_msg += "The following items are recommended but not configured:\n\n"
+            warning_msg += "\n".join(warnings)
+            warning_msg += "\n\nSession data will be saved to the primary database, but "
+            warning_msg += "secondary JSON backups will not be created.\n\n"
+            warning_msg += "Do you want to continue anyway?"
+            
+            self.show_status_message("Secondary backup folder not configured", "warning")
+            
+            result = messagebox.askquestion("Backup Warning", warning_msg, icon='warning')
+            if result == 'no':
+                return False
         
         return True
     

@@ -161,47 +161,48 @@ class TrailingUI:
         self.setup_tab_manager.setup_setup_tab()
         self.setup_entry_tab()
         
-        # Message history for status bar
-        self.status_message_history = []
-        self.status_message_index = -1
-        self.max_status_messages = 20     # Keep last 20 messages (configurable)
-        
-        # Error handling flags
-        self.error_showing = False
-        self.is_flashing = False
-        self.flash_after_id = None
-        
         # Status bar frame at bottom
         status_bar_frame = tk.Frame(self.root, bd=1, relief=tk.SUNKEN)
         status_bar_frame.pack(side=tk.BOTTOM, fill=tk.X)
         
-        # Left arrow button for message history
-        self.status_left_arrow = tk.Button(status_bar_frame, text="◀", 
-                                           width=2, state="disabled",
-                                           command=self.prev_status_message)
+        # Create status bar widgets with proper Unicode arrows
+        self.status_left_arrow = tk.Button(status_bar_frame, text="\u25C0", 
+                                           width=2, state="disabled")
         self.status_left_arrow.pack(side=tk.LEFT, padx=(2, 0))
         
-        # Right arrow button for message history
-        self.status_right_arrow = tk.Button(status_bar_frame, text="▶", 
-                                            width=2, state="disabled",
-                                            command=self.next_status_message)
+        self.status_right_arrow = tk.Button(status_bar_frame, text="\u25B6", 
+                                            width=2, state="disabled")
         self.status_right_arrow.pack(side=tk.LEFT, padx=(2, 0))
         
-        # Cancel button to dismiss message
         self.status_cancel_button = tk.Button(status_bar_frame, text="Cancel Msg", 
                                               width=10, 
-                                              command=self.dismiss_status_message,
                                               relief=tk.RAISED,
                                               cursor="hand2")
         self.status_cancel_button.pack(side=tk.LEFT, padx=(5, 2))
         
-        # Status message label
         self.status_label = tk.Label(status_bar_frame, textvariable=sv.t_status,
                                      anchor=tk.W, padx=5, pady=2)
         self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        # Bind click to dismiss message
-        self.status_label.bind("<Button-1>", self.dismiss_status_message)
+        # Initialize StatusBarManager for 3-queue priority system
+        from status_bar import StatusBarManager
+        self.status_bar_mgr = StatusBarManager(
+            root=self.root,
+            status_var=sv.t_status,
+            status_label=self.status_label,
+            left_arrow=self.status_left_arrow,
+            right_arrow=self.status_right_arrow,
+            cancel_button=self.status_cancel_button
+        )
+        
+        # Bind click on label to dismiss
+        self.status_label.bind("<Button-1>", self.status_bar_mgr.dismiss_message)
+        
+        # Legacy flags kept for compatibility
+        self.error_showing = False
+        self.is_flashing = False
+        self.flash_after_id = None
+        self.status_message_history = []
         
         # Show main window
         self.root.deiconify()
@@ -434,14 +435,9 @@ class TrailingUI:
                 # Save to JSON backup
                 self.save_session_to_json(session_data, terrains, purposes, distractions)
             
-            # Clear form and set up for next session (unless editing)
-            if not is_update:
-                self.trailing_entry.clear_form()
-            else:
-                # If editing, reset editing mode but keep current session displayed
-                self.trailing_entry.editing_session = False
-                self.trailing_entry.editing_row = None
-                self.trailing_entry.update_save_button_text()  # Change button back to "Save Session"
+            # Clear form and set up for next session
+            # After both new saves and updates, prepare for a new session
+            self.trailing_entry.clear_form()
             
             # Save last handler and dog to config
             current_handler = sv.t_handler.get()
@@ -835,7 +831,7 @@ class TrailingUI:
         # Range type selection
         tk.Label(frame, text="Export Range:", font=("Helvetica", 10, "bold")).grid(row=1, column=0, sticky="w", pady=(10, 5))
         
-        range_type_var = tk.StringVar(value="Date")
+        range_type_var = tk.StringVar(value="Session")
         tk.Radiobutton(frame, text="Date Range", variable=range_type_var, value="Date").grid(row=2, column=0, sticky="w", padx=(20, 0))
         tk.Radiobutton(frame, text="Session Number Range", variable=range_type_var, value="Session").grid(row=3, column=0, sticky="w", padx=(20, 0))
         
@@ -1759,130 +1755,38 @@ class TrailingUI:
     # ===== STATUS BAR METHODS =====
     
     def show_status_message(self, message, msg_type="info"):
-        """Show a status message with optional type (info, warning, error)"""
-        # Stop any existing flash
-        self._stop_flash()
+        """Display a status message with appropriate color and priority
         
-        # Add to history
-        self.status_message_history.append((message, msg_type))
-        if len(self.status_message_history) > self.max_status_messages:
-            self.status_message_history.pop(0)
+        Args:
+            message: Message text to display
+            msg_type: "info", "warning", or "error"
         
-        # Reset to most recent
-        self.status_message_index = -1
-        
-        # Set the message
-        sv.t_status.set(message)
-        
-        # Set colors based on type
-        if msg_type == "error":
-            self.error_showing = True
-            self.is_flashing = True
-            self.flash_state = False
-            self.root.after(100, self._flash_step)
-        elif msg_type == "warning":
-            self.error_showing = False
-            self.status_label.config(fg="orange", bg="SystemButtonFace", font=("TkDefaultFont", 9, "normal"))
-        else:
-            self.error_showing = False
-            self.status_label.config(fg="black", bg="SystemButtonFace", font=("TkDefaultFont", 9, "normal"))
-        
-        self._update_arrow_states()
+        Uses StatusBarManager with 3 priority queues:
+            - Error: Red flashing, highest priority
+            - Warning: Orange text, medium priority
+            - Info: Black text, lowest priority
+        """
+        self.status_bar_mgr.show_message(message, msg_type)
     
     def _flash_step(self):
-        """Animate error flashing"""
-        if not self.is_flashing:
-            return
-        
-        self.flash_state = not self.flash_state
-        if self.flash_state:
-            self.status_label.config(fg="white", bg="red", font=("TkDefaultFont", 9, "bold"))
-        else:
-            self.status_label.config(fg="red", bg="SystemButtonFace", font=("TkDefaultFont", 9, "bold"))
-        
-        self.flash_after_id = self.root.after(500, self._flash_step)
+        """Flash animation step - handled by StatusBarManager"""
+        pass  # Now handled by StatusBarManager
     
     def _stop_flash(self):
-        """Stop flashing animation"""
-        self.is_flashing = False
-        if self.flash_after_id:
-            self.root.after_cancel(self.flash_after_id)
-            self.flash_after_id = None
-        self.status_label.config(fg="black", bg="SystemButtonFace", font=("TkDefaultFont", 9, "normal"))
+        """Stop flash animation - handled by StatusBarManager"""
+        self.status_bar_mgr._stop_flash()
     
     def dismiss_status_message(self, event=None):
-        """Clear the current status message"""
-        self._stop_flash()
-        self.error_showing = False
-        
-        if self.status_message_history and self.status_message_index >= 0:
-            actual_index = -(self.status_message_index + 1)
-            if -actual_index <= len(self.status_message_history):
-                self.status_message_history.pop(actual_index)
-                
-                if self.status_message_history:
-                    if self.status_message_index >= len(self.status_message_history):
-                        self.status_message_index = len(self.status_message_history) - 1
-                    message, msg_type = self.status_message_history[-(self.status_message_index + 1)]
-                    sv.t_status.set(message)
-                else:
-                    self.status_message_index = -1
-                    sv.t_status.set("")
-            else:
-                sv.t_status.set("")
-        elif self.status_message_history and self.status_message_index == -1:
-            self.status_message_history.pop()
-            if self.status_message_history:
-                message, msg_type = self.status_message_history[-1]
-                sv.t_status.set(message)
-            else:
-                sv.t_status.set("")
-        else:
-            sv.t_status.set("")
-        
-        self._update_arrow_states()
+        """Clear the current status message - wrapper for StatusBarManager"""
+        self.status_bar_mgr.dismiss_message(event)
     
     def prev_status_message(self):
-        """Navigate to previous (older) status message"""
-        if not self.status_message_history:
-            return
-        
-        if self.error_showing and self.status_message_index == -1:
-            return
-        
-        if self.status_message_index == -1:
-            if len(self.status_message_history) >= 2:
-                self.status_message_index = 1
-                message, msg_type = self.status_message_history[-2]
-                sv.t_status.set(message)
-                self._update_arrow_states()
-            return
-        
-        if self.status_message_index < len(self.status_message_history) - 1:
-            self.status_message_index += 1
-            message, msg_type = self.status_message_history[-(self.status_message_index + 1)]
-            sv.t_status.set(message)
-            self._update_arrow_states()
+        """Navigate to previous (older) status message - wrapper for StatusBarManager"""
+        self.status_bar_mgr.prev_message()
     
     def next_status_message(self):
-        """Navigate to next (newer) status message"""
-        if not self.status_message_history:
-            return
-        
-        if self.error_showing and self.status_message_index == -1:
-            return
-        
-        if self.status_message_index > 0:
-            self.status_message_index -= 1
-            message, msg_type = self.status_message_history[-(self.status_message_index + 1)]
-            sv.t_status.set(message)
-            self._update_arrow_states()
-        elif self.status_message_index == 0:
-            self.status_message_index = -1
-            if self.status_message_history:
-                message, msg_type = self.status_message_history[-1]
-                sv.t_status.set(message)
-            self._update_arrow_states()
+        """Navigate to next (newer) status message - wrapper for StatusBarManager"""
+        self.status_bar_mgr.next_message()
     
     def on_tab_changed(self, event):
         """Handle tab change event - check for setup requirements"""
@@ -1955,34 +1859,30 @@ class TrailingUI:
                 )
                 return False
         
+        # Check backup folder - soft warning only
+        backup_folder = sv.backup_folder.get().strip()
+        if not backup_folder or not os.path.exists(backup_folder):
+            if not backup_folder:
+                warning_detail = "Secondary backup folder not selected"
+            else:
+                warning_detail = f"Secondary backup folder does not exist: {backup_folder}"
+            
+            warning_msg = f"Secondary Backup Warning\n\n{warning_detail}\n\n"
+            warning_msg += "Session data will be saved to the primary database, but "
+            warning_msg += "secondary JSON backups will not be created.\n\n"
+            warning_msg += "Do you want to continue anyway?"
+            
+            self.show_status_message("Secondary backup folder not configured", "warning")
+            
+            result = messagebox.askquestion("Backup Warning", warning_msg, icon='warning')
+            if result == 'no':
+                return False
+        
         return True
     
     def _update_arrow_states(self):
-        """Update arrow button states based on history position"""
-        if not self.status_message_history:
-            self.status_left_arrow.config(state="disabled")
-            self.status_right_arrow.config(state="disabled")
-            return
-        
-        if self.error_showing and self.status_message_index == -1:
-            self.status_left_arrow.config(state="disabled")
-            self.status_right_arrow.config(state="disabled")
-            return
-        
-        history_len = len(self.status_message_history)
-        
-        if self.status_message_index == -1:
-            if history_len >= 2:
-                self.status_left_arrow.config(state="normal")
-            else:
-                self.status_left_arrow.config(state="disabled")
-            self.status_right_arrow.config(state="disabled")
-        else:
-            if self.status_message_index < history_len - 1:
-                self.status_left_arrow.config(state="normal")
-            else:
-                self.status_left_arrow.config(state="disabled")
-            self.status_right_arrow.config(state="normal")
+        """Update arrow button states - wrapper for StatusBarManager"""
+        self.status_bar_mgr._update_arrow_states()
     
     def run(self):
         """Run the application"""

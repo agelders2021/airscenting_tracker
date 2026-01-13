@@ -898,6 +898,44 @@ class BackupSyncManager:
             'errors': []
         }
     
+    def _ensure_backup_folders_exist(self, status) -> None:
+        """
+        Ensure JSON and Images folders exist within backup folders.
+        Creates them if backup folder exists but subfolders don't.
+        """
+        folders_to_check = [
+            (self.primary_folder, "Primary"),
+            (self.secondary_folder, "Secondary")
+        ]
+        
+        for json_folder, label in folders_to_check:
+            if json_folder is None:
+                continue
+                
+            # json_folder is the JSON subfolder - get parent backup folder
+            backup_folder = json_folder.parent
+            
+            if not backup_folder.exists():
+                # Backup folder doesn't exist - skip (user needs to create it)
+                continue
+            
+            # Check/create JSON folder
+            if not json_folder.exists():
+                try:
+                    json_folder.mkdir(parents=True, exist_ok=True)
+                    status(f"{label} JSON folder created: {json_folder}")
+                except Exception as e:
+                    status(f"Warning: Could not create {label} JSON folder: {e}")
+            
+            # Check/create Images folder (sibling to JSON folder)
+            images_folder = backup_folder / "Images"
+            if not images_folder.exists():
+                try:
+                    images_folder.mkdir(parents=True, exist_ok=True)
+                    status(f"{label} Images folder created: {images_folder}")
+                except Exception as e:
+                    status(f"Warning: Could not create {label} Images folder: {e}")
+    
     def perform_full_sync(self, status_callback=None) -> dict:
         """
         Perform complete synchronization.
@@ -920,6 +958,9 @@ class BackupSyncManager:
             print(f"Sync: {msg}")
             if status_callback:
                 status_callback(msg)
+        
+        # Ensure JSON and Images folders exist if backup folders exist
+        self._ensure_backup_folders_exist(status)
         
         # Check database health
         db_healthy = self.db_ops.is_db_healthy()

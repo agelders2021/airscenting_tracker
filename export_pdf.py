@@ -70,7 +70,7 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
     # Range type selection
     tk.Label(frame, text="Export Range:", font=("Helvetica", 10, "bold")).grid(row=1, column=0, sticky="w", pady=(10, 5))
     
-    range_type_var = tk.StringVar(value="Date")
+    range_type_var = tk.StringVar(value="Session")
     tk.Radiobutton(frame, text="Date Range", variable=range_type_var, value="Date").grid(row=2, column=0, sticky="w", padx=(20, 0))
     tk.Radiobutton(frame, text="Session Number Range", variable=range_type_var, value="Session").grid(row=3, column=0, sticky="w", padx=(20, 0))
     

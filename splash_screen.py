@@ -141,7 +141,7 @@ class SplashScreen:
         loading_label.pack(pady=(30, 5))
         
         # Countdown text
-        self.countdown_var = tk.StringVar(value="Auto-closing in 15 seconds...")
+        self.countdown_var = tk.StringVar(value="Auto-closing in 5 seconds...")
         countdown_label = tk.Label(
             frame,
             textvariable=self.countdown_var,
@@ -156,9 +156,9 @@ class SplashScreen:
             frame,
             mode='determinate',
             length=300,
-            maximum=150  # 15 seconds * 10 tenths per second
+            maximum=50  # 5 seconds * 10 tenths per second
         )
-        self.progress['value'] = 150  # Start at full
+        self.progress['value'] = 50  # Start at full
         self.progress.pack(pady=10)
         
         # Buttons frame
@@ -187,7 +187,7 @@ class SplashScreen:
         self.root.update()
         
         # Start countdown updates
-        self.remaining_tenths = 150  # 15 seconds * 10 tenths
+        self.remaining_tenths = 50  # 5 seconds * 10 tenths
         self.update_countdown()
     
     def stop_countdown(self):

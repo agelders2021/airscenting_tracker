@@ -295,26 +295,17 @@ class Misc2Operations:
         # Show success message
         self.ui.show_status_message(message, "info")
 
-        # Handle post-save behavior based on mode
+        # Handle post-save behavior - always prepare for a new session after save/update
         from ui_navigation import Navigation
         nav = Navigation(self.ui)
         
         if is_update_mode:
-            # UPDATE MODE: Stay on current session, reload to refresh display
-            nav.load_session_by_number(session_data["session_number"])
-            
-            # Get the session status for display
+            # Get the session status for display message
             db_ops = DatabaseOperations(self.ui)
             saved_status = db_ops.get_session_status(session_data["session_number"], dog_name)
-            
-            # Update LabelFrame title based on status
-            nav.update_session_frame_title(saved_status)
-            
-            self.ui.navigation.update_navigation_buttons()
             self.ui.show_status_message(f"Updated session (Status: {saved_status})", "info")
-            return
         
-        # NEW MODE: Clear form and prepare for next entry
+        # BOTH NEW AND UPDATE MODE: Clear form and prepare for next entry
         # Clear current_db_session_number to exit any lingering update mode
         self.ui.current_db_session_number = None
         self.ui.selected_sessions = []
@@ -369,5 +360,11 @@ class Misc2Operations:
         # Reset tree selection to subject 1 after clearing form
         self.ui.reset_subject_responses_tree_selection()
         self.ui.navigation.update_navigation_buttons()
+        
+        # Reset save button text to "Save Session" for new entries
+        self.ui.set_save_button_text("Save Session")
+        
+        # Reset session frame title for new entry
+        nav.update_session_frame_title(None)
 
 
