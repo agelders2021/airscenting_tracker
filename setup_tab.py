@@ -401,7 +401,7 @@ class SetupTab:
         save_config_frame = tk.Frame(frame)
         save_config_frame.pack(pady=20)
         
-        tk.Button(save_config_frame, text="ðŸ’¾ Save Configuration",
+        tk.Button(save_config_frame, text="Save Configuration",
                  command=self.save_configuration_settings,
                  bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold"),
                  width=30, height=2).pack()

@@ -384,7 +384,7 @@ class TrailingEntryTab:
                                      values=["North", "South", "East", "West", "NE", "NW", "SE", "SW"])
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
-        tk.Label(weather_frame, text="Temperature (Â°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        tk.Label(weather_frame, text="Temperature (Ã‚Â°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         tk.Entry(weather_frame, textvariable=sv.t_temp_laying, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="e", padx=5, pady=2)
@@ -408,7 +408,7 @@ class TrailingEntryTab:
                                      values=["North", "South", "East", "West", "NE", "NW", "SE", "SW"])
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
-        tk.Label(weather_frame, text="Temperature (Â°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        tk.Label(weather_frame, text="Temperature (Ã‚Â°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         tk.Entry(weather_frame, textvariable=sv.t_temp_running, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="e", padx=5, pady=2)
@@ -424,12 +424,12 @@ class TrailingEntryTab:
         
         tk.Label(behavior_frame, text="Start Behavior:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_start_behavior, width=54,
-                    values=["Excellentâ€”Direction of Travel immediately identified ",
-                            "Very Goodâ€”Direction of travel not imediately identified",
-                            "Goodâ€”Direction of travel identified with cueing",
-                            "Fairâ€”Direction of travel not identified",
-                            "Poorâ€”Direction of travel incorrectly identified",
-                            "Needs Workâ€”Could not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
+                    values=["ExcellentÃ¢â‚¬â€Direction of Travel immediately identified ",
+                            "Very GoodÃ¢â‚¬â€Direction of travel not imediately identified",
+                            "GoodÃ¢â‚¬â€Direction of travel identified with cueing",
+                            "FairÃ¢â‚¬â€Direction of travel not identified",
+                            "PoorÃ¢â‚¬â€Direction of travel incorrectly identified",
+                            "Needs WorkÃ¢â‚¬â€Could not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(behavior_frame, text="Pace:").grid(row=0, column=2, sticky="e", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_pace, width=18,
@@ -446,9 +446,9 @@ class TrailingEntryTab:
         tk.Label(behavior_frame, text="Indication at Find:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_indication, width=54,
                     values=["Immediate Trained Final Response",
-                            "Strong Alertâ€”Exhibited Trained Final Response after hesitation",
-                            "Moderate Alertâ€”Alert behavior but no TFR",
-                            "Weak Alertâ€”Hesitant, before clear response, needed cueing", 
+                            "Strong AlertÃ¢â‚¬â€Exhibited Trained Final Response after hesitation",
+                            "Moderate AlertÃ¢â‚¬â€Alert behavior but no TFR",
+                            "Weak AlertÃ¢â‚¬â€Hesitant, before clear response, needed cueing", 
                             "No Clear Indication"]).grid(row=1, column=1, sticky="w", padx=5, pady=2)
     
     def _create_distractions_section(self, frame):
@@ -1443,6 +1443,12 @@ class TrailingEntryTab:
         self.current_session_index = -1
         self.prev_session_btn.config(state=tk.DISABLED)
         self.next_session_btn.config(state=tk.DISABLED)
+        
+        # Disable Hide/Restore buttons when not viewing a session
+        if hasattr(self, 'hide_btn'):
+            self.hide_btn.config(state=tk.DISABLED)
+        if hasattr(self, 'resume_btn'):
+            self.resume_btn.config(state=tk.DISABLED)
         
         # Keep handler: preserve current value, or get from config if empty
         current_handler = sv.t_handler.get()

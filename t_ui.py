@@ -100,7 +100,7 @@ class TrailingUI:
         self.root.withdraw()
         
         # Show splash screen
-        self.splash = SplashScreen(self.root, version="1.0.3-alpha", 
+        self.splash = SplashScreen(self.root, version="1.0.4-alpha", 
                                    app_title=T_APP_TITLE, github_url=T_GITHUB_URL)
         
         # Set window properties
@@ -393,7 +393,7 @@ class TrailingUI:
     
     def show_about_dialog(self):
         """Show the About dialog"""
-        show_about(self.root, version="1.0.3-alpha", 
+        show_about(self.root, version="1.0.4-alpha", 
                    app_title=T_APP_TITLE, github_url="https://" + T_GITHUB_URL)
     
     def get_json_config_path(self):
@@ -490,6 +490,8 @@ class TrailingUI:
             'on_navigate_previous': self.on_navigate_previous,
             'on_navigate_next': self.on_navigate_next,
             'on_export_pdf': self.on_export_pdf,
+            'on_resume_session': self.on_resume_session,
+            'on_hide_session': self.on_hide_session,
         }
         
         # Create the entry tab
@@ -857,6 +859,21 @@ class TrailingUI:
             distractions = db_ops.load_distractions(session_id)
             self.trailing_entry.set_distractions(distractions)
         
+        # Enable/disable Hide and Restore buttons based on session status
+        session_status = session_data.get('status', 'active')
+        if session_status == 'deleted':
+            # Hidden session - disable Hide, enable Restore
+            if hasattr(self.trailing_entry, 'hide_btn'):
+                self.trailing_entry.hide_btn.config(state=tk.DISABLED)
+            if hasattr(self.trailing_entry, 'resume_btn'):
+                self.trailing_entry.resume_btn.config(state=tk.NORMAL)
+        else:
+            # Active session - enable Hide, disable Restore
+            if hasattr(self.trailing_entry, 'hide_btn'):
+                self.trailing_entry.hide_btn.config(state=tk.NORMAL)
+            if hasattr(self.trailing_entry, 'resume_btn'):
+                self.trailing_entry.resume_btn.config(state=tk.DISABLED)
+        
         self.show_status_message(f"Loaded session {session_data.get('t_session_number')} for editing", "info")
     
     def _update_navigation_buttons(self):
@@ -897,6 +914,93 @@ class TrailingUI:
             self._load_session_into_form(session)
             self._update_navigation_buttons()
     
+    def on_resume_session(self):
+        """Restore (undelete) the currently displayed session"""
+        if not self.trailing_entry.editing_session:
+            return
+        
+        dog_name = sv.t_dog.get()
+        session_number = sv.t_session.get()
+        
+        if not dog_name or not session_number:
+            return
+        
+        try:
+            session_num = int(session_number)
+        except ValueError:
+            return
+        
+        # Confirm action
+        result = messagebox.askyesno(
+            "Restore Session",
+            f"Mark session {session_num} for {dog_name} as active?",
+            icon='question'
+        )
+        
+        if result:
+            db_ops = DatabaseOperations(self)
+            success = db_ops.update_session_status(session_num, dog_name, 'active')
+            
+            if success:
+                self.show_status_message(f"Session {session_num} restored to active", "info")
+                
+                # Update the session in the dog_sessions_list if present
+                for session in self.trailing_entry.dog_sessions_list:
+                    if session.get('t_session_number') == session_num:
+                        session['status'] = 'active'
+                        break
+                
+                # Reload session to update display (including frame title)
+                idx = self.trailing_entry.current_session_index
+                if 0 <= idx < len(self.trailing_entry.dog_sessions_list):
+                    self._load_session_into_form(self.trailing_entry.dog_sessions_list[idx])
+            else:
+                messagebox.showerror("Error", "Failed to restore session")
+    
+    def on_hide_session(self):
+        """Mark the currently displayed session as hidden (deleted)"""
+        if not self.trailing_entry.editing_session:
+            return
+        
+        dog_name = sv.t_dog.get()
+        session_number = sv.t_session.get()
+        
+        if not dog_name or not session_number:
+            return
+        
+        try:
+            session_num = int(session_number)
+        except ValueError:
+            return
+        
+        # Confirm action
+        result = messagebox.askyesno(
+            "Hide Session",
+            f"Mark session {session_num} for {dog_name} as hidden?\n\n"
+            "This can be undone with the Restore button.",
+            icon='warning'
+        )
+        
+        if result:
+            db_ops = DatabaseOperations(self)
+            success = db_ops.update_session_status(session_num, dog_name, 'deleted')
+            
+            if success:
+                self.show_status_message(f"Session {session_num} marked as hidden", "info")
+                
+                # Update the session in the dog_sessions_list if present
+                for session in self.trailing_entry.dog_sessions_list:
+                    if session.get('t_session_number') == session_num:
+                        session['status'] = 'deleted'
+                        break
+                
+                # Reload session to update display (including frame title)
+                idx = self.trailing_entry.current_session_index
+                if 0 <= idx < len(self.trailing_entry.dog_sessions_list):
+                    self._load_session_into_form(self.trailing_entry.dog_sessions_list[idx])
+            else:
+                messagebox.showerror("Error", "Failed to hide session")
+
     def on_export_pdf(self):
         """Export sessions to PDF with range and status options"""
         from tkinter import Toplevel
