@@ -228,11 +228,11 @@ class TrailingEntryTab:
         self.view_edit_hide_btn.grid(row=0, column=5, sticky='e', padx=5, pady=2)
         
         # Navigation buttons
-        self.prev_session_btn = tk.Button(session_frame, text="◀ Previous", bg="#FF8C00", fg="white", 
+        self.prev_session_btn = tk.Button(session_frame, text="\u25C0 Previous", bg="#FF8C00", fg="white", 
                                          width=10, command=self._navigate_previous_session, state=tk.DISABLED)
         self.prev_session_btn.grid(row=0, column=6, padx=2, pady=2)
         
-        self.next_session_btn = tk.Button(session_frame, text="Next ▶", bg="#FF8C00", fg="white",
+        self.next_session_btn = tk.Button(session_frame, text="Next \u25B6", bg="#FF8C00", fg="white",
                                          width=10, command=self._navigate_next_session, state=tk.DISABLED)
         self.next_session_btn.grid(row=0, column=7, padx=2, pady=2)
         
@@ -384,7 +384,7 @@ class TrailingEntryTab:
                                      values=["North", "South", "East", "West", "NE", "NW", "SE", "SW"])
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
-        tk.Label(weather_frame, text="Temperature (°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        tk.Label(weather_frame, text="Temperature (Â°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         tk.Entry(weather_frame, textvariable=sv.t_temp_laying, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="e", padx=5, pady=2)
@@ -408,7 +408,7 @@ class TrailingEntryTab:
                                      values=["North", "South", "East", "West", "NE", "NW", "SE", "SW"])
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
-        tk.Label(weather_frame, text="Temperature (°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        tk.Label(weather_frame, text="Temperature (Â°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         tk.Entry(weather_frame, textvariable=sv.t_temp_running, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="e", padx=5, pady=2)
@@ -424,12 +424,12 @@ class TrailingEntryTab:
         
         tk.Label(behavior_frame, text="Start Behavior:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_start_behavior, width=54,
-                    values=["Excellent—Direction of Travel immediately identified ",
-                            "Very Good—Direction of travel not imediately identified",
-                            "Good—Direction of travel identified with cueing",
-                            "Fair—Direction of travel not identified",
-                            "Poor—Direction of travel incorrectly identified",
-                            "Needs Work—Could not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
+                    values=["Excellentâ€”Direction of Travel immediately identified ",
+                            "Very Goodâ€”Direction of travel not imediately identified",
+                            "Goodâ€”Direction of travel identified with cueing",
+                            "Fairâ€”Direction of travel not identified",
+                            "Poorâ€”Direction of travel incorrectly identified",
+                            "Needs Workâ€”Could not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(behavior_frame, text="Pace:").grid(row=0, column=2, sticky="e", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_pace, width=18,
@@ -446,9 +446,9 @@ class TrailingEntryTab:
         tk.Label(behavior_frame, text="Indication at Find:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_indication, width=54,
                     values=["Immediate Trained Final Response",
-                            "Strong Alert—Exhibited Trained Final Response after hesitation",
-                            "Moderate Alert—Alert behavior but no TFR",
-                            "Weak Alert—Hesitant, before clear response, needed cueing", 
+                            "Strong Alertâ€”Exhibited Trained Final Response after hesitation",
+                            "Moderate Alertâ€”Alert behavior but no TFR",
+                            "Weak Alertâ€”Hesitant, before clear response, needed cueing", 
                             "No Clear Indication"]).grid(row=1, column=1, sticky="w", padx=5, pady=2)
     
     def _create_distractions_section(self, frame):
@@ -1444,8 +1444,11 @@ class TrailingEntryTab:
         self.prev_session_btn.config(state=tk.DISABLED)
         self.next_session_btn.config(state=tk.DISABLED)
         
-        # Keep handler from defaults
-        sv.t_handler.set(self._get_config_value('get_handler_name', ""))
+        # Keep handler: preserve current value, or get from config if empty
+        current_handler = sv.t_handler.get()
+        if not current_handler:
+            current_handler = self._get_config_value('get_handler_name', "")
+        sv.t_handler.set(current_handler)
         
         # Reset date picker to today
         try:

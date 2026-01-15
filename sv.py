@@ -152,6 +152,9 @@ class Stringvars:
         self.t_distractions_list = []  # List of {type, response} dicts
         self.t_map_files_list = []  # List of trail map file paths
         
+        # ===== SETUP TAB - USER =====
+        self.current_user = tk.StringVar(master=master)
+        
         # ===== SETUP TAB - PATHS =====
         self.db_path = tk.StringVar(master=master)
         self.trail_maps_folder = tk.StringVar(master=master)
@@ -770,7 +773,7 @@ if __name__ == "__main__":
     # Example 5: Change detection
     print("\nExample 5: Change detection")
     snapshot = sv.get_state_string()
-    sv.temperature.set("72Â°F")
+    sv.temperature.set("72Ã‚Â°F")
     has_changes = sv.has_changes_from(snapshot)
     print(f"Has changes: {has_changes}")
     

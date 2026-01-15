@@ -292,6 +292,14 @@ class Misc2Operations:
         }
         self.ui.misc_data_ops.save_session_to_json(session_backup_data)
 
+        # Save current handler to config for persistence across sessions and restarts
+        current_handler = sv.handler.get()
+        if current_handler:
+            if "airscenting" not in self.ui.config:
+                self.ui.config["airscenting"] = {}
+            self.ui.config["airscenting"]["default_handler"] = current_handler
+            self.ui.save_config()
+
         # Show success message
         self.ui.show_status_message(message, "info")
 

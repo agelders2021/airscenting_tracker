@@ -63,6 +63,7 @@ class SetupTab:
         # Initialize Setup tab widgets (will be created in setup_setup_tab)
         # Note: StringVars are in sv module, not here
         self.s_create_db_btn = None
+        self.s_user_combo = None
         self.s_location_listbox = None
         self.s_add_location_btn = None
         self.s_remove_location_btn = None
@@ -142,6 +143,19 @@ class SetupTab:
         self.s_create_db_btn = tk.Button(db_frame, text="Initialize Data Structures", 
                                        command=self.initialize_data_structures, state="disabled")
         self.s_create_db_btn.pack(side="left", padx=5)
+        
+        # User selection combobox
+        tk.Label(db_frame, text="User:").pack(side="left", padx=(15, 2))
+        self.s_user_combo = ttk.Combobox(db_frame, textvariable=sv.current_user, width=15)
+        self.s_user_combo['values'] = self.ui.machine_user_list if self.ui.machine_user_list else []
+        self.s_user_combo.pack(side="left", padx=2)
+        ToolTip(self.s_user_combo,
+                "Select an existing user or type a new username.\n"
+                "Each user has their own storage folder configuration.\n"
+                "Changing users requires application restart to take effect.")
+        
+        # Bind FocusOut to handle user selection/creation
+        self.s_user_combo.bind('<FocusOut>', self._on_user_combo_focus_out)
         
         # Add trace to db_path to enable/disable Initialize button
         sv.db_path.trace_add('write', self.update_create_db_button_state)
@@ -387,7 +401,7 @@ class SetupTab:
         save_config_frame = tk.Frame(frame)
         save_config_frame.pack(pady=20)
         
-        tk.Button(save_config_frame, text="💾 Save Configuration",
+        tk.Button(save_config_frame, text="ðŸ’¾ Save Configuration",
                  command=self.save_configuration_settings,
                  bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold"),
                  width=30, height=2).pack()
@@ -2323,4 +2337,178 @@ class SetupTab:
         except Exception as e:
             print(f"Warning: Could not sync config from database: {e}")
     
-
+    def _on_user_combo_focus_out(self, event=None):
+        """Handle user combobox focus out - save new user and prompt for restart.
+        
+        When user types a new username or selects an existing one:
+        1. If new user: Add to bootstrap, save, prompt for restart
+        2. If existing user different from current: Prompt for restart
+        3. If same user: No action needed
+        """
+        new_user = sv.current_user.get().strip()
+        
+        if not new_user:
+            # Empty username - restore to current user
+            sv.current_user.set(self.ui.machine_current_user)
+            return
+        
+        # Check if user changed
+        if new_user == self.ui.machine_current_user:
+            # No change
+            return
+        
+        # Check if this is a new user or existing user
+        is_new_user = new_user not in self.ui.machine_user_list
+        
+        if is_new_user:
+            # New user - confirm creation
+            result = messagebox.askyesno(
+                "Create New User",
+                f"Create new user '{new_user}'?\n\n"
+                "This will save the current configuration and require\n"
+                "an application restart to switch to the new user.\n\n"
+                "The new user will start with empty storage folder settings."
+            )
+            
+            if not result:
+                # User cancelled - restore original
+                sv.current_user.set(self.ui.machine_current_user)
+                return
+            
+            # Add new user to bootstrap with empty settings
+            self._add_new_user_to_bootstrap(new_user)
+            
+            # Update combo values
+            self.s_user_combo['values'] = self.ui.machine_user_list
+            
+            # Prompt for restart
+            messagebox.showinfo(
+                "Restart Required",
+                f"User '{new_user}' has been created.\n\n"
+                "Please restart the application to switch to this user.\n\n"
+                "The application will now continue with the current user."
+            )
+            
+            # Restore current user (change takes effect on restart)
+            sv.current_user.set(self.ui.machine_current_user)
+        else:
+            # Existing user - prompt for restart to switch
+            result = messagebox.askyesno(
+                "Switch User",
+                f"Switch to user '{new_user}'?\n\n"
+                "This requires an application restart to take effect."
+            )
+            
+            if not result:
+                # User cancelled - restore original
+                sv.current_user.set(self.ui.machine_current_user)
+                return
+            
+            # Update bootstrap with new current user
+            self._set_current_user_in_bootstrap(new_user)
+            
+            # Prompt for restart
+            messagebox.showinfo(
+                "Restart Required",
+                f"User will be switched to '{new_user}' on next startup.\n\n"
+                "Please restart the application to apply the change.\n\n"
+                "The application will now continue with the current user."
+            )
+            
+            # Restore current user (change takes effect on restart)
+            sv.current_user.set(self.ui.machine_current_user)
+    
+    def _add_new_user_to_bootstrap(self, username):
+        """Add a new user to the bootstrap file with empty settings.
+        
+        Args:
+            username: The new username to add
+        """
+        import json
+        from config import BOOTSTRAP_FILE
+        
+        # Load existing bootstrap
+        bootstrap = {"current_user": "", "users": {}}
+        if BOOTSTRAP_FILE.exists():
+            try:
+                with open(BOOTSTRAP_FILE, 'r') as f:
+                    existing = json.load(f)
+                    
+                    # Handle legacy format migration
+                    if "users" in existing:
+                        bootstrap = existing
+                    else:
+                        # Migrate legacy format
+                        default_user = getuser()
+                        bootstrap["current_user"] = existing.get("current_user", default_user)
+                        bootstrap["users"][default_user] = {
+                            "db_file_path": existing.get("db_file_path", ""),
+                            "trail_maps_folder": existing.get("trail_maps_folder", ""),
+                            "backup_folder": existing.get("backup_folder", "")
+                        }
+            except:
+                pass
+        
+        # Ensure users dict exists
+        if "users" not in bootstrap:
+            bootstrap["users"] = {}
+        
+        # Add new user with empty settings
+        if username not in bootstrap["users"]:
+            bootstrap["users"][username] = {
+                "db_file_path": "",
+                "trail_maps_folder": "",
+                "backup_folder": ""
+            }
+        
+        # Set as current user (will take effect on restart)
+        bootstrap["current_user"] = username
+        
+        # Save bootstrap
+        with open(BOOTSTRAP_FILE, 'w') as f:
+            json.dump(bootstrap, f, indent=2)
+        
+        # Update machine user list
+        self.ui.machine_user_list = list(bootstrap["users"].keys())
+    
+    def _set_current_user_in_bootstrap(self, username):
+        """Set the current user in bootstrap file (for restart).
+        
+        Args:
+            username: The username to set as current
+        """
+        import json
+        from config import BOOTSTRAP_FILE
+        
+        # Load existing bootstrap
+        bootstrap = {"current_user": "", "users": {}}
+        if BOOTSTRAP_FILE.exists():
+            try:
+                with open(BOOTSTRAP_FILE, 'r') as f:
+                    existing = json.load(f)
+                    
+                    # Handle legacy format migration
+                    if "users" in existing:
+                        bootstrap = existing
+                    else:
+                        # Migrate legacy format
+                        default_user = getuser()
+                        bootstrap["current_user"] = existing.get("current_user", default_user)
+                        bootstrap["users"][default_user] = {
+                            "db_file_path": existing.get("db_file_path", ""),
+                            "trail_maps_folder": existing.get("trail_maps_folder", ""),
+                            "backup_folder": existing.get("backup_folder", "")
+                        }
+            except:
+                pass
+        
+        # Ensure users dict exists
+        if "users" not in bootstrap:
+            bootstrap["users"] = {}
+        
+        # Set current user
+        bootstrap["current_user"] = username
+        
+        # Save bootstrap
+        with open(BOOTSTRAP_FILE, 'w') as f:
+            json.dump(bootstrap, f, indent=2)

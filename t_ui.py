@@ -57,6 +57,8 @@ class TrailingUI:
         self.machine_db_path = ""
         self.machine_trail_maps_folder = ""
         self.machine_backup_folder = ""
+        self.machine_current_user = ""
+        self.machine_user_list = []
         
         # Load paths from bootstrap if exists
         self.load_bootstrap()
@@ -93,6 +95,7 @@ class TrailingUI:
         sv.db_path.set(self.machine_db_path)
         sv.trail_maps_folder.set(self.machine_trail_maps_folder)
         sv.backup_folder.set(self.machine_backup_folder)
+        sv.current_user.set(self.machine_current_user)
         
         self.root.withdraw()
         
@@ -215,31 +218,122 @@ class TrailingUI:
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
     
     def load_bootstrap(self):
-        """Load machine-specific paths from bootstrap file"""
+        """Load machine-specific paths from bootstrap file.
+        
+        Bootstrap JSON structure supports multiple users:
+        {
+            "current_user": "username",
+            "users": {
+                "username": {
+                    "db_file_path": "...",
+                    "trail_maps_folder": "...",
+                    "backup_folder": "..."
+                }
+            }
+        }
+        
+        Legacy format (single user) is auto-migrated:
+        {
+            "db_file_path": "...",
+            "trail_maps_folder": "...",
+            "backup_folder": "..."
+        }
+        """
         if self.bootstrap_file.exists():
             try:
                 with open(self.bootstrap_file, 'r') as f:
                     bootstrap = json.load(f)
-                    self.machine_db_path = bootstrap.get("db_file_path", "")
-                    self.machine_trail_maps_folder = bootstrap.get("trail_maps_folder", "")
-                    self.machine_backup_folder = bootstrap.get("backup_folder", "")
+                    
+                    # Check for new multi-user format
+                    if "users" in bootstrap:
+                        # New format
+                        self.machine_current_user = bootstrap.get("current_user", "")
+                        self.machine_user_list = list(bootstrap.get("users", {}).keys())
+                        
+                        # Load current user's settings
+                        if self.machine_current_user and self.machine_current_user in bootstrap.get("users", {}):
+                            user_settings = bootstrap["users"][self.machine_current_user]
+                            self.machine_db_path = user_settings.get("db_file_path", "")
+                            self.machine_trail_maps_folder = user_settings.get("trail_maps_folder", "")
+                            self.machine_backup_folder = user_settings.get("backup_folder", "")
+                    else:
+                        # Legacy format - migrate to new format
+                        # Use system username as default user
+                        default_user = getuser()
+                        self.machine_current_user = default_user
+                        self.machine_user_list = [default_user]
+                        self.machine_db_path = bootstrap.get("db_file_path", "")
+                        self.machine_trail_maps_folder = bootstrap.get("trail_maps_folder", "")
+                        self.machine_backup_folder = bootstrap.get("backup_folder", "")
+                        
+                        # Save in new format (migration happens automatically on next save)
             except:
                 pass
+        
+        # If no bootstrap file exists or no current user set, default to system username
+        if not self.machine_current_user:
+            self.machine_current_user = getuser()
+            self.machine_user_list = [self.machine_current_user]
     
     def save_bootstrap(self):
-        """Save machine-specific paths to bootstrap file"""
-        bootstrap = {"config_folder_path": str(self.config_file.parent)}
+        """Save machine-specific paths to bootstrap file.
+        
+        Uses multi-user structure:
+        {
+            "current_user": "username",
+            "users": {
+                "username": {
+                    "db_file_path": "...",
+                    "trail_maps_folder": "...",
+                    "backup_folder": "..."
+                }
+            }
+        }
+        """
+        # Load existing bootstrap data or create new structure
+        bootstrap = {
+            "current_user": "",
+            "users": {}
+        }
+        
         if self.bootstrap_file.exists():
             try:
                 with open(self.bootstrap_file, 'r') as f:
-                    bootstrap = json.load(f)
+                    existing = json.load(f)
+                    
+                    # Handle legacy format migration
+                    if "users" in existing:
+                        bootstrap = existing
+                    else:
+                        # Migrate legacy format
+                        default_user = getuser()
+                        bootstrap["current_user"] = default_user
+                        bootstrap["users"][default_user] = {
+                            "db_file_path": existing.get("db_file_path", ""),
+                            "trail_maps_folder": existing.get("trail_maps_folder", ""),
+                            "backup_folder": existing.get("backup_folder", "")
+                        }
             except:
                 pass
         
-        bootstrap["db_file_path"] = self.machine_db_path
-        bootstrap["trail_maps_folder"] = self.machine_trail_maps_folder
-        bootstrap["backup_folder"] = self.machine_backup_folder
+        # Ensure current user is set
+        if not self.machine_current_user:
+            self.machine_current_user = getuser()
         
+        # Update current user
+        bootstrap["current_user"] = self.machine_current_user
+        
+        # Update/add user's settings
+        bootstrap["users"][self.machine_current_user] = {
+            "db_file_path": self.machine_db_path,
+            "trail_maps_folder": self.machine_trail_maps_folder,
+            "backup_folder": self.machine_backup_folder
+        }
+        
+        # Update user list
+        self.machine_user_list = list(bootstrap["users"].keys())
+        
+        # Save to bootstrap file
         with open(self.bootstrap_file, 'w') as f:
             json.dump(bootstrap, f, indent=2)
     

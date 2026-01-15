@@ -66,6 +66,8 @@ class AirScentingUI:
         self.machine_db_path = ""
         self.machine_trail_maps_folder = ""
         self.machine_backup_folder = ""
+        self.machine_current_user = ""
+        self.machine_user_list = []
         
         # Load paths from bootstrap if exists
         self.load_bootstrap()
@@ -119,6 +121,7 @@ class AirScentingUI:
         sv.db_path.set(self.machine_db_path)
         sv.trail_maps_folder.set(self.machine_trail_maps_folder)
         sv.backup_folder.set(self.machine_backup_folder)
+        sv.current_user.set(self.machine_current_user)
         
         self.root.withdraw()
         
@@ -383,32 +386,120 @@ class AirScentingUI:
         if hasattr(self, 'a_save_session_btn'):
             self.a_save_session_btn.config(text=text)
     def load_bootstrap(self):
-        """Load machine-specific paths from bootstrap file"""
+        """Load machine-specific paths from bootstrap file.
+        
+        Bootstrap JSON structure supports multiple users:
+        {
+            "current_user": "username",
+            "users": {
+                "username": {
+                    "db_file_path": "...",
+                    "trail_maps_folder": "...",
+                    "backup_folder": "..."
+                }
+            }
+        }
+        
+        Legacy format (single user) is auto-migrated:
+        {
+            "db_file_path": "...",
+            "trail_maps_folder": "...",
+            "backup_folder": "..."
+        }
+        """
         if self.bootstrap_file.exists():
             try:
                 with open(self.bootstrap_file, 'r') as f:
                     bootstrap = json.load(f)
-                    self.machine_db_path = bootstrap.get("db_file_path", "")
-                    self.machine_trail_maps_folder = bootstrap.get("trail_maps_folder", "")
-                    self.machine_backup_folder = bootstrap.get("backup_folder", "")
-            except:
-                pass
-    
-    def save_bootstrap(self):
-        """Save machine-specific paths to bootstrap file"""
-        # Get existing bootstrap data
-        bootstrap = {"config_folder_path": str(self.config_file.parent)}
-        if self.bootstrap_file.exists():
-            try:
-                with open(self.bootstrap_file, 'r') as f:
-                    bootstrap = json.load(f)
+                    
+                    # Check for new multi-user format
+                    if "users" in bootstrap:
+                        # New format
+                        self.machine_current_user = bootstrap.get("current_user", "")
+                        self.machine_user_list = list(bootstrap.get("users", {}).keys())
+                        
+                        # Load current user's settings
+                        if self.machine_current_user and self.machine_current_user in bootstrap.get("users", {}):
+                            user_settings = bootstrap["users"][self.machine_current_user]
+                            self.machine_db_path = user_settings.get("db_file_path", "")
+                            self.machine_trail_maps_folder = user_settings.get("trail_maps_folder", "")
+                            self.machine_backup_folder = user_settings.get("backup_folder", "")
+                    else:
+                        # Legacy format - migrate to new format
+                        # Use system username as default user
+                        default_user = getuser()
+                        self.machine_current_user = default_user
+                        self.machine_user_list = [default_user]
+                        self.machine_db_path = bootstrap.get("db_file_path", "")
+                        self.machine_trail_maps_folder = bootstrap.get("trail_maps_folder", "")
+                        self.machine_backup_folder = bootstrap.get("backup_folder", "")
+                        
+                        # Save in new format (migration happens automatically on next save)
             except:
                 pass
         
-        # Update with current machine paths
-        bootstrap["db_file_path"] = self.machine_db_path
-        bootstrap["trail_maps_folder"] = self.machine_trail_maps_folder
-        bootstrap["backup_folder"] = self.machine_backup_folder
+        # If no bootstrap file exists or no current user set, default to system username
+        if not self.machine_current_user:
+            self.machine_current_user = getuser()
+            self.machine_user_list = [self.machine_current_user]
+    
+    def save_bootstrap(self):
+        """Save machine-specific paths to bootstrap file.
+        
+        Uses multi-user structure:
+        {
+            "current_user": "username",
+            "users": {
+                "username": {
+                    "db_file_path": "...",
+                    "trail_maps_folder": "...",
+                    "backup_folder": "..."
+                }
+            }
+        }
+        """
+        # Load existing bootstrap data or create new structure
+        bootstrap = {
+            "current_user": "",
+            "users": {}
+        }
+        
+        if self.bootstrap_file.exists():
+            try:
+                with open(self.bootstrap_file, 'r') as f:
+                    existing = json.load(f)
+                    
+                    # Handle legacy format migration
+                    if "users" in existing:
+                        bootstrap = existing
+                    else:
+                        # Migrate legacy format
+                        default_user = getuser()
+                        bootstrap["current_user"] = default_user
+                        bootstrap["users"][default_user] = {
+                            "db_file_path": existing.get("db_file_path", ""),
+                            "trail_maps_folder": existing.get("trail_maps_folder", ""),
+                            "backup_folder": existing.get("backup_folder", "")
+                        }
+            except:
+                pass
+        
+        # Ensure current user is set
+        if not self.machine_current_user:
+            self.machine_current_user = getuser()
+        
+        # Update current user
+        bootstrap["current_user"] = self.machine_current_user
+        
+        # Update/add user's settings
+        bootstrap["users"][self.machine_current_user] = {
+            "db_file_path": self.machine_db_path,
+            "trail_maps_folder": self.machine_trail_maps_folder,
+            "backup_folder": self.machine_backup_folder
+        }
+        
+        # Update user list
+        self.machine_user_list = list(bootstrap["users"].keys())
         
         # Save to bootstrap file
         with open(self.bootstrap_file, 'w') as f:
@@ -1387,6 +1478,14 @@ class AirScentingUI:
     def on_closing(self):
         """Handle window close event"""
         if self.form_mgmt.check_unsaved_changes("exit"):
+            # Save last handler to config before closing
+            current_handler = sv.handler.get()
+            if current_handler:
+                if "airscenting" not in self.config:
+                    self.config["airscenting"] = {}
+                self.config["airscenting"]["default_handler"] = current_handler
+                self.save_config()
+            
             self.root.destroy()
     
     def on_tab_changed(self, event):
@@ -1544,14 +1643,14 @@ class AirScentingUI:
         # Build error messages (hard requirements)
         errors = []
         if not database_exists:
-            errors.append("• Database not created")
+            errors.append("â€¢ Database not created")
         
         # Trail maps folder is still required for images
         if not trail_maps_folder or not os.path.exists(trail_maps_folder):
             if not trail_maps_folder:
-                errors.append("• Trail Maps Storage folder not selected")
+                errors.append("â€¢ Trail Maps Storage folder not selected")
             else:
-                errors.append(f"• Trail Maps Storage folder does not exist: {trail_maps_folder}")
+                errors.append(f"â€¢ Trail Maps Storage folder does not exist: {trail_maps_folder}")
         
         # Check if at least one dog is defined
         if database_exists:
@@ -1577,7 +1676,7 @@ class AirScentingUI:
                 reload(database)
                 
                 if dog_count == 0:
-                    errors.append("• At least one dog must be defined")
+                    errors.append("â€¢ At least one dog must be defined")
             except Exception as e:
                 print(f"Error checking dogs: {e}")
                 # Don't block if there's an error checking
@@ -1586,9 +1685,9 @@ class AirScentingUI:
         warnings = []
         if not backup_folder or not os.path.exists(backup_folder):
             if not backup_folder:
-                warnings.append("• Backup folder not selected")
+                warnings.append("â€¢ Backup folder not selected")
             else:
-                warnings.append(f"• Backup folder does not exist: {backup_folder}")
+                warnings.append(f"â€¢ Backup folder does not exist: {backup_folder}")
         
         # If there are hard errors (database, dogs), show message and prevent switching
         if errors:
