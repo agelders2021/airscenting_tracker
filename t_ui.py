@@ -100,7 +100,7 @@ class TrailingUI:
         self.root.withdraw()
         
         # Show splash screen
-        self.splash = SplashScreen(self.root, version="1.0.4-alpha", 
+        self.splash = SplashScreen(self.root, version="1.0.5-alpha", 
                                    app_title=T_APP_TITLE, github_url=T_GITHUB_URL)
         
         # Set window properties
@@ -393,7 +393,7 @@ class TrailingUI:
     
     def show_about_dialog(self):
         """Show the About dialog"""
-        show_about(self.root, version="1.0.4-alpha", 
+        show_about(self.root, version="1.0.5-alpha", 
                    app_title=T_APP_TITLE, github_url="https://" + T_GITHUB_URL)
     
     def get_json_config_path(self):
@@ -1002,9 +1002,8 @@ class TrailingUI:
                 messagebox.showerror("Error", "Failed to hide session")
 
     def on_export_pdf(self):
-        """Export sessions to PDF with range and status options"""
-        from tkinter import Toplevel
-        from tkcalendar import DateEntry
+        """Export sessions to PDF using list-based selection like View/Edit/Hide"""
+        from tkinter import Toplevel, Listbox, Scrollbar
         
         dog_name = sv.t_dog.get()
         if not dog_name:
@@ -1014,111 +1013,106 @@ class TrailingUI:
         # Create dialog
         dialog = Toplevel(self.root)
         dialog.title("Export Sessions to PDF")
-        dialog.geometry("500x420")
-        dialog.resizable(False, False)
+        dialog.geometry("650x500")
+        dialog.resizable(True, True)
         dialog.transient(self.root)
         dialog.grab_set()
         
-        frame = tk.Frame(dialog, padx=20, pady=20)
-        frame.pack(fill="both", expand=True)
+        # Dog display at top
+        header_frame = tk.Frame(dialog, padx=10, pady=10)
+        header_frame.pack(fill="x")
+        tk.Label(header_frame, text="Dog:", font=("Helvetica", 10, "bold")).pack(side=tk.LEFT)
+        tk.Label(header_frame, text=dog_name, font=("Helvetica", 10)).pack(side=tk.LEFT, padx=(5, 0))
         
-        # Dog display
-        tk.Label(frame, text="Dog:", font=("Helvetica", 10, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 10))
-        tk.Label(frame, text=dog_name, font=("Helvetica", 10)).grid(row=0, column=1, sticky="w", pady=(0, 10))
+        # Instructions
+        instructions = tk.Label(
+            dialog,
+            text="Select sessions to export:\n"
+                 "• Click to select one session\n"
+                 "• Ctrl+Click to select multiple sessions\n"
+                 "• Shift+Click to select a range",
+            justify="left",
+            padx=10,
+            pady=5
+        )
+        instructions.pack()
         
-        # Range type selection
-        tk.Label(frame, text="Export Range:", font=("Helvetica", 10, "bold")).grid(row=1, column=0, sticky="w", pady=(10, 5))
+        # Status filter radiobuttons
+        filter_frame = tk.Frame(dialog)
+        filter_frame.pack(pady=(5, 5))
         
-        range_type_var = tk.StringVar(value="Session")
-        tk.Radiobutton(frame, text="Date Range", variable=range_type_var, value="Date").grid(row=2, column=0, sticky="w", padx=(20, 0))
-        tk.Radiobutton(frame, text="Session Number Range", variable=range_type_var, value="Session").grid(row=3, column=0, sticky="w", padx=(20, 0))
+        tk.Label(filter_frame, text="Show Sessions:").pack(side=tk.LEFT, padx=(0, 10))
+        export_status_var = tk.StringVar(value="active")
         
-        # Range inputs frame
-        input_frame = tk.Frame(frame)
-        input_frame.grid(row=2, column=1, rowspan=2, sticky="w", padx=(20, 0))
+        # Listbox with scrollbar
+        list_frame = tk.Frame(dialog)
+        list_frame.pack(fill="both", expand=True, padx=10, pady=5)
         
-        # Get min/max values
-        db_ops = DatabaseOperations(self)
+        scrollbar = Scrollbar(list_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        def get_dog_ranges():
-            try:
-                from database import get_connection
-                from sqlalchemy import text
-                with get_connection() as conn:
-                    result = conn.execute(text("""
-                        SELECT MIN(t_date), MAX(t_date), MIN(t_session_number), MAX(t_session_number)
-                        FROM t_training_sessions WHERE t_dog_name = :dog_name
-                    """), {"dog_name": dog_name})
-                    row = result.fetchone()
-                    return row[0], row[1], row[2], row[3]
-            except:
-                return None, None, None, None
+        session_listbox = Listbox(list_frame, selectmode="extended", yscrollcommand=scrollbar.set,
+                                  font=("Courier", 10), width=70)
+        session_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=session_listbox.yview)
         
-        min_date, max_date, min_session, max_session = get_dog_ranges()
+        # Store session data for lookup
+        session_data_list = []
         
-        # Labels
-        tk.Label(input_frame, text="Start:").grid(row=0, column=0, sticky="e", padx=5)
-        tk.Label(input_frame, text="End:").grid(row=1, column=0, sticky="e", padx=5)
+        def populate_listbox():
+            """Populate the listbox with session data"""
+            session_listbox.delete(0, tk.END)
+            session_data_list.clear()
+            
+            db_ops = DatabaseOperations(self)
+            status_filter = export_status_var.get()
+            sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter=status_filter.capitalize() if status_filter != "both" else "All")
+            
+            for session in sessions:
+                session_num = session.get('t_session_number', '?')
+                date = session.get('t_date', '')
+                handler = session.get('t_handler', '') or ''
+                location = session.get('t_location', '') or ''
+                status = session.get('status', 'active')
+                status_marker = " [HIDDEN]" if status == 'deleted' else ""
+                
+                # Format: Session #  |  Date  |  Handler  |  Location
+                display_text = f"#{session_num:3d}  |  {str(date):10s}  |  {handler:15s}  |  {location:20s}{status_marker}"
+                session_listbox.insert(tk.END, display_text)
+                session_data_list.append(session)
+            
+            # Select all by default
+            if session_data_list:
+                session_listbox.select_set(0, tk.END)
         
-        # Date pickers
-        start_date = DateEntry(input_frame, width=14, date_pattern='yyyy-mm-dd')
-        start_date.grid(row=0, column=1, padx=5, pady=2)
-        end_date = DateEntry(input_frame, width=14, date_pattern='yyyy-mm-dd')
-        end_date.grid(row=1, column=1, padx=5, pady=2)
+        def on_filter_changed():
+            """Handle filter radiobutton change"""
+            populate_listbox()
         
-        # Session entries
-        start_var = tk.StringVar(value=str(min_session) if min_session else "1")
-        end_var = tk.StringVar(value=str(max_session) if max_session else "1")
-        start_entry = tk.Entry(input_frame, textvariable=start_var, width=15)
-        end_entry = tk.Entry(input_frame, textvariable=end_var, width=15)
+        # Add radiobuttons
+        tk.Radiobutton(filter_frame, text="Active", variable=export_status_var,
+                      value="active", command=on_filter_changed).pack(side=tk.LEFT, padx=5)
+        tk.Radiobutton(filter_frame, text="Hidden", variable=export_status_var,
+                      value="deleted", command=on_filter_changed).pack(side=tk.LEFT, padx=5)
+        tk.Radiobutton(filter_frame, text="Both", variable=export_status_var,
+                      value="both", command=on_filter_changed).pack(side=tk.LEFT, padx=5)
         
-        def update_input_widgets(*args):
-            if range_type_var.get() == "Date":
-                start_date.grid(row=0, column=1, padx=5, pady=2)
-                end_date.grid(row=1, column=1, padx=5, pady=2)
-                start_entry.grid_remove()
-                end_entry.grid_remove()
-            else:
-                start_entry.grid(row=0, column=1, padx=5, pady=2)
-                end_entry.grid(row=1, column=1, padx=5, pady=2)
-                start_date.grid_remove()
-                end_date.grid_remove()
-        
-        range_type_var.trace("w", update_input_widgets)
-        update_input_widgets()
-        
-        # Status filter
-        tk.Label(frame, text="Session Status:", font=("Helvetica", 10, "bold")).grid(row=4, column=0, sticky="w", pady=(15, 5))
-        status_frame = tk.Frame(frame)
-        status_frame.grid(row=4, column=1, sticky="w", pady=(15, 5))
-        
-        status_var = tk.StringVar(value="active")
-        tk.Radiobutton(status_frame, text="Active", variable=status_var, value="active").pack(side=tk.LEFT, padx=5)
-        tk.Radiobutton(status_frame, text="Hidden", variable=status_var, value="deleted").pack(side=tk.LEFT, padx=5)
-        tk.Radiobutton(status_frame, text="Both", variable=status_var, value="both").pack(side=tk.LEFT, padx=5)
-        
-        # Sort order
-        tk.Label(frame, text="Sort Order:", font=("Helvetica", 10, "bold")).grid(row=5, column=0, sticky="w", pady=(15, 5))
-        sort_var = tk.StringVar(value="Ascending")
-        ttk.Combobox(frame, textvariable=sort_var, width=20, state="readonly", 
-                     values=["Ascending", "Descending"]).grid(row=5, column=1, sticky="w", pady=(15, 5))
+        # Initial population
+        populate_listbox()
         
         # Buttons
-        button_frame = tk.Frame(frame)
-        button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
+        button_frame = tk.Frame(dialog)
+        button_frame.pack(pady=10)
         
         def do_export():
-            # Get range values
-            if range_type_var.get() == "Date":
-                start_value = start_date.get_date().strftime("%Y-%m-%d")
-                end_value = end_date.get_date().strftime("%Y-%m-%d")
-            else:
-                start_value = start_var.get()
-                end_value = end_var.get()
-            
-            if not start_value or not end_value:
-                messagebox.showwarning("Invalid Range", "Please enter both start and end values")
+            selected_indices = session_listbox.curselection()
+            if not selected_indices:
+                messagebox.showwarning("No Selection", "Please select at least one session to export")
                 return
+            
+            # Get selected sessions
+            selected_sessions = [session_data_list[i] for i in selected_indices]
+            selected_nums = [s.get('t_session_number') for s in selected_sessions]
             
             # Get file save location
             default_filename = f"Trailing_Log_{dog_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
@@ -1134,13 +1128,10 @@ class TrailingUI:
             
             dialog.destroy()
             
-            # Export
-            self._export_trailing_sessions_to_pdf(
-                filepath, dog_name, range_type_var.get(),
-                start_value, end_value, sort_var.get(), status_var.get()
-            )
+            # Export with selected sessions
+            self._export_trailing_sessions_by_selection(filepath, dog_name, selected_nums)
         
-        tk.Button(button_frame, text="Export to PDF", command=do_export, bg="#4CAF50", fg="white", width=15).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="Export", command=do_export, bg="#4CAF50", fg="white", width=15).pack(side=tk.LEFT, padx=5)
         tk.Button(button_frame, text="Cancel", command=dialog.destroy, width=10).pack(side=tk.LEFT, padx=5)
     
     def _export_trailing_sessions_to_pdf(self, filepath, dog_name, range_type, start_value, end_value, sort_order, status_filter):
@@ -1528,6 +1519,359 @@ class TrailingUI:
             doc.build(elements)
             
             # Send success message to status bar instead of popup
+            self.show_status_message(f"Exported {len(sessions)} session(s) to: {filepath}", "info")
+            
+            # Ask to open
+            if messagebox.askyesno("Open File?", "Would you like to open the exported PDF?"):
+                import subprocess
+                import platform
+                if platform.system() == 'Windows':
+                    os.startfile(filepath)
+                elif platform.system() == 'Darwin':
+                    subprocess.run(['open', filepath])
+                else:
+                    subprocess.run(['xdg-open', filepath])
+                    
+        except Exception as e:
+            messagebox.showerror("Export Error", f"Failed to export PDF:\n{e}")
+            print(f"PDF export error: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _export_trailing_sessions_by_selection(self, filepath, dog_name, session_numbers):
+        """Export selected trailing sessions to PDF file
+        
+        Args:
+            filepath: Path to save PDF
+            dog_name: Name of the dog
+            session_numbers: List of session numbers to export
+        """
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.lib.enums import TA_LEFT, TA_CENTER
+        
+        try:
+            # Fetch sessions by specific numbers
+            db_ops = DatabaseOperations(self)
+            sessions = db_ops.get_trailing_sessions_by_numbers(dog_name, session_numbers)
+            
+            if not sessions:
+                messagebox.showinfo("No Sessions", "No sessions found matching the selection")
+                return
+            
+            # Get trail maps folder for images
+            trail_maps_folder = sv.trail_maps_folder.get().strip()
+            
+            doc = SimpleDocTemplate(filepath, pagesize=letter, 
+                                    rightMargin=0.5*inch, leftMargin=0.5*inch,
+                                    topMargin=0.5*inch, bottomMargin=0.5*inch)
+            
+            styles = getSampleStyleSheet()
+            
+            # Custom styles matching airscenting
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=18,
+                textColor=colors.HexColor('#2E4057'),
+                spaceAfter=20,
+                alignment=TA_CENTER
+            )
+            
+            heading_style = ParagraphStyle(
+                'CustomHeading',
+                parent=styles['Heading2'],
+                fontSize=12,
+                textColor=colors.HexColor('#4CAF50'),
+                spaceAfter=6,
+                spaceBefore=6
+            )
+            
+            label_style = ParagraphStyle(
+                'Label',
+                parent=styles['Normal'],
+                fontSize=9,
+                textColor=colors.HexColor('#666666'),
+                spaceAfter=2
+            )
+            
+            value_style = ParagraphStyle(
+                'Value',
+                parent=styles['Normal'],
+                fontSize=10,
+                spaceAfter=8
+            )
+            
+            elements = []
+            
+            # Title
+            elements.append(Paragraph(f"Trailing Training Log for {dog_name}", title_style))
+            elements.append(Spacer(1, 0.2*inch))
+            
+            for i, session_data in enumerate(sessions):
+                if i > 0:
+                    # Page break after every 2 sessions
+                    if i % 2 == 0:
+                        elements.append(PageBreak())
+                    else:
+                        # Separator line
+                        elements.append(Spacer(1, 0.15*inch))
+                        elements.append(Table([['']], colWidths=[7*inch], 
+                                         style=[('LINEABOVE', (0,0), (-1,-1), 1, colors.grey)]))
+                        elements.append(Spacer(1, 0.15*inch))
+                
+                # Session header
+                session_num = session_data.get('t_session_number', '?')
+                date_str = str(session_data.get('t_date', '')) if session_data.get('t_date') else ''
+                elements.append(Paragraph(f"<b>Session #{session_num}</b> - {date_str}", heading_style))
+                elements.append(Spacer(1, 0.1*inch))
+                
+                # Helper function to add fields to table
+                def add_field(label, value):
+                    if value and str(value).strip():
+                        return [Paragraph(f"<b>{label}:</b>", label_style), 
+                                Paragraph(str(value), value_style)]
+                    return None
+                
+                # Session Information
+                elements.append(Paragraph("<b>Session Information</b>", heading_style))
+                session_info_data = []
+                
+                fields = [
+                    ('Handler', session_data.get('t_handler')),
+                    ('Field Support', session_data.get('t_field_support')),
+                    ('Location', session_data.get('t_location')),
+                    ('Start Time', session_data.get('t_start_time')),
+                ]
+                for label, value in fields:
+                    row = add_field(label, value)
+                    if row:
+                        session_info_data.append(row)
+                
+                # Add session purposes (comma-separated if multiple)
+                purposes = session_data.get('purposes', [])
+                if purposes:
+                    purposes_str = ', '.join(purposes) if isinstance(purposes, list) else str(purposes)
+                    row = add_field('Session Purposes', purposes_str)
+                    if row:
+                        session_info_data.append(row)
+                
+                if session_info_data:
+                    table = Table(session_info_data, colWidths=[1.5*inch, 5.5*inch])
+                    table.setStyle(TableStyle([
+                        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                        ('TOPPADDING', (0,0), (-1,-1), 2),
+                        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                    ]))
+                    elements.append(table)
+                elements.append(Spacer(1, 0.1*inch))
+                
+                # Trail Details
+                elements.append(Paragraph("<b>Trail Details</b>", heading_style))
+                trail_info_data = []
+                
+                fields = [
+                    ('Trail Age', session_data.get('t_trail_age')),
+                    ('Trail Length', session_data.get('t_trail_length')),
+                    ('Difficulty', session_data.get('t_difficulty')),
+                    ('Trail Layer', session_data.get('t_trail_layer')),
+                    ('Cross-Track Layer', session_data.get('t_cross_track_layer')),
+                    ('Cross-Track Age', session_data.get('t_cross_track_age')),
+                ]
+                for label, value in fields:
+                    row = add_field(label, value)
+                    if row:
+                        trail_info_data.append(row)
+                
+                # Add terrains (comma-separated if multiple)
+                terrains = session_data.get('terrains', [])
+                if terrains:
+                    terrains_str = ', '.join(terrains) if isinstance(terrains, list) else str(terrains)
+                    row = add_field('Terrain Types', terrains_str)
+                    if row:
+                        trail_info_data.append(row)
+                
+                if trail_info_data:
+                    table = Table(trail_info_data, colWidths=[1.5*inch, 5.5*inch])
+                    table.setStyle(TableStyle([
+                        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                        ('TOPPADDING', (0,0), (-1,-1), 2),
+                        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                    ]))
+                    elements.append(table)
+                elements.append(Spacer(1, 0.1*inch))
+                
+                # Weather Information
+                elements.append(Paragraph("<b>Weather Information</b>", heading_style))
+                weather_data = []
+                
+                # Weather when laying trail
+                fields = [
+                    ('Weather (Laying)', session_data.get('t_weather_laying')),
+                    ('Temperature (Laying)', session_data.get('t_temp_laying')),
+                    ('Wind Speed (Laying)', session_data.get('t_wind_laying')),
+                    ('Wind Direction (Laying)', session_data.get('t_wind_direction_laying')),
+                    ('Humidity (Laying)', session_data.get('t_humidity_laying')),
+                    ('Weather (Running)', session_data.get('t_weather_running')),
+                    ('Temperature (Running)', session_data.get('t_temp_running')),
+                    ('Wind Speed (Running)', session_data.get('t_wind_running')),
+                    ('Wind Direction (Running)', session_data.get('t_wind_direction_running')),
+                    ('Humidity (Running)', session_data.get('t_humidity_running')),
+                ]
+                for label, value in fields:
+                    row = add_field(label, value)
+                    if row:
+                        weather_data.append(row)
+                
+                if weather_data:
+                    table = Table(weather_data, colWidths=[1.5*inch, 5.5*inch])
+                    table.setStyle(TableStyle([
+                        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                        ('TOPPADDING', (0,0), (-1,-1), 2),
+                        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                    ]))
+                    elements.append(table)
+                elements.append(Spacer(1, 0.1*inch))
+                
+                # Behavior and Distractions
+                behavior_fields = [
+                    ('Start Behavior', session_data.get('t_start_behavior')),
+                    ('Consistency', session_data.get('t_consistency')),
+                    ('Head Position', session_data.get('t_head_pos')),
+                    ('Pace', session_data.get('t_pace')),
+                    ('Indication', session_data.get('t_indication')),
+                    ('Time Taken', session_data.get('t_time')),
+                    ('Success', session_data.get('t_success')),
+                ]
+                behavior_data = []
+                has_behavior = False
+                for label, value in behavior_fields:
+                    row = add_field(label, value)
+                    if row:
+                        behavior_data.append(row)
+                        has_behavior = True
+                
+                # Get distractions
+                distractions = session_data.get('distractions', [])
+                distraction_table_data = []
+                has_distractions = False
+                for d in distractions:
+                    d_type = d.get('t_distraction_type', '')
+                    d_response = d.get('t_response', '')
+                    if d_type or d_response:
+                        distraction_table_data.append([d_type, d_response])
+                        has_distractions = True
+                
+                if has_behavior or has_distractions:
+                    elements.append(Paragraph("<b>Behavior & Distractions</b>", heading_style))
+                    
+                    if has_behavior:
+                        table = Table(behavior_data, colWidths=[1.5*inch, 5.5*inch])
+                        table.setStyle(TableStyle([
+                            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                            ('TOPPADDING', (0,0), (-1,-1), 2),
+                            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                        ]))
+                        elements.append(table)
+                    
+                    if has_distractions:
+                        distraction_header = [['Distraction', 'Response']]
+                        full_distraction_table = distraction_header + distraction_table_data
+                        
+                        d_table = Table(full_distraction_table, colWidths=[2*inch, 3*inch])
+                        d_table.setStyle(TableStyle([
+                            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#E0E0E0')),
+                            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                            ('FONTSIZE', (0,0), (-1,-1), 9),
+                            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+                            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+                            ('TOPPADDING', (0,0), (-1,-1), 4),
+                            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+                            ('LEFTPADDING', (0,0), (-1,-1), 4),
+                        ]))
+                        
+                        distraction_row = [
+                            Paragraph(f"<b>Distractions:</b>", label_style),
+                            d_table
+                        ]
+                        distraction_wrapper = Table([distraction_row], colWidths=[1.5*inch, 5.5*inch])
+                        distraction_wrapper.setStyle(TableStyle([
+                            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                            ('TOPPADDING', (0,0), (-1,-1), 2),
+                            ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                        ]))
+                        elements.append(distraction_wrapper)
+                    
+                    elements.append(Spacer(1, 0.1*inch))
+                
+                # Impression/Comments
+                impression = session_data.get('t_impression', '')
+                if impression and str(impression).strip():
+                    elements.append(Paragraph("<b>Overall Impression</b>", heading_style))
+                    impression_text = str(impression).replace('\n', '<br/>')
+                    elements.append(Paragraph(impression_text, value_style))
+                    elements.append(Spacer(1, 0.1*inch))
+                
+                # Maps and Images
+                map_files_str = session_data.get('t_map_files', '')
+                if map_files_str and trail_maps_folder:
+                    image_files = []
+                    if map_files_str:
+                        try:
+                            import json
+                            parsed = json.loads(map_files_str)
+                            if isinstance(parsed, list):
+                                image_files = [f.strip() for f in parsed if f and f.strip()]
+                            else:
+                                image_files = [str(parsed).strip()] if parsed else []
+                        except (json.JSONDecodeError, TypeError):
+                            image_files = [f.strip() for f in map_files_str.replace(';', ',').split(',') if f.strip()]
+                    
+                    if image_files:
+                        elements.append(Paragraph("<b>Maps and Images</b>", heading_style))
+                        
+                        for image_file in image_files:
+                            if image_file:
+                                if os.path.isabs(image_file):
+                                    image_path = image_file
+                                else:
+                                    image_path = os.path.join(trail_maps_folder, image_file)
+                                
+                                if os.path.exists(image_path):
+                                    try:
+                                        file_ext = os.path.splitext(image_file)[1].lower()
+                                        
+                                        if file_ext in ['.jpg', '.jpeg', '.png']:
+                                            img = Image(image_path, width=6.5*inch, height=6.5*inch, kind='proportional')
+                                            elements.append(img)
+                                            elements.append(Spacer(1, 0.05*inch))
+                                            display_name = os.path.basename(image_file)
+                                            caption = Paragraph(f"<i>{display_name}</i>", label_style)
+                                            elements.append(caption)
+                                            elements.append(Spacer(1, 0.1*inch))
+                                        elif file_ext == '.pdf':
+                                            display_name = os.path.basename(image_file)
+                                            note_text = f"<i>{display_name}</i><br/><font color='blue'>PDF file (not embedded)</font>"
+                                            elements.append(Paragraph(note_text, value_style))
+                                            elements.append(Spacer(1, 0.1*inch))
+                                    except Exception as e:
+                                        display_name = os.path.basename(image_file)
+                                        error_text = f"<i>{display_name}</i><br/><font color='red'>Error loading image: {str(e)}</font>"
+                                        elements.append(Paragraph(error_text, value_style))
+                                        elements.append(Spacer(1, 0.1*inch))
+                                else:
+                                    display_name = os.path.basename(image_file)
+                                    error_text = f"<i>{display_name}</i><br/><font color='red'>File not found: {image_path}</font>"
+                                    elements.append(Paragraph(error_text, value_style))
+                                    elements.append(Spacer(1, 0.1*inch))
+            
+            doc.build(elements)
+            
+            # Send success message to status bar
             self.show_status_message(f"Exported {len(sessions)} session(s) to: {filepath}", "info")
             
             # Ask to open

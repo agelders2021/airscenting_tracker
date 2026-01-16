@@ -33,7 +33,7 @@ import json
 
 def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup_folder, trail_maps_folder, status_var=None):
     """
-    Show export dialog for selecting sessions to export
+    Show export dialog for selecting sessions to export using list-based selection.
     
     Args:
         parent: Parent window
@@ -44,11 +44,18 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
         trail_maps_folder: Path to trail maps folder
         status_var: Optional StringVar for status bar messages
     """
+    from sqlalchemy import text
+    
+    # Validate dog selection first
+    if not current_dog:
+        messagebox.showwarning("No Dog Selected", "Please select a dog first to export their sessions")
+        return
+    
     # Create dialog window
     dialog = tk.Toplevel(parent)
     dialog.title("Export Sessions to PDF")
-    dialog.geometry("500x400")
-    dialog.resizable(False, False)
+    dialog.geometry("650x500")
+    dialog.resizable(True, True)
     
     # Center dialog
     dialog.transient(parent)
@@ -58,199 +65,123 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
     y = parent.winfo_y() + (parent.winfo_height() // 2) - (dialog.winfo_height() // 2)
     dialog.geometry(f"+{x}+{y}")
     
-    frame = tk.Frame(dialog, padx=20, pady=20)
-    frame.pack(fill="both", expand=True)
+    # Dog display at top
+    header_frame = tk.Frame(dialog, padx=10, pady=10)
+    header_frame.pack(fill="x")
+    tk.Label(header_frame, text="Dog:", font=("Helvetica", 10, "bold")).pack(side=tk.LEFT)
+    tk.Label(header_frame, text=current_dog, font=("Helvetica", 10)).pack(side=tk.LEFT, padx=(5, 0))
     
-    # Dog selection (read-only, shows current dog)
-    tk.Label(frame, text="Dog:", font=("Helvetica", 10, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 10))
-    dog_var = tk.StringVar(value=current_dog if current_dog else "")
-    tk.Label(frame, text=current_dog if current_dog else "(No dog selected)", 
-             font=("Helvetica", 10)).grid(row=0, column=1, sticky="w", pady=(0, 10))
+    # Instructions
+    instructions = tk.Label(
+        dialog, 
+        text="Select sessions to export:\n"
+             "• Click to select one session\n"
+             "• Ctrl+Click to select multiple sessions\n"
+             "• Shift+Click to select a range",
+        justify="left",
+        padx=10,
+        pady=5
+    )
+    instructions.pack()
     
-    # Range type selection
-    tk.Label(frame, text="Export Range:", font=("Helvetica", 10, "bold")).grid(row=1, column=0, sticky="w", pady=(10, 5))
+    # Status filter radiobuttons
+    filter_frame = tk.Frame(dialog)
+    filter_frame.pack(pady=(5, 5))
     
-    range_type_var = tk.StringVar(value="Session")
-    tk.Radiobutton(frame, text="Date Range", variable=range_type_var, value="Date").grid(row=2, column=0, sticky="w", padx=(20, 0))
-    tk.Radiobutton(frame, text="Session Number Range", variable=range_type_var, value="Session").grid(row=3, column=0, sticky="w", padx=(20, 0))
+    tk.Label(filter_frame, text="Show Sessions:").pack(side=tk.LEFT, padx=(0, 10))
+    export_status_var = tk.StringVar(value="active")
     
-    # Range inputs frame
-    input_frame = tk.Frame(frame)
-    input_frame.grid(row=2, column=1, rowspan=2, sticky="w", padx=(20, 0))
+    # Listbox with scrollbar
+    list_frame = tk.Frame(dialog)
+    list_frame.pack(fill="both", expand=True, padx=10, pady=5)
     
-    # Function to get min/max dates and sessions for the selected dog
-    def get_dog_ranges():
-        """Get min/max dates and session numbers for selected dog"""
-        if not current_dog:
-            return None, None, None, None
-        
+    scrollbar = tk.Scrollbar(list_frame)
+    scrollbar.pack(side="right", fill="y")
+    
+    listbox = tk.Listbox(
+        list_frame, 
+        selectmode="extended",  # Allow Ctrl+Click and Shift+Click
+        yscrollcommand=scrollbar.set,
+        font=("Courier", 10)
+    )
+    listbox.pack(side="left", fill="both", expand=True)
+    scrollbar.config(command=listbox.yview)
+    
+    # Store session numbers for reference
+    session_numbers = []
+    
+    def get_sessions_for_dog(status_filter):
+        """Get sessions for current dog with given status filter"""
+        sessions = []
         try:
-            from sqlalchemy import text
+            # Build status filter clause
+            if status_filter == "active":
+                status_clause = " AND (status = 'active' OR status IS NULL)"
+            elif status_filter == "deleted":
+                status_clause = " AND status = 'deleted'"
+            else:  # "both"
+                status_clause = ""
             
             with get_connection_func() as conn:
-                # Get min/max dates
-                date_result = conn.execute(
-                    text("""
-                        SELECT MIN(date), MAX(date)
-                        FROM training_sessions
-                        WHERE dog_name = :dog_name
-                    """),
-                    {"dog_name": current_dog}
-                )
-                date_row = date_result.fetchone()
-                min_date = date_row[0] if date_row else None
-                max_date = date_row[1] if date_row else None
-                
-                # Get min/max session numbers
-                session_result = conn.execute(
-                    text("""
-                        SELECT MIN(session_number), MAX(session_number)
-                        FROM training_sessions
-                        WHERE dog_name = :dog_name
-                    """),
-                    {"dog_name": current_dog}
-                )
-                session_row = session_result.fetchone()
-                min_session = session_row[0] if session_row else None
-                max_session = session_row[1] if session_row else None
-                
-                return min_date, max_date, min_session, max_session
+                query = text(f"""
+                    SELECT session_number, date, handler, dog_name, status
+                    FROM training_sessions
+                    WHERE dog_name = :dog_name{status_clause}
+                    ORDER BY session_number ASC
+                """)
+                result = conn.execute(query, {"dog_name": current_dog})
+                for row in result:
+                    sessions.append(row)
         except Exception as e:
-            print(f"Error getting dog ranges: {e}")
-            return None, None, None, None
+            print(f"Error fetching sessions: {e}")
+        return sessions
     
-    # Labels
-    tk.Label(input_frame, text="Start:").grid(row=0, column=0, sticky="e", padx=5)
-    tk.Label(input_frame, text="End:").grid(row=1, column=0, sticky="e", padx=5)
+    def populate_listbox():
+        """Populate listbox with sessions based on current filter"""
+        listbox.delete(0, "end")
+        session_numbers.clear()
+        
+        sessions = get_sessions_for_dog(export_status_var.get())
+        
+        for session in sessions:
+            session_num, date, handler, dog, status = session
+            handler = handler or ""
+            status_marker = " [HIDDEN]" if status == 'deleted' else ""
+            text = f"Session #{session_num:3d}  |  {date}  |  {handler:20s}{status_marker}"
+            listbox.insert("end", text)
+            session_numbers.append(session_num)
+        
+        # Select all by default
+        if session_numbers:
+            listbox.select_set(0, "end")
     
-    # Date Entry widgets (for date range)
-    start_date = DateEntry(input_frame, width=14, date_pattern='yyyy-mm-dd')
-    start_date.grid(row=0, column=1, padx=5, pady=2)
+    def on_filter_changed():
+        """Handle filter radiobutton change"""
+        populate_listbox()
     
-    end_date = DateEntry(input_frame, width=14, date_pattern='yyyy-mm-dd')
-    end_date.grid(row=1, column=1, padx=5, pady=2)
+    # Add radiobuttons after defining the callback
+    tk.Radiobutton(filter_frame, text="Active", variable=export_status_var,
+                  value="active", command=on_filter_changed).pack(side=tk.LEFT, padx=5)
+    tk.Radiobutton(filter_frame, text="Hidden", variable=export_status_var,
+                  value="deleted", command=on_filter_changed).pack(side=tk.LEFT, padx=5)
+    tk.Radiobutton(filter_frame, text="Both", variable=export_status_var,
+                  value="both", command=on_filter_changed).pack(side=tk.LEFT, padx=5)
     
-    # Text Entry widgets (for session number range)
-    start_var = tk.StringVar()
-    start_entry = tk.Entry(input_frame, textvariable=start_var, width=15)
-    
-    end_var = tk.StringVar()
-    end_entry = tk.Entry(input_frame, textvariable=end_var, width=15)
-    
-    # Helper labels for format
-    format_label = tk.Label(input_frame, text="(Click to select)", font=("Helvetica", 8), fg="gray")
-    format_label.grid(row=0, column=2, sticky="w")
-    
-    def update_input_widgets(*args):
-        """Show appropriate input widgets based on range type and auto-fill with data"""
-        if range_type_var.get() == "Date":
-            # Show date pickers
-            start_date.grid(row=0, column=1, padx=5, pady=2)
-            end_date.grid(row=1, column=1, padx=5, pady=2)
-            # Hide text entries
-            start_entry.grid_remove()
-            end_entry.grid_remove()
-            format_label.config(text="(Click to select)")
-            
-            # Auto-fill with min/max dates
-            min_date, max_date, _, _ = get_dog_ranges()
-            if min_date and max_date:
-                # Convert to date objects if needed
-                if isinstance(min_date, str):
-                    min_date = datetime.strptime(min_date, "%Y-%m-%d").date()
-                if isinstance(max_date, str):
-                    max_date = datetime.strptime(max_date, "%Y-%m-%d").date()
-                start_date.set_date(min_date)
-                end_date.set_date(max_date)
-        else:
-            # Show text entries
-            start_entry.grid(row=0, column=1, padx=5, pady=2)
-            end_entry.grid(row=1, column=1, padx=5, pady=2)
-            # Hide date pickers
-            start_date.grid_remove()
-            end_date.grid_remove()
-            format_label.config(text="(Session #)")
-            
-            # Auto-fill with min/max session numbers
-            _, _, min_session, max_session = get_dog_ranges()
-            if min_session is not None and max_session is not None:
-                start_var.set(str(min_session))
-                end_var.set(str(max_session))
-    
-    range_type_var.trace("w", update_input_widgets)
-    
-    # Initial fill
-    update_input_widgets()
-    
-    # Function to get the appropriate start/end values
-    def get_range_values():
-        if range_type_var.get() == "Date":
-            return start_date.get_date().strftime("%Y-%m-%d"), end_date.get_date().strftime("%Y-%m-%d")
-        else:
-            return start_var.get(), end_var.get()
-    
-    # Status filter
-    tk.Label(frame, text="Session Status:", font=("Helvetica", 10, "bold")).grid(row=4, column=0, sticky="w", pady=(15, 5))
-    status_frame = tk.Frame(frame)
-    status_frame.grid(row=4, column=1, sticky="w", pady=(15, 5))
-    
-    status_var = tk.StringVar(value="active")
-    tk.Radiobutton(status_frame, text="Active", variable=status_var, value="active").pack(side=tk.LEFT, padx=5)
-    tk.Radiobutton(status_frame, text="Hidden", variable=status_var, value="deleted").pack(side=tk.LEFT, padx=5)
-    tk.Radiobutton(status_frame, text="Both", variable=status_var, value="both").pack(side=tk.LEFT, padx=5)
-    
-    # Sort order
-    tk.Label(frame, text="Sort Order:", font=("Helvetica", 10, "bold")).grid(row=5, column=0, sticky="w", pady=(15, 5))
-    sort_var = tk.StringVar(value="Ascending")
-    sort_combo = ttk.Combobox(frame, textvariable=sort_var, width=25, state="readonly", values=["Ascending", "Descending"])
-    sort_combo.grid(row=5, column=1, sticky="w", pady=(15, 5))
+    # Initial population
+    populate_listbox()
     
     # Buttons
-    button_frame = tk.Frame(frame)
-    button_frame.grid(row=6, column=0, columnspan=2, pady=(20, 0))
+    button_frame = tk.Frame(dialog)
+    button_frame.pack(pady=10)
     
     def do_export():
-        # Capture status_var from outer scope for export function
-        status_var_external = status_var
-        
-        # Validate dog selection
-        if not current_dog:
-            messagebox.showwarning("No Dog Selected", "Please select a dog first")
+        selected_indices = listbox.curselection()
+        if not selected_indices:
+            messagebox.showwarning("No Selection", "Please select at least one session to export")
             return
         
-        # Get range values
-        start_value, end_value = get_range_values()
-        
-        # Validate range inputs
-        if not start_value or not end_value:
-            messagebox.showwarning("Invalid Range", "Please enter both start and end values")
-            return
-        
-        # Validate that start is not greater than end
-        try:
-            if range_type_var.get() == "Date":
-                # Compare dates
-                start_date_obj = datetime.strptime(start_value, "%Y-%m-%d").date()
-                end_date_obj = datetime.strptime(end_value, "%Y-%m-%d").date()
-                
-                if start_date_obj > end_date_obj:
-                    messagebox.showerror("Invalid Date Range", 
-                                       f"Start date ({start_value}) is after end date ({end_value}).\n\n"
-                                       "Please correct the date range.")
-                    return
-            else:  # Session
-                # Compare session numbers
-                start_session = int(start_value)
-                end_session = int(end_value)
-                
-                if start_session > end_session:
-                    messagebox.showerror("Invalid Session Range",
-                                       f"Start session ({start_session}) is greater than end session ({end_session}).\n\n"
-                                       "Please correct the session range.")
-                    return
-        except (ValueError, TypeError) as e:
-            messagebox.showerror("Invalid Range", f"Error validating range: {str(e)}")
-            return
+        # Get selected session numbers
+        selected_sessions = [session_numbers[i] for i in selected_indices]
         
         # Get file save location
         default_filename = f"AirScenting_Log_{current_dog}_{datetime.now().strftime('%Y%m%d')}.pdf"
@@ -267,22 +198,154 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
         # Close dialog
         dialog.destroy()
         
-        # Perform export
-        export_to_pdf(
+        # Perform export with selected sessions
+        export_sessions_to_pdf(
             filepath=filepath,
             dog_name=current_dog,
-            range_type=range_type_var.get(),
-            start_value=start_value,
-            end_value=end_value,
-            sort_order=sort_var.get(),
+            session_numbers=selected_sessions,
             get_connection_func=get_connection_func,
             trail_maps_folder=trail_maps_folder,
-            status_filter=status_var.get(),
-            status_msg_var=status_var_external
+            status_msg_var=status_var
         )
     
-    tk.Button(button_frame, text="Export to PDF", command=do_export, bg="#4CAF50", fg="white", width=15).pack(side=tk.LEFT, padx=5)
+    tk.Button(button_frame, text="Export", command=do_export, bg="#4CAF50", fg="white", width=15).pack(side=tk.LEFT, padx=5)
     tk.Button(button_frame, text="Cancel", command=dialog.destroy, width=10).pack(side=tk.LEFT, padx=5)
+
+
+def export_sessions_to_pdf(filepath, dog_name, session_numbers, get_connection_func, trail_maps_folder, status_msg_var=None):
+    """Export selected sessions to PDF
+    
+    Args:
+        filepath: Path to save the PDF file
+        dog_name: Name of the dog
+        session_numbers: List of session numbers to export
+        get_connection_func: Function to get database connection
+        trail_maps_folder: Path to trail maps folder
+        status_msg_var: Optional StringVar for status messages
+    """
+    try:
+        # Fetch sessions from database
+        sessions = fetch_sessions_by_numbers(
+            dog_name, session_numbers, get_connection_func
+        )
+        
+        if not sessions:
+            messagebox.showinfo("No Sessions", "No sessions found matching the specified criteria")
+            return
+        
+        # Generate PDF
+        generate_pdf(filepath, dog_name, sessions, trail_maps_folder)
+        
+        # Send success message to status bar instead of popup
+        if status_msg_var:
+            status_msg_var.set(f"Exported {len(sessions)} session(s) to: {filepath}")
+        else:
+            print(f"Exported {len(sessions)} session(s) to: {filepath}")
+        
+        # Ask to open the PDF
+        if messagebox.askyesno("Open File?", "Would you like to open the exported PDF?"):
+            import subprocess
+            import platform
+            if platform.system() == 'Windows':
+                os.startfile(filepath)
+            elif platform.system() == 'Darwin':
+                subprocess.run(['open', filepath])
+            else:
+                subprocess.run(['xdg-open', filepath])
+        
+    except Exception as e:
+        messagebox.showerror("Export Error", f"Failed to export PDF:\n{str(e)}")
+        import traceback
+        traceback.print_exc()
+
+
+def fetch_sessions_by_numbers(dog_name, session_numbers, get_connection_func):
+    """Fetch sessions from database by specific session numbers
+    
+    Args:
+        dog_name: Name of the dog
+        session_numbers: List of session numbers to fetch
+        get_connection_func: Function to get database connection
+        
+    Returns:
+        List of session dictionaries
+    """
+    from sqlalchemy import text
+    
+    sessions = []
+    
+    # Sort session numbers for consistent output
+    sorted_numbers = sorted(session_numbers)
+    
+    with get_connection_func() as conn:
+        for session_num in sorted_numbers:
+            query = text("""
+                SELECT id, date, session_number, handler, session_purpose, field_support,
+                       location, search_area_size, num_subjects, handler_knowledge,
+                       weather, temperature, wind_direction, wind_speed, search_type,
+                       drive_level, subjects_found, comments, image_files
+                FROM training_sessions
+                WHERE dog_name = :dog_name AND session_number = :session_num
+            """)
+            
+            result = conn.execute(query, {
+                "dog_name": dog_name,
+                "session_num": session_num
+            })
+            
+            row = result.fetchone()
+            if row:
+                session_id = row[0]
+                
+                # Get selected terrains for this session
+                terrain_result = conn.execute(
+                    text("SELECT terrain_name FROM selected_terrains WHERE session_id = :session_id ORDER BY terrain_name"),
+                    {"session_id": session_id}
+                )
+                terrains = [t[0] for t in terrain_result.fetchall()]
+                
+                # Get subject responses for this session
+                subject_result = conn.execute(
+                    text("SELECT subject_number, tfr, refind FROM subject_responses WHERE session_id = :session_id ORDER BY subject_number"),
+                    {"session_id": session_id}
+                )
+                subject_responses = [(s[0], s[1], s[2]) for s in subject_result.fetchall()]
+                
+                # Parse image files JSON
+                image_files = []
+                if row[18]:  # image_files column
+                    try:
+                        image_files = json.loads(row[18])
+                    except:
+                        pass
+                
+                session_data = {
+                    'id': session_id,
+                    'date': row[1],
+                    'session_number': row[2],
+                    'handler': row[3],
+                    'session_purpose': row[4],
+                    'field_support': row[5],
+                    'location': row[6],
+                    'search_area_size': row[7],
+                    'num_subjects': row[8],
+                    'handler_knowledge': row[9],
+                    'weather': row[10],
+                    'temperature': row[11],
+                    'wind_direction': row[12],
+                    'wind_speed': row[13],
+                    'search_type': row[14],
+                    'drive_level': row[15],
+                    'subjects_found': row[16],
+                    'comments': row[17],
+                    'image_files': image_files,
+                    'terrains': terrains,
+                    'subject_responses': subject_responses
+                }
+                
+                sessions.append(session_data)
+    
+    return sessions
 
 
 def export_to_pdf(filepath, dog_name, range_type, start_value, end_value, sort_order, get_connection_func, trail_maps_folder, status_filter="active", status_msg_var=None):

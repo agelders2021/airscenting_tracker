@@ -128,7 +128,7 @@ class AirScentingUI:
         # Show splash screen IMMEDIATELY (before building UI)
         # This ensures user sees progress while UI is being constructed
         # Splash will auto-close after 15 seconds or user can close it manually
-        self.splash = SplashScreen(self.root, version="1.0.4-alpha")
+        self.splash = SplashScreen(self.root, version="1.0.5-alpha")
         
         # Set window properties and center horizontally
         self.root.title(APP_TITLE)
@@ -517,7 +517,7 @@ class AirScentingUI:
     
     def show_about_dialog(self):
         """Show the About dialog"""
-        show_about(self.root, version="1.0.4-alpha")
+        show_about(self.root, version="1.0.5-alpha")
     
     def get_json_config_path(self):
         """Get the path to config file in JSON folder (primary location)"""

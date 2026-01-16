@@ -942,6 +942,153 @@ class DatabaseManager:
             print(f"Error getting sessions for export: {e}")
             traceback.print_exc()
             return []
+    
+    def get_trailing_sessions_by_numbers(self, dog_name, session_numbers):
+        """
+        Get trailing sessions by specific session numbers for PDF export.
+        
+        Args:
+            dog_name: Name of dog
+            session_numbers: List of session numbers to fetch
+            
+        Returns:
+            list of session dictionaries
+        """
+        if not self._db_exists() or not dog_name or not session_numbers:
+            return []
+        
+        try:
+            old_db_type = self._switch_db_context()
+            
+            sessions = []
+            # Sort session numbers for consistent output
+            sorted_numbers = sorted(session_numbers)
+            
+            with get_connection() as conn:
+                for session_num in sorted_numbers:
+                    query = text("""
+                        SELECT id, t_session_number, t_dog_name, t_date, t_handler, t_field_support,
+                               t_location, t_start_time, t_finish_time, t_trail_age, t_trail_length,
+                               t_difficulty, t_trail_layer, t_cross_track_layer, t_cross_track_age,
+                               t_weather_laying, t_temperature_laying, t_wind_speed_laying, t_wind_direction_laying, t_humidity_laying,
+                               t_weather_running, t_temperature_running, t_wind_speed_running, t_wind_direction_running, t_humidity_running,
+                               t_start_behavior, t_consistency, t_head_position, t_pace, t_indication,
+                               t_time_to_complete, t_success_rate, t_impression, t_map_files,
+                               uuid, update_time, status
+                        FROM t_training_sessions
+                        WHERE t_dog_name = :dog_name AND t_session_number = :session_num
+                    """)
+                    result = conn.execute(query, {
+                        "dog_name": dog_name,
+                        "session_num": session_num
+                    })
+                    
+                    row = result.fetchone()
+                    if row:
+                        session_id = row[0]
+                        
+                        # Fetch session purposes
+                        try:
+                            purpose_result = conn.execute(
+                                text("SELECT purpose_name FROM t_selected_purposes WHERE t_session_id = :session_id ORDER BY purpose_name"),
+                                {"session_id": session_id}
+                            )
+                            purposes = [p[0] for p in purpose_result.fetchall()]
+                        except Exception:
+                            purposes = []
+                        
+                        # Fetch terrains
+                        try:
+                            terrain_result = conn.execute(
+                                text("SELECT terrain_name FROM t_selected_terrains WHERE t_session_id = :session_id ORDER BY terrain_name"),
+                                {"session_id": session_id}
+                            )
+                            terrains = [t[0] for t in terrain_result.fetchall()]
+                        except Exception:
+                            terrains = []
+                        
+                        # Fetch distractions
+                        try:
+                            distraction_result = conn.execute(
+                                text("SELECT distraction_data FROM t_distractions WHERE t_session_id = :session_id"),
+                                {"session_id": session_id}
+                            )
+                            distraction_rows = distraction_result.fetchall()
+                            distractions = []
+                            for d_row in distraction_rows:
+                                if d_row[0]:
+                                    try:
+                                        d_data = json.loads(d_row[0])
+                                        if isinstance(d_data, list):
+                                            distractions.extend(d_data)
+                                        else:
+                                            distractions.append(d_data)
+                                    except (json.JSONDecodeError, ValueError):
+                                        try:
+                                            import ast
+                                            d_data = ast.literal_eval(d_row[0])
+                                            if isinstance(d_data, list):
+                                                distractions.extend(d_data)
+                                            else:
+                                                distractions.append(d_data)
+                                        except (ValueError, SyntaxError):
+                                            distractions.append(d_row[0])
+                        except Exception:
+                            distractions = []
+                        
+                        session = {
+                            'id': session_id,
+                            't_session_number': row[1],
+                            't_dog_name': row[2],
+                            't_date': row[3],
+                            't_handler': row[4],
+                            't_field_support': row[5],
+                            't_location': row[6],
+                            't_start_time': row[7],
+                            't_finish_time': row[8],
+                            't_trail_age': row[9],
+                            't_trail_length': row[10],
+                            't_difficulty': row[11],
+                            't_trail_layer': row[12],
+                            't_cross_track_layer': row[13],
+                            't_cross_track_age': row[14],
+                            't_weather_laying': row[15],
+                            't_temp_laying': row[16],
+                            't_wind_laying': row[17],
+                            't_wind_direction_laying': row[18],
+                            't_humidity_laying': row[19],
+                            't_weather_running': row[20],
+                            't_temp_running': row[21],
+                            't_wind_running': row[22],
+                            't_wind_direction_running': row[23],
+                            't_humidity_running': row[24],
+                            't_start_behavior': row[25],
+                            't_consistency': row[26],
+                            't_head_pos': row[27],
+                            't_pace': row[28],
+                            't_indication': row[29],
+                            't_time': row[30],
+                            't_success': row[31],
+                            't_impression': row[32],
+                            't_map_files': row[33],
+                            'uuid': row[34],
+                            'update_time': row[35],
+                            'status': row[36],
+                            'purposes': purposes,
+                            'terrains': terrains,
+                            'distractions': distractions
+                        }
+                        sessions.append(session)
+            
+            self._restore_db_context(old_db_type)
+            return sessions
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error getting sessions by numbers: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
 
 
 # Singleton database manager
@@ -1027,3 +1174,7 @@ class DatabaseOperations:
         return self.db_manager.get_trailing_sessions_for_export(
             dog_name, range_type, start_value, end_value, sort_order, status_filter
         )
+    
+    def get_trailing_sessions_by_numbers(self, dog_name, session_numbers):
+        """Get specific sessions by session numbers for PDF export"""
+        return self.db_manager.get_trailing_sessions_by_numbers(dog_name, session_numbers)
