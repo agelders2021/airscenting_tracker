@@ -27,7 +27,7 @@ import json
 import os
 from sqlalchemy import text
 from datetime import datetime
-import t_config as config
+import config  # Use shared config module (not t_config) so database path updates are visible
 from database import engine, get_connection
 from ui_utils import get_username, get_default_terrain_types, get_default_distraction_types
 from backup_management import generate_session_uuid, get_current_update_time
