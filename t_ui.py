@@ -100,7 +100,7 @@ class TrailingUI:
         self.root.withdraw()
         
         # Show splash screen
-        self.splash = SplashScreen(self.root, version="1.0.5-alpha", 
+        self.splash = SplashScreen(self.root, version="1.0.7-alpha", 
                                    app_title=T_APP_TITLE, github_url=T_GITHUB_URL)
         
         # Set window properties
@@ -393,7 +393,7 @@ class TrailingUI:
     
     def show_about_dialog(self):
         """Show the About dialog"""
-        show_about(self.root, version="1.0.5-alpha", 
+        show_about(self.root, version="1.0.7-alpha", 
                    app_title=T_APP_TITLE, github_url="https://" + T_GITHUB_URL)
     
     def get_json_config_path(self):
