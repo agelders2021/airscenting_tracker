@@ -254,6 +254,7 @@ class TrailingEntryTab:
                                             'Obedience', 'Mock Cert Test', 'Mission'])
         self.purpose_combo.grid(row=1, column=3, sticky="w", padx=5, pady=2)
         self.purpose_combo.bind('<<ComboboxSelected>>', self._add_to_purpose_accumulator)
+        ToolTip(self.purpose_combo,"Select purpose to be added to 'Session Purposes' list to right \u25B6\n(Selections are not shown in this entry box)",delay=250)
         
         # Session Purposes listbox (accumulator)
         purpose_list_frame = tk.Frame(session_frame)
@@ -319,9 +320,10 @@ class TrailingEntryTab:
                                          state="readonly", values=terrain_types)
         self.terrain_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         self.terrain_combo.bind('<<ComboboxSelected>>', self._add_to_terrain_accumulator)
+        ToolTip(self.terrain_combo,"Select terrain type to be added to 'Terrain Types' to right \u25B6\n(Selections are not shown in this entry box)",delay=250)
         
         # Terrain listbox
-        tk.Label(trail_frame, text="Terrain types:").grid(row=0,column=4,sticky="e",padx=5,pady=2)
+        tk.Label(trail_frame, text="Terrain Types:").grid(row=0,column=4,sticky="e",padx=5,pady=2)
         self.terrain_listbox = tk.Listbox(trail_frame, height=3, width=entry_terrain_width)
         self.terrain_listbox.grid(row=0, column=5, sticky="wn", rowspan=3, padx=(5, 0), pady=2)
         self.terrain_listbox.bind('<Double-Button-1>', self._remove_terrain_from_list)
@@ -457,28 +459,30 @@ class TrailingEntryTab:
         distraction_frame.grid(row=4, column=0, columnspan=2, sticky="ew", pady=5)
         
         # Input row
-        tk.Label(distraction_frame, text="Distraction:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        tk.Label(distraction_frame, text="Distraction:").grid(row=0, column=0, sticky="nw", padx=5, pady=2)
         distraction_types = self._get_config_list('get_distraction_types', self._get_default_distraction_types())
         self.distraction_combo = ttk.Combobox(distraction_frame, textvariable=sv.t_distractions, width=20,
                                              values=distraction_types)
-        self.distraction_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
+        self.distraction_combo.grid(row=0, column=1, sticky="nw", padx=5, pady=2)
+        ToolTip(self.distraction_combo,"Select Distraction via dropdown list or type custom distraction\nThen select 'Response' to the right \u25B6",delay=250) 
         
-        tk.Label(distraction_frame, text="Response:").grid(row=0, column=1, sticky="e", padx=5, pady=2)
+        tk.Label(distraction_frame, text="Response:").grid(row=0, column=2, sticky="ne", padx=5, pady=2)
         self.response_combo = ttk.Combobox(distraction_frame, textvariable=sv.t_distraction_response, width=20,
                     values=["Ignored", "Brief Check", "Prolonged Interest", "Lost Trail", "Recovered Quickly", "Scared", "Panicked", "Ate"],
                     state="disabled")
-        self.response_combo.grid(row=0, column=2, sticky="w", padx=5, pady=2)
+        self.response_combo.grid(row=0, column=3, sticky="nw", padx=5, pady=2)
         self.response_combo.bind('<<ComboboxSelected>>', self._on_response_selected)
         self.response_combo.bind('<Return>', self._on_response_selected)
+        ToolTip(self.response_combo,"Select response using dropdown list or type custom response followed by 'Enter' key",delay=500)
         
         # Trace for enabling/disabling response combo
         sv.t_distractions.trace_add('write', self._on_distraction_change)
         
         # Table and buttons
-        tk.Label(distraction_frame, text="Accumulated\nDistractions:").grid(row=1, column=0, sticky="nw", padx=5, pady=(10,2))
+        tk.Label(distraction_frame, text="Accumulated\nDistractions:").grid(row=1, column=3,rowspan=3, sticky="ne", padx=5, pady=(2,2))
         
         table_container = tk.Frame(distraction_frame)
-        table_container.grid(row=1, column=1, columnspan=3, sticky="ew", padx=5, pady=(10,2))
+        table_container.grid(row=0, column=4, rowspan=3, sticky="new", padx=5, pady=(0,2))
         
         tree_frame = tk.Frame(table_container)
         tree_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
