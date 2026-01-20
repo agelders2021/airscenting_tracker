@@ -251,6 +251,10 @@ class Misc2Operations:
             # Save selected terrains
             db_mgr.save_selected_terrains(session_id, self.ui.accumulated_terrains)
 
+            # Save selected purposes
+            selected_purposes = self.ui.get_selected_purposes()
+            db_mgr.save_selected_purposes(session_id, selected_purposes)
+
             # Save subject responses
             subject_responses_list = []
             for i in range(1, 11):
@@ -285,6 +289,7 @@ class Misc2Operations:
             "subject_responses": subject_responses_list,
             "image_files": self.ui.map_files_list,
             "selected_terrains": self.ui.accumulated_terrains,
+            "selected_purposes": selected_purposes,
             "user_name": get_username(),
             "uuid": session_uuid,
             "update_time": update_time,

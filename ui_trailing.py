@@ -146,6 +146,9 @@ class TrailingEntryTab:
         
         # Build the UI
         self._create_widgets()
+        
+        # Note: form_snapshot is taken by the parent (t_ui.py) after initial data is loaded
+        # to prevent false "unsaved changes" detection on startup
     
     def _get_config_value(self, method_name, default=None):
         """Safely get a config value"""
@@ -254,15 +257,16 @@ class TrailingEntryTab:
                                             'Obedience', 'Mock Cert Test', 'Mission'])
         self.purpose_combo.grid(row=1, column=3, sticky="w", padx=5, pady=2)
         self.purpose_combo.bind('<<ComboboxSelected>>', self._add_to_purpose_accumulator)
-        ToolTip(self.purpose_combo,"Select purpose to be added to 'Session Purposes' list to right \u25B6\n(Selections are not shown in this entry box)",delay=250)
+        self.purpose_combo.bind('<Return>', self._add_to_purpose_accumulator)
+        ToolTip(self.purpose_combo,"Select purpose to be added to 'Session Purposes' list to right \u25B6\nOr type custom purpose and press 'Enter'\n(Selections are not shown in this entry box)",delay=250)
         
         # Session Purposes listbox (accumulator)
         purpose_list_frame = tk.Frame(session_frame)
-        purpose_list_frame.grid(row=1, column=4, rowspan=2, columnspan=2, sticky="w", padx=5, pady=2)
+        purpose_list_frame.grid(row=1, column=4, rowspan=2, columnspan=3, sticky="w", padx=5, pady=2)
         
         tk.Label(purpose_list_frame, text="Session Purposes:\n\n").pack(side=tk.LEFT, padx=(0, 5))
         
-        self.purpose_listbox = tk.Listbox(purpose_list_frame, height=3, width=20)
+        self.purpose_listbox = tk.Listbox(purpose_list_frame, height=3, width=25)
         self.purpose_listbox.pack(side=tk.LEFT)
         self.purpose_listbox.bind('<Double-Button-1>', self._remove_purpose_from_list)
         ToolTip(self.purpose_listbox, "Session Purposes\nDouble-click an entry to remove from list", delay=750)
@@ -286,11 +290,11 @@ class TrailingEntryTab:
         # Resume and Hide buttons (aligned with Previous/Next in columns 6-7)
         self.resume_btn = tk.Button(session_frame, text="Restore", bg="#28a745", fg="white",
                                    width=10, command=self._resume_session, state=tk.DISABLED)
-        self.resume_btn.grid(row=2, column=6, padx=2, pady=2)
+        self.resume_btn.grid(row=2, column=7, padx=2, pady=2)
         
         self.hide_btn = tk.Button(session_frame, text="Hide", bg="#dc3545", fg="white",
                                  width=10, command=self._hide_session, state=tk.DISABLED)
-        self.hide_btn.grid(row=2, column=7, padx=2, pady=2)
+        self.hide_btn.grid(row=2, column=8, padx=2, pady=2)
     
     def _create_trail_details_section(self, frame):
         """Create Trail Details section"""
@@ -386,7 +390,7 @@ class TrailingEntryTab:
                                      values=["North", "South", "East", "West", "NE", "NW", "SE", "SW"])
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
-        tk.Label(weather_frame, text="Temperature (°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        tk.Label(weather_frame, text="Temperature (Â°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         tk.Entry(weather_frame, textvariable=sv.t_temp_laying, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="e", padx=5, pady=2)
@@ -410,7 +414,7 @@ class TrailingEntryTab:
                                      values=["North", "South", "East", "West", "NE", "NW", "SE", "SW"])
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
-        tk.Label(weather_frame, text="Temperature (°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        tk.Label(weather_frame, text="Temperature (Â°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         tk.Entry(weather_frame, textvariable=sv.t_temp_running, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="e", padx=5, pady=2)
@@ -426,12 +430,12 @@ class TrailingEntryTab:
         
         tk.Label(behavior_frame, text="Start Behavior:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_start_behavior, width=54,
-                    values=["ExcellentÃ¢â‚¬â€Direction of Travel immediately identified ",
-                            "Very GoodÃ¢â‚¬â€Direction of travel not imediately identified",
-                            "GoodÃ¢â‚¬â€Direction of travel identified with cueing",
-                            "FairÃ¢â‚¬â€Direction of travel not identified",
-                            "PoorÃ¢â‚¬â€Direction of travel incorrectly identified",
-                            "Needs WorkÃ¢â‚¬â€Could not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
+                    values=["ExcellentÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂDirection of Travel immediately identified ",
+                            "Very GoodÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂDirection of travel not imediately identified",
+                            "GoodÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂDirection of travel identified with cueing",
+                            "FairÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂDirection of travel not identified",
+                            "PoorÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂDirection of travel incorrectly identified",
+                            "Needs WorkÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂCould not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(behavior_frame, text="Pace:").grid(row=0, column=2, sticky="e", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_pace, width=18,
@@ -448,9 +452,9 @@ class TrailingEntryTab:
         tk.Label(behavior_frame, text="Indication at Find:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_indication, width=54,
                     values=["Immediate Trained Final Response",
-                            "Strong AlertÃ¢â‚¬â€Exhibited Trained Final Response after hesitation",
-                            "Moderate AlertÃ¢â‚¬â€Alert behavior but no TFR",
-                            "Weak AlertÃ¢â‚¬â€Hesitant, before clear response, needed cueing", 
+                            "Strong AlertÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂExhibited Trained Final Response after hesitation",
+                            "Moderate AlertÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂAlert behavior but no TFR",
+                            "Weak AlertÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂHesitant, before clear response, needed cueing", 
                             "No Clear Indication"]).grid(row=1, column=1, sticky="w", padx=5, pady=2)
     
     def _create_distractions_section(self, frame):
@@ -760,6 +764,20 @@ class TrailingEntryTab:
     
     def _quit(self):
         """Handle quit button"""
+        # Check for unsaved changes before quitting
+        if self.has_unsaved_changes():
+            result = messagebox.askyesnocancel(
+                "Unsaved Changes",
+                "You have unsaved changes to the current session.\n\n"
+                "Do you want to save before exiting?",
+                icon='warning'
+            )
+            
+            if result is None:  # Cancel - don't quit
+                return
+            elif result:  # Yes - save first
+                self._save_session()
+        
         if 'on_quit' in self.callbacks:
             self.callbacks['on_quit']()
         else:

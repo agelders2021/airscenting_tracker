@@ -32,52 +32,6 @@ from pathlib import Path
 from datetime import datetime
 from getpass import getuser
 from t_config import APP_TITLE, CONFIG_FILE, BOOTSTRAP_FILE, T_APP_TITLE, T_GITHUB_URL
-
-# =============================================================================
-# CRITICAL: Configure database path BEFORE importing modules that use database.py
-# The database.py module creates its engine at import time, so we must update
-# the config BEFORE any imports that trigger database.py to load.
-# =============================================================================
-def _configure_database_path_from_bootstrap():
-    """Load bootstrap and configure database path before database module is imported.
-    
-    This must be called BEFORE importing t_ui_database or any module that imports database.py,
-    because database.py creates its engine at import time with the URL from config.
-    """
-    import config as original_config
-    
-    # Load bootstrap to get machine-specific paths
-    if BOOTSTRAP_FILE.exists():
-        try:
-            with open(BOOTSTRAP_FILE, 'r') as f:
-                bootstrap = json.load(f)
-                
-                # Check for new multi-user format
-                if "users" in bootstrap:
-                    current_user = bootstrap.get("current_user", "")
-                    if current_user and current_user in bootstrap.get("users", {}):
-                        user_settings = bootstrap["users"][current_user]
-                        machine_db_path = user_settings.get("db_file_path", "")
-                    else:
-                        machine_db_path = ""
-                else:
-                    # Legacy format
-                    machine_db_path = bootstrap.get("db_file_path", "")
-                
-                # Update config with the correct database path
-                if machine_db_path:
-                    db_file = Path(machine_db_path) / "air_scenting.db"
-                    original_config.DB_CONFIG["sqlite"]["url"] = f"sqlite:///{db_file}"
-                    return machine_db_path
-        except Exception as e:
-            print(f"Warning: Could not load bootstrap for database path: {e}")
-    
-    return ""
-
-# Configure database path BEFORE importing database-dependent modules
-_early_db_path = _configure_database_path_from_bootstrap()
-
-# Now it's safe to import modules that use database.py
 from splash_screen import SplashScreen
 from about_dialog import show_about
 from tips import ToolTip
@@ -100,20 +54,19 @@ class TrailingUI:
         self.bootstrap_file = BOOTSTRAP_FILE
         
         # Initialize machine-specific paths
-        # Use early-loaded path if available (from module-level initialization)
-        self.machine_db_path = _early_db_path
+        self.machine_db_path = ""
         self.machine_trail_maps_folder = ""
         self.machine_backup_folder = ""
         self.machine_current_user = ""
         self.machine_user_list = []
         
-        # Load full bootstrap (for trail_maps_folder, backup_folder, etc.)
+        # Load paths from bootstrap if exists
         self.load_bootstrap()
         
-        # If db_path changed in load_bootstrap, update the database config
-        # (This handles the case where bootstrap was modified after module load)
+        # CRITICAL: Update database path in the shared config module BEFORE any database operations
+        # database.py imports config (not t_config), so we must update the original config
         import config as original_config
-        if self.machine_db_path and self.machine_db_path != _early_db_path:
+        if self.machine_db_path:
             db_file = Path(self.machine_db_path) / "air_scenting.db"
             original_config.DB_CONFIG["sqlite"]["url"] = f"sqlite:///{db_file}"
             # Dispose old engine so new connection uses updated path
@@ -147,7 +100,7 @@ class TrailingUI:
         self.root.withdraw()
         
         # Show splash screen
-        self.splash = SplashScreen(self.root, version="1.0.6-alpha", 
+        self.splash = SplashScreen(self.root, version="1.0.5-alpha", 
                                    app_title=T_APP_TITLE, github_url=T_GITHUB_URL)
         
         # Set window properties
@@ -440,7 +393,7 @@ class TrailingUI:
     
     def show_about_dialog(self):
         """Show the About dialog"""
-        show_about(self.root, version="1.0.6-alpha", 
+        show_about(self.root, version="1.0.5-alpha", 
                    app_title=T_APP_TITLE, github_url="https://" + T_GITHUB_URL)
     
     def get_json_config_path(self):
@@ -2056,6 +2009,10 @@ class TrailingUI:
             if db_file.exists():
                 self.notebook.select(self.entry_tab)
                 print("Database found - starting on Entry tab")
+        
+        # Take form snapshot AFTER initial data is loaded to prevent false "unsaved changes"
+        if hasattr(self, 'trailing_entry'):
+            self.trailing_entry.take_form_snapshot()
     
     def _check_db_health(self) -> bool:
         """Check if database is accessible and has required tables."""
@@ -2325,6 +2282,21 @@ class TrailingUI:
     
     def on_closing(self):
         """Handle window close"""
+        # Check for unsaved session entry changes
+        if hasattr(self, 'trailing_entry') and self.trailing_entry.has_unsaved_changes():
+            result = messagebox.askyesnocancel(
+                "Unsaved Changes",
+                "You have unsaved changes to the current session.\n\n"
+                "Do you want to save before exiting?",
+                icon='warning'
+            )
+            
+            if result is None:  # Cancel - don't close
+                return
+            elif result:  # Yes - save first
+                session_data = self.trailing_entry.get_session_data()
+                self.on_session_save(session_data)
+        
         # Save last dog and handler
         current_dog = sv.t_dog.get()
         current_handler = sv.t_handler.get()

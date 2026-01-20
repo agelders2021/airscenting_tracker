@@ -237,6 +237,26 @@ class FormManagement:
                     else:
                         return True
                 
+                # Compare selected purposes
+                db_purposes = set(session_dict.get("selected_purposes", []))
+                current_purposes = set(self.ui.get_selected_purposes()) if hasattr(self.ui, 'get_selected_purposes') else set()
+                
+                if db_purposes != current_purposes:
+                    result = messagebox.askyesnocancel(
+                        "Unsaved Changes",
+                        f"You have unsaved purpose changes to Session #{session_num}.\n\n"
+                        "Do you want to save before proceeding?",
+                        icon='warning'
+                    )
+                    
+                    if result is None:
+                        return False
+                    elif result:
+                        self.ui.save_session()
+                        return True
+                    else:
+                        return True
+                
                 # Compare subject responses
                 db_responses = session_dict.get("subject_responses", [])
                 db_responses_dict = {r["subject_number"]: (r["tfr"], r["refind"]) for r in db_responses}
@@ -269,6 +289,7 @@ class FormManagement:
             else:
                 # Session doesn't exist in database - check if form has data entered
                 # (This handles the case of a NEW session with unsaved data)
+                current_purposes = self.ui.get_selected_purposes() if hasattr(self.ui, 'get_selected_purposes') else []
                 form_has_data = (
                     current_purpose or
                     current_field_support or
@@ -287,7 +308,8 @@ class FormManagement:
                     current_finish_time or
                     current_comments or
                     self.ui.accumulated_terrains or
-                    self.ui.map_files_list
+                    self.ui.map_files_list or
+                    current_purposes
                 )
                 
                 # Also check if any subject responses have been entered
@@ -370,6 +392,13 @@ class FormManagement:
             if hasattr(self.ui, 'a_accumulated_terrain_combo'):
                 self.ui.a_accumulated_terrain_combo['values'] = []
                 sv.accumulated_terrain.set("")
+            
+            # Clear purpose listbox
+            sv.a_purpose.set("")
+            sv.a_purpose_list.clear()
+            if hasattr(self.ui, 'a_purpose_listbox'):
+                self.ui.a_purpose_listbox.delete(0, tk.END)
+                self.ui._update_purpose_scrollbar()
             
             # Clear subject responses tree
             for i in range(1, 11):
@@ -484,6 +513,13 @@ class FormManagement:
         if hasattr(self.ui, 'a_accumulated_terrain_combo'):
             self.ui.a_accumulated_terrain_combo['values'] = []
             sv.accumulated_terrain.set("")
+        
+        # Clear purpose listbox
+        sv.a_purpose.set("")
+        sv.a_purpose_list.clear()
+        if hasattr(self.ui, 'a_purpose_listbox'):
+            self.ui.a_purpose_listbox.delete(0, tk.END)
+            self.ui._update_purpose_scrollbar()
         
         # Clear subject responses tree
         for i in range(1, 11):

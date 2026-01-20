@@ -488,6 +488,65 @@ class DatabaseManager:
             print(f"Error loading selected terrains: {e}")
             return []
     
+    # ===== AIRSCENTING SESSION PURPOSES =====
+    
+    def save_selected_purposes(self, session_id, purpose_list):
+        """Save selected purposes for an airscenting session"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                # Delete existing
+                conn.execute(
+                    text("DELETE FROM a_selected_purposes WHERE session_id = :session_id"),
+                    {"session_id": session_id}
+                )
+                
+                # Insert new
+                for purpose_name in purpose_list:
+                    if purpose_name and purpose_name.strip():
+                        conn.execute(
+                            text("""
+                                INSERT INTO a_selected_purposes (session_id, purpose_name, user_name)
+                                VALUES (:session_id, :purpose_name, :user_name)
+                            """),
+                            {
+                                "session_id": session_id,
+                                "purpose_name": purpose_name.strip(),
+                                "user_name": get_username()
+                            }
+                        )
+                
+                conn.commit()
+            
+            self._restore_db_context(old_db_type)
+            return True
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error saving selected purposes: {e}")
+            return False
+    
+    def load_selected_purposes(self, session_id):
+        """Load selected purposes for an airscenting session"""
+        try:
+            old_db_type = self._switch_db_context()
+            
+            with get_connection() as conn:
+                result = conn.execute(
+                    text("SELECT purpose_name FROM a_selected_purposes WHERE session_id = :session_id ORDER BY purpose_name"),
+                    {"session_id": session_id}
+                )
+                purposes = [row[0] for row in result]
+            
+            self._restore_db_context(old_db_type)
+            return purposes
+            
+        except Exception as e:
+            self._restore_db_context(old_db_type)
+            print(f"Error loading selected purposes: {e}")
+            return []
+    
     # ===== SUBJECT RESPONSES =====
     
     def save_subject_responses(self, session_id, responses_list):
@@ -1194,12 +1253,12 @@ class DatabaseOperations:
             session_dict["drive_level"],    # row[14]
             session_dict["subjects_found"], # row[15]
             session_dict["image_files"],    # row[16]
-            session_dict["comments"]        # row[17] Ã¢â€ Â ADDED!
+            session_dict["comments"]        # row[17] ÃƒÂ¢Ã¢â‚¬Â Ã‚Â ADDED!
         )
     
     def get_session_with_related_data(self, session_number, dog_name):
         """
-        Get complete session data including related data (terrains, responses).
+        Get complete session data including related data (terrains, responses, purposes).
         Returns a dict with all session info.
         """
         session_dict = self.db_manager.load_session(session_number, dog_name)
@@ -1215,11 +1274,16 @@ class DatabaseOperations:
             selected_terrains = self.db_manager.load_selected_terrains(session_id)
             session_dict["selected_terrains"] = selected_terrains
             
+            # Load selected purposes
+            selected_purposes = self.db_manager.load_selected_purposes(session_id)
+            session_dict["selected_purposes"] = selected_purposes
+            
             # Load subject responses
             subject_responses = self.db_manager.load_subject_responses(session_id)
             session_dict["subject_responses"] = subject_responses
         else:
             session_dict["selected_terrains"] = []
+            session_dict["selected_purposes"] = []
             session_dict["subject_responses"] = []
         
         return session_dict

@@ -41,6 +41,7 @@ def create_tables():
         distraction_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
         selected_terrain_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
         subject_response_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
+        a_selected_purpose_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
         # Trailing session tables
         t_session_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
         t_selected_terrain_id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
@@ -55,6 +56,7 @@ def create_tables():
         distraction_id_type = "SERIAL PRIMARY KEY"
         selected_terrain_id_type = "SERIAL PRIMARY KEY"
         subject_response_id_type = "SERIAL PRIMARY KEY"
+        a_selected_purpose_id_type = "SERIAL PRIMARY KEY"
         # Trailing session tables
         t_session_id_type = "SERIAL PRIMARY KEY"
         t_selected_terrain_id_type = "SERIAL PRIMARY KEY"
@@ -174,6 +176,18 @@ def create_tables():
     )
     """
     
+    # Airscenting selected purposes table (many-to-many: sessions to purposes)
+    a_selected_purposes_table = f"""
+    CREATE TABLE IF NOT EXISTS a_selected_purposes (
+        id {a_selected_purpose_id_type},
+        session_id INTEGER NOT NULL,
+        purpose_name TEXT NOT NULL,
+        user_name TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES training_sessions(id)
+    )
+    """
+    
     # =========================================================================
     # TRAILING SESSION TABLES
     # =========================================================================
@@ -282,6 +296,8 @@ def create_tables():
         conn.execute(text(selected_terrains_table))
         # Create subject_responses table
         conn.execute(text(subject_responses_table))
+        # Create a_selected_purposes table (airscenting purposes)
+        conn.execute(text(a_selected_purposes_table))
         
         # Create trailing session tables
         conn.execute(text(t_sessions_table))
@@ -303,6 +319,7 @@ def drop_tables():
         conn.execute(text("DROP TABLE IF EXISTS t_selected_terrains"))
         conn.execute(text("DROP TABLE IF EXISTS t_training_sessions"))
         # Drop airscenting tables
+        conn.execute(text("DROP TABLE IF EXISTS a_selected_purposes"))
         conn.execute(text("DROP TABLE IF EXISTS subject_responses"))
         conn.execute(text("DROP TABLE IF EXISTS selected_terrains"))
         conn.execute(text("DROP TABLE IF EXISTS training_sessions"))
@@ -447,6 +464,57 @@ def add_missing_columns_to_t_training_sessions():
             messages.append(f"Already existed: {', '.join(already_exists)}")
         
         return True, "; ".join(messages) if messages else "No changes needed"
+        
+    except Exception as e:
+        return False, f"Migration error: {e}"
+
+
+def migrate_add_a_selected_purposes_table():
+    """
+    Migration: Create a_selected_purposes table for airscenting session purposes.
+    
+    Safe to run multiple times - checks if table exists before creating.
+    Should be called at application startup to ensure schema is up to date.
+    
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    try:
+        # Auto-increment syntax differs between databases
+        if DB_TYPE == "sqlite":
+            id_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
+        else:  # postgres or supabase
+            id_type = "SERIAL PRIMARY KEY"
+        
+        with get_connection() as conn:
+            # Check if table exists
+            if DB_TYPE == "sqlite":
+                result = conn.execute(text(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='a_selected_purposes'"
+                ))
+            else:
+                result = conn.execute(text("""
+                    SELECT table_name FROM information_schema.tables 
+                    WHERE table_name = 'a_selected_purposes'
+                """))
+            
+            if result.fetchone():
+                return True, "a_selected_purposes table already exists"
+            
+            # Create the table
+            conn.execute(text(f"""
+                CREATE TABLE IF NOT EXISTS a_selected_purposes (
+                    id {id_type},
+                    session_id INTEGER NOT NULL,
+                    purpose_name TEXT NOT NULL,
+                    user_name TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (session_id) REFERENCES training_sessions(id)
+                )
+            """))
+            conn.commit()
+            
+            return True, "Created a_selected_purposes table"
         
     except Exception as e:
         return False, f"Migration error: {e}"

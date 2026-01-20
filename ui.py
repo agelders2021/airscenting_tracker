@@ -128,7 +128,7 @@ class AirScentingUI:
         # Show splash screen IMMEDIATELY (before building UI)
         # This ensures user sees progress while UI is being constructed
         # Splash will auto-close after 15 seconds or user can close it manually
-        self.splash = SplashScreen(self.root, version="1.0.6-alpha")
+        self.splash = SplashScreen(self.root, version="1.0.5-alpha")
         
         # Set window properties and center horizontally
         self.root.title(APP_TITLE)
@@ -385,6 +385,55 @@ class AirScentingUI:
         """Change Save Session button text (Save Session vs Update Session)"""
         if hasattr(self, 'a_save_session_btn'):
             self.a_save_session_btn.config(text=text)
+    
+    # ===== SESSION PURPOSE ACCUMULATOR METHODS =====
+    
+    def _add_to_purpose_accumulator(self, event):
+        """Add selected session purpose to the listbox"""
+        purpose = sv.a_purpose.get()
+        if purpose:
+            current_items = self.a_purpose_listbox.get(0, tk.END)
+            if purpose in current_items:
+                messagebox.showinfo("Duplicate", f"'{purpose}' is already in the list")
+                sv.a_purpose.set("")
+                return
+            
+            self.a_purpose_listbox.insert(tk.END, purpose)
+            sv.a_purpose.set("")
+            self._update_purpose_scrollbar()
+    
+    def _remove_purpose_from_list(self, event):
+        """Remove session purpose from listbox when double-clicked"""
+        selection = self.a_purpose_listbox.curselection()
+        if not selection:
+            return
+        
+        purpose = self.a_purpose_listbox.get(selection[0])
+        
+        if messagebox.askyesno("Remove Session Purpose", f"Remove '{purpose}' from the list?"):
+            self.a_purpose_listbox.delete(selection[0])
+            self._update_purpose_scrollbar()
+    
+    def _update_purpose_scrollbar(self):
+        """Show or hide purpose scrollbar based on number of items"""
+        item_count = self.a_purpose_listbox.size()
+        if item_count > 2:
+            self.a_purpose_scrollbar.pack(side=tk.LEFT, fill=tk.Y)
+        else:
+            self.a_purpose_scrollbar.pack_forget()
+    
+    def set_selected_purposes(self, purposes_list):
+        """Populate purpose listbox from a list of purpose names"""
+        self.a_purpose_listbox.delete(0, tk.END)
+        for purpose in purposes_list:
+            if purpose and purpose.strip():
+                self.a_purpose_listbox.insert(tk.END, purpose.strip())
+        self._update_purpose_scrollbar()
+    
+    def get_selected_purposes(self):
+        """Get list of purposes from the listbox"""
+        return list(self.a_purpose_listbox.get(0, tk.END))
+    
     def load_bootstrap(self):
         """Load machine-specific paths from bootstrap file.
         
@@ -517,7 +566,7 @@ class AirScentingUI:
     
     def show_about_dialog(self):
         """Show the About dialog"""
-        show_about(self.root, version="1.0.6-alpha")
+        show_about(self.root, version="1.0.5-alpha")
     
     def get_json_config_path(self):
         """Get the path to config file in JSON folder (primary location)"""
@@ -700,18 +749,18 @@ class AirScentingUI:
         self.selected_sessions_index = -1  # Current position in selected sessions
         # Row 2: Delete/Undelete buttons (for editing existing sessions)
         self.a_delete_undelete_frame = tk.Frame(session_frame)
-        self.a_delete_undelete_frame.grid(row=2, column=6, columnspan=4, sticky="w", padx=5, pady=5)
+        self.a_delete_undelete_frame.grid(row=2, column=7, columnspan=3, sticky="w", padx=5, pady=5)
         
         tk.Button(self.a_delete_undelete_frame, text="Restore", bg="#28a745", fg="white",
-                 command=self.navigation.undelete_current_session, width=12).pack(side="left", padx=5)
+                 command=self.navigation.undelete_current_session, width=10).pack(side="left", padx=5)
         tk.Button(self.a_delete_undelete_frame, text="Hide", bg="#dc3545", fg="white",
-                 command=self.navigation.delete_current_session, width=12).pack(side="left", padx=5)
+                 command=self.navigation.delete_current_session, width=10).pack(side="left", padx=5)
         
         # Initially disable the frame (enabled only when editing existing session)
         for child in self.a_delete_undelete_frame.winfo_children():
             child.config(state="disabled")
         
-        # Row 3: Handler, Session Purpose
+        # Row 1: Handler, Add Session Purpose + accumulator
         tk.Label(session_frame, text="Handler:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         # Get handler from nested airscenting config
         airscenting_config = self.config.get("airscenting", {})
@@ -719,14 +768,32 @@ class AirScentingUI:
         sv.handler.set(default_handler)
         tk.Entry(session_frame, textvariable=sv.handler, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
-        tk.Label(session_frame, text="Session Purpose:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
-        purpose_combo = ttk.Combobox(session_frame, textvariable=sv.session_purpose, width=22,
+        tk.Label(session_frame, text="Add Session Purpose:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
+        self.a_purpose_combo = ttk.Combobox(session_frame, textvariable=sv.a_purpose, width=22, state="enabled",
                                      values=['Area Search Training', 'Refind Training', 
                                             'Motivational Training', 
                                             'Obedience', 'Mock Certification Test', 'Mission'])
-        purpose_combo.grid(row=1, column=3, columnspan=3, sticky="w", padx=5, pady=2)
+        self.a_purpose_combo.grid(row=1, column=3, sticky="w", padx=5, pady=2)
+        self.a_purpose_combo.bind('<<ComboboxSelected>>', self._add_to_purpose_accumulator)
+        self.a_purpose_combo.bind('<Return>', self._add_to_purpose_accumulator)
+        ToolTip(self.a_purpose_combo, "Select purpose to be added to 'Session Purposes' list to right \u25B6\nOr type custom purpose and press Enter\n(Selections are not shown in this entry box)", delay=250)
         
-        # Row 3: Field Support, Dog
+        # Session Purposes listbox (accumulator)
+        purpose_list_frame = tk.Frame(session_frame)
+        purpose_list_frame.grid(row=1, column=4, rowspan=2, columnspan=3, sticky="w", padx=5, pady=2)
+        
+        tk.Label(purpose_list_frame, text="Session Purposes:\n\n").pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.a_purpose_listbox = tk.Listbox(purpose_list_frame, height=3, width=25)
+        self.a_purpose_listbox.pack(side=tk.LEFT)
+        self.a_purpose_listbox.bind('<Double-Button-1>', self._remove_purpose_from_list)
+        ToolTip(self.a_purpose_listbox, "Session Purposes\nDouble-click an entry to remove from list", delay=750)
+        
+        # Scrollbar for purpose listbox (initially hidden)
+        self.a_purpose_scrollbar = tk.Scrollbar(purpose_list_frame, orient="vertical", command=self.a_purpose_listbox.yview)
+        self.a_purpose_listbox.config(yscrollcommand=self.a_purpose_scrollbar.set)
+        
+        # Row 2: Field Support, Dog, Resume/Hide buttons (aligned with Previous/Next)
         tk.Label(session_frame, text="Field Support:").grid(row=2, column=0, sticky="e", padx=5, pady=2)
         tk.Entry(session_frame, textvariable=sv.field_support, width=15).grid(row=2, column=1, sticky="w", padx=5, pady=2)
         
@@ -804,7 +871,6 @@ class AirScentingUI:
         self.a_accumulated_terrain_combo.bind('<<ComboboxSelected>>', self.remove_terrain_from_list)
         
         # Add tooltip to accumulated terrain combobox
-        from tips import ToolTip
         ToolTip(self.a_accumulated_terrain_combo, "Terrain List Accumulator\nClick an entry to remove from list", delay=750)
         
         # Track accumulated terrains as a list
@@ -993,7 +1059,7 @@ class AirScentingUI:
         tk.Button(button_frame, text="Clear Form", command=self.form_mgmt.clear_form,
                  width=15).pack(side="left", padx=10)
         
-        tk.Button(button_frame, text="Quit", command=self.root.quit,
+        tk.Button(button_frame, text="Quit", command=self.on_closing,
                  width=10).pack(side="left", padx=10)
         
         # Initialize navigation button states
@@ -1477,6 +1543,11 @@ class AirScentingUI:
 
     def on_closing(self):
         """Handle window close event"""
+        # First check for unsaved session entry changes
+        if not self.form_mgmt.check_entry_tab_changes():
+            return  # User cancelled
+        
+        # Then check for unsaved setup/config changes
         if self.form_mgmt.check_unsaved_changes("exit"):
             # Save last handler to config before closing
             current_handler = sv.handler.get()
@@ -1643,14 +1714,14 @@ class AirScentingUI:
         # Build error messages (hard requirements)
         errors = []
         if not database_exists:
-            errors.append("â€¢ Database not created")
+            errors.append("Ã¢â‚¬Â¢ Database not created")
         
         # Trail maps folder is still required for images
         if not trail_maps_folder or not os.path.exists(trail_maps_folder):
             if not trail_maps_folder:
-                errors.append("â€¢ Trail Maps Storage folder not selected")
+                errors.append("Ã¢â‚¬Â¢ Trail Maps Storage folder not selected")
             else:
-                errors.append(f"â€¢ Trail Maps Storage folder does not exist: {trail_maps_folder}")
+                errors.append(f"Ã¢â‚¬Â¢ Trail Maps Storage folder does not exist: {trail_maps_folder}")
         
         # Check if at least one dog is defined
         if database_exists:
@@ -1676,7 +1747,7 @@ class AirScentingUI:
                 reload(database)
                 
                 if dog_count == 0:
-                    errors.append("â€¢ At least one dog must be defined")
+                    errors.append("Ã¢â‚¬Â¢ At least one dog must be defined")
             except Exception as e:
                 print(f"Error checking dogs: {e}")
                 # Don't block if there's an error checking
@@ -1685,9 +1756,9 @@ class AirScentingUI:
         warnings = []
         if not backup_folder or not os.path.exists(backup_folder):
             if not backup_folder:
-                warnings.append("â€¢ Backup folder not selected")
+                warnings.append("Ã¢â‚¬Â¢ Backup folder not selected")
             else:
-                warnings.append(f"â€¢ Backup folder does not exist: {backup_folder}")
+                warnings.append(f"Ã¢â‚¬Â¢ Backup folder does not exist: {backup_folder}")
         
         # If there are hard errors (database, dogs), show message and prevent switching
         if errors:

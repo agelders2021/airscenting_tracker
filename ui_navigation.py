@@ -356,6 +356,11 @@ class Navigation:
                     sv.accumulated_terrain.set(self.ui.accumulated_terrains[0])
                     self.ui.a_accumulated_terrain_combo['state'] = 'readonly'
             
+            # Load selected purposes
+            selected_purposes = session_dict.get("selected_purposes", [])
+            if hasattr(self.ui, 'set_selected_purposes'):
+                self.ui.set_selected_purposes(selected_purposes)
+            
             # Load subject responses into treeview
             subject_responses = session_dict.get("subject_responses", [])
             
@@ -484,6 +489,13 @@ class Navigation:
                 self.ui.a_accumulated_terrain_combo['values'] = []
                 sv.accumulated_terrain.set("")
             
+            # Clear selected purposes
+            sv.a_purpose.set("")
+            sv.a_purpose_list.clear()
+            if hasattr(self.ui, 'a_purpose_listbox'):
+                self.ui.a_purpose_listbox.delete(0, tk.END)
+                self.ui._update_purpose_scrollbar()
+            
             # Clear subject responses
             for i in range(1, 11):
                 item_id = f'subject_{i}'
@@ -545,9 +557,9 @@ class Navigation:
         instructions = tk.Label(
             dialog, 
             text="Select sessions to navigate:\n"
-                 "â€¢ Click to select one session\n"
-                 "â€¢ Ctrl+Click to select multiple sessions\n"
-                 "â€¢ Shift+Click to select a range\n"
+                 "Ã¢â‚¬Â¢ Click to select one session\n"
+                 "Ã¢â‚¬Â¢ Ctrl+Click to select multiple sessions\n"
+                 "Ã¢â‚¬Â¢ Shift+Click to select a range\n"
                  "Use Previous/Next buttons to navigate through selected sessions",
             justify="left",
             padx=10,

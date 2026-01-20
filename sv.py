@@ -59,8 +59,12 @@ class Stringvars:
         self.dog = tk.StringVar(master=master)
         
         # ===== SESSION DETAILS =====
-        self.session_purpose = tk.StringVar(master=master)
+        self.session_purpose = tk.StringVar(master=master)  # Legacy single-value field (kept for compatibility)
+        self.a_purpose = tk.StringVar(master=master)  # Current dropdown selection for purpose accumulator
         self.field_support = tk.StringVar(master=master)
+        
+        # ===== SESSION PURPOSES (List of selected purposes for accumulator) =====
+        self.a_purpose_list = []  # Accumulated session purposes for airscenting
         
         # ===== SEARCH PARAMETERS =====
         self.location = tk.StringVar(master=master)
@@ -214,6 +218,8 @@ class Stringvars:
         
         # Session details
         self.session_purpose.set("")
+        self.a_purpose.set("")
+        self.a_purpose_list.clear()
         self.field_support.set("")
         
         # Search parameters
@@ -237,8 +243,9 @@ class Stringvars:
         self.start_time.set("")
         self.finish_time.set("")
         
-        # Terrain and subject responses
+        # Terrain, purposes, and subject responses
         self.terrain_list.clear()
+        self.a_purpose_list.clear()
         self.subject_responses.clear()
     
     def clear_setup_entry_fields(self):
@@ -773,7 +780,7 @@ if __name__ == "__main__":
     # Example 5: Change detection
     print("\nExample 5: Change detection")
     snapshot = sv.get_state_string()
-    sv.temperature.set("72Ã‚Â°F")
+    sv.temperature.set("72Ãƒâ€šÃ‚Â°F")
     has_changes = sv.has_changes_from(snapshot)
     print(f"Has changes: {has_changes}")
     
