@@ -125,11 +125,6 @@ class AirScentingUI:
         
         self.root.withdraw()
         
-        # Show splash screen IMMEDIATELY (before building UI)
-        # This ensures user sees progress while UI is being constructed
-        # Splash will auto-close after 15 seconds or user can close it manually
-        self.splash = SplashScreen(self.root, version="1.0.7-alpha")
-        
         # Set window properties and center horizontally
         self.root.title(APP_TITLE)
         
@@ -148,42 +143,97 @@ class AirScentingUI:
         # Track if we need to maximize
         self.is_maximized = False
         
-        if available_height < window_height:
-            # Screen too small - maximize window
-            self.is_maximized = True
-            # Set geometry first, then maximize (works better on some systems)
-            x_position = (screen_width - window_width) // 2
-            self.root.geometry(f"{window_width}x{window_height}+{x_position}+0")
-            
-            # Maximize based on OS
+        # Determine final geometry BEFORE creating splash screen
+        # Try to restore saved geometry for airscenting
+        saved_geometry = self.config.get("airscenting", {}).get("window_geometry", None)
+        geometry_restored = False
+        final_geometry = None  # Will hold the geometry string for splash centering
+        
+        print(f"DEBUG: Attempting to restore airscenting geometry")
+        print(f"DEBUG: saved_geometry from config = '{saved_geometry}'")
+        print(f"DEBUG: screen dimensions = {screen_width}x{screen_height}")
+        
+        if saved_geometry:
+            try:
+                # Validate saved geometry format
+                # Parse geometry string: WxH+X+Y or WxH-X+Y etc.
+                import re
+                match = re.match(r'(\d+)x(\d+)([+-]\d+)([+-]\d+)', saved_geometry)
+                print(f"DEBUG: regex match = {match}")
+                if match:
+                    saved_w, saved_h, saved_x, saved_y = match.groups()
+                    saved_w, saved_h = int(saved_w), int(saved_h)
+                    saved_x, saved_y = int(saved_x), int(saved_y)
+                    print(f"DEBUG: parsed geometry: w={saved_w}, h={saved_h}, x={saved_x}, y={saved_y}")
+                    
+                    # Basic sanity check - just ensure window isn't impossibly positioned
+                    # Allow for multi-monitor setups (x/y can be larger than primary screen)
+                    # Just check that dimensions are reasonable
+                    sanity_check = (saved_w >= 400 and saved_w <= 5000 and 
+                                   saved_h >= 300 and saved_h <= 3000 and
+                                   saved_x >= -2000 and saved_x <= 10000 and
+                                   saved_y >= -500 and saved_y <= 5000)
+                    print(f"DEBUG: sanity check passed = {sanity_check}")
+                    
+                    if sanity_check:
+                        print(f"DEBUG: Applying saved geometry: {saved_geometry}")
+                        final_geometry = saved_geometry
+                        geometry_restored = True
+                    else:
+                        print(f"DEBUG: Sanity check failed, using default geometry")
+                else:
+                    print(f"DEBUG: Regex did not match saved_geometry")
+            except Exception as e:
+                print(f"Could not restore saved geometry: {e}")
+        else:
+            print(f"DEBUG: No saved geometry found in config")
+        
+        if not geometry_restored:
+            if available_height < window_height:
+                # Screen too small - maximize window
+                self.is_maximized = True
+                x_position = (screen_width - window_width) // 2
+                final_geometry = f"{window_width}x{window_height}+{x_position}+0"
+            else:
+                # Screen is large enough - use normal sizing
+                # Calculate center position (horizontally centered, at top)
+                x_position = (screen_width - window_width) // 2
+                y_position = 0  # Keep at top of screen
+                
+                # Ensure window is not off-screen
+                x_position = max(0, x_position)
+                
+                final_geometry = f"{window_width}x{window_height}+{x_position}+{y_position}"
+        
+        # Now create splash screen centered over the final main window position
+        self.splash = SplashScreen(self.root, version="1.0.7-alpha", main_window_geometry=final_geometry)
+        
+        # Apply the geometry to the main window
+        self.root.geometry(final_geometry)
+        
+        # Handle maximization if needed
+        if not geometry_restored and available_height < window_height:
             try:
                 if os.name == 'nt':  # Windows
                     self.root.state('zoomed')
                 else:  # Mac/Linux
-                    # Try different methods
                     try:
                         self.root.attributes('-zoomed', True)
                     except:
-                        # Fallback: set to screen size minus margin
                         self.root.geometry(f"{screen_width}x{available_height}+0+0")
             except Exception as e:
                 print(f"Could not maximize window: {e}")
-                # Fallback: fit to available height
                 adjusted_height = min(window_height, available_height)
                 x_position = max(0, (screen_width - window_width) // 2)
                 self.root.geometry(f"{window_width}x{adjusted_height}+{x_position}+0")
-        else:
-            # Screen is large enough - use normal sizing
-            # Calculate center position (horizontally centered, at top)
-            x_position = (screen_width - window_width) // 2
-            y_position = 0  # Keep at top of screen
-            
-            # Ensure window is not off-screen
-            x_position = max(0, x_position)
-            
-            self.root.geometry(f"{window_width}x{window_height}+{x_position}+{y_position}")
         
         self.root.minsize(window_width, 800)  # Minimum height slightly less than default
+        
+        # Bind window configure event to save geometry on move/resize
+        # Use flag to prevent saving during initial window setup
+        self._geometry_save_after_id = None
+        self._geometry_save_enabled = False  # Will be enabled after startup completes
+        self.root.bind("<Configure>", self._on_window_configure)
         
         # Create menu bar
         self.create_menu_bar()
@@ -305,6 +355,9 @@ class AirScentingUI:
         
         # Take initial snapshot after UI is ready
         self.root.after(100, self.form_mgmt.take_form_snapshot)
+        
+        # Enable geometry saving after startup completes (all scheduled tasks done by 600ms)
+        self.root.after(1000, self._enable_geometry_save)
         
         # Set up window close handler
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -1714,14 +1767,14 @@ class AirScentingUI:
         # Build error messages (hard requirements)
         errors = []
         if not database_exists:
-            errors.append("Ã¢â‚¬Â¢ Database not created")
+            errors.append("ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Database not created")
         
         # Trail maps folder is still required for images
         if not trail_maps_folder or not os.path.exists(trail_maps_folder):
             if not trail_maps_folder:
-                errors.append("Ã¢â‚¬Â¢ Trail Maps Storage folder not selected")
+                errors.append("ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Trail Maps Storage folder not selected")
             else:
-                errors.append(f"Ã¢â‚¬Â¢ Trail Maps Storage folder does not exist: {trail_maps_folder}")
+                errors.append(f"ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Trail Maps Storage folder does not exist: {trail_maps_folder}")
         
         # Check if at least one dog is defined
         if database_exists:
@@ -1747,7 +1800,7 @@ class AirScentingUI:
                 reload(database)
                 
                 if dog_count == 0:
-                    errors.append("Ã¢â‚¬Â¢ At least one dog must be defined")
+                    errors.append("ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ At least one dog must be defined")
             except Exception as e:
                 print(f"Error checking dogs: {e}")
                 # Don't block if there's an error checking
@@ -1756,9 +1809,9 @@ class AirScentingUI:
         warnings = []
         if not backup_folder or not os.path.exists(backup_folder):
             if not backup_folder:
-                warnings.append("Ã¢â‚¬Â¢ Backup folder not selected")
+                warnings.append("ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Backup folder not selected")
             else:
-                warnings.append(f"Ã¢â‚¬Â¢ Backup folder does not exist: {backup_folder}")
+                warnings.append(f"ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Backup folder does not exist: {backup_folder}")
         
         # If there are hard errors (database, dogs), show message and prevent switching
         if errors:
@@ -1970,6 +2023,66 @@ class AirScentingUI:
             self.set_db_password()
         
         return True
+    
+    def _on_window_configure(self, event):
+        """Handle window move/resize - save geometry with debounce"""
+        # Only handle events from the main window, not child widgets
+        if event.widget != self.root:
+            return
+        
+        # Don't save during startup
+        if not self._geometry_save_enabled:
+            return
+        
+        # Cancel any pending save
+        if self._geometry_save_after_id:
+            self.root.after_cancel(self._geometry_save_after_id)
+        
+        # Schedule a save after 500ms of no changes (debounce)
+        self._geometry_save_after_id = self.root.after(500, self._save_window_geometry)
+    
+    def _enable_geometry_save(self):
+        """Enable geometry saving after startup completes"""
+        self._geometry_save_enabled = True
+        print("DEBUG: Geometry saving now enabled")
+    
+    def _save_window_geometry(self):
+        """Save current window geometry to config"""
+        try:
+            # Don't save if window is maximized or minimized
+            if os.name == 'nt':
+                if self.root.state() == 'zoomed':
+                    print("DEBUG: Window is zoomed, skipping geometry save")
+                    return
+            else:
+                try:
+                    if self.root.attributes('-zoomed'):
+                        print("DEBUG: Window is zoomed, skipping geometry save")
+                        return
+                except:
+                    pass
+            
+            # Get current geometry
+            geometry = self.root.geometry()
+            
+            # Ensure airscenting section exists
+            if "airscenting" not in self.config:
+                self.config["airscenting"] = {}
+            
+            # Save geometry
+            self.config["airscenting"]["window_geometry"] = geometry
+            
+            # Debug: show where we're saving
+            json_path = self.get_json_config_path()
+            print(f"DEBUG: Saving airscenting geometry '{geometry}'")
+            print(f"DEBUG: machine_db_path = '{self.machine_db_path}'")
+            print(f"DEBUG: json_config_path = {json_path}")
+            
+            self.save_config()
+        except Exception as e:
+            import traceback
+            print(f"Error saving window geometry: {e}")
+            traceback.print_exc()
     
     def run(self):
         """Start the application"""

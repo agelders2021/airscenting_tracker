@@ -99,10 +99,6 @@ class TrailingUI:
         
         self.root.withdraw()
         
-        # Show splash screen
-        self.splash = SplashScreen(self.root, version="1.0.7-alpha", 
-                                   app_title=T_APP_TITLE, github_url=T_GITHUB_URL)
-        
         # Set window properties
         self.root.title(APP_TITLE)
         
@@ -112,12 +108,64 @@ class TrailingUI:
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
         
-        x_position = (screen_width - window_width) // 2
-        y_position = 0
+        # Determine final geometry BEFORE creating splash screen
+        # Try to restore saved geometry for trailing
+        saved_geometry = self.config.get("trailing", {}).get("window_geometry", None)
+        geometry_restored = False
+        final_geometry = None  # Will hold the geometry string for splash centering
         
-        self.root.geometry(f"{window_width}x{window_height}+{x_position}+{y_position}")
+        print(f"DEBUG: Attempting to restore trailing geometry")
+        print(f"DEBUG: saved_geometry from config = '{saved_geometry}'")
+        
+        if saved_geometry:
+            try:
+                # Validate saved geometry format
+                # Parse geometry string: WxH+X+Y or WxH-X+Y etc.
+                import re
+                match = re.match(r'(\d+)x(\d+)([+-]\d+)([+-]\d+)', saved_geometry)
+                if match:
+                    saved_w, saved_h, saved_x, saved_y = match.groups()
+                    saved_w, saved_h = int(saved_w), int(saved_h)
+                    saved_x, saved_y = int(saved_x), int(saved_y)
+                    print(f"DEBUG: parsed geometry: w={saved_w}, h={saved_h}, x={saved_x}, y={saved_y}")
+                    
+                    # Basic sanity check - just ensure window isn't impossibly positioned
+                    # Allow for multi-monitor setups (x/y can be larger than primary screen)
+                    sanity_check = (saved_w >= 400 and saved_w <= 5000 and 
+                                   saved_h >= 300 and saved_h <= 3000 and
+                                   saved_x >= -2000 and saved_x <= 10000 and
+                                   saved_y >= -500 and saved_y <= 5000)
+                    
+                    if sanity_check:
+                        print(f"DEBUG: Applying saved geometry: {saved_geometry}")
+                        final_geometry = saved_geometry
+                        geometry_restored = True
+                    else:
+                        print(f"DEBUG: Sanity check failed, using default geometry")
+            except Exception as e:
+                print(f"Could not restore saved geometry: {e}")
+        
+        if not geometry_restored:
+            x_position = (screen_width - window_width) // 2
+            y_position = 0
+            final_geometry = f"{window_width}x{window_height}+{x_position}+{y_position}"
+        
+        # Now create splash screen centered over the final main window position
+        self.splash = SplashScreen(self.root, version="1.0.7-alpha", 
+                                   app_title=T_APP_TITLE, github_url=T_GITHUB_URL,
+                                   main_window_geometry=final_geometry)
+        
+        # Apply the geometry to the main window
+        self.root.geometry(final_geometry)
+        
         self.root.minsize(window_width, 800)
         self.root.minsize(window_height,950)
+        
+        # Bind window configure event to save geometry on move/resize
+        # Use flag to prevent saving during initial window setup
+        self._geometry_save_after_id = None
+        self._geometry_save_enabled = False  # Will be enabled after startup completes
+        self.root.bind("<Configure>", self._on_window_configure)
         
         # Create menu bar
         self.create_menu_bar()
@@ -213,6 +261,9 @@ class TrailingUI:
         
         # Load initial data
         self.root.after(500, self.load_initial_data)
+        
+        # Enable geometry saving after startup completes
+        self.root.after(1000, self._enable_geometry_save)
         
         # Set up window close handler
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -1028,9 +1079,9 @@ class TrailingUI:
         instructions = tk.Label(
             dialog,
             text="Select sessions to export:\n"
-                 "â€¢ Click to select one session\n"
-                 "â€¢ Ctrl+Click to select multiple sessions\n"
-                 "â€¢ Shift+Click to select a range",
+                 "Ã¢â‚¬Â¢ Click to select one session\n"
+                 "Ã¢â‚¬Â¢ Ctrl+Click to select multiple sessions\n"
+                 "Ã¢â‚¬Â¢ Shift+Click to select a range",
             justify="left",
             padx=10,
             pady=5
@@ -2090,6 +2141,9 @@ class TrailingUI:
                                 next_session = self.get_next_session_number(dog_name)
                                 sv.t_session.set(str(next_session))
                                 print(f"Startup sync: Updated session number to {next_session} for {dog_name}")
+                                # Re-take form snapshot since session number changed
+                                if hasattr(self, 'trailing_entry'):
+                                    self.trailing_entry.take_form_snapshot()
                             except Exception as e:
                                 print(f"Startup sync: Error updating session number: {e}")
                     
@@ -2226,6 +2280,9 @@ class TrailingUI:
                                 try:
                                     next_session = self.get_next_session_number(dog_name)
                                     sv.t_session.set(str(next_session))
+                                    # Re-take form snapshot since session number changed
+                                    if hasattr(self, 'trailing_entry'):
+                                        self.trailing_entry.take_form_snapshot()
                                 except Exception as e:
                                     print(f"Sync: Error updating session number: {e}")
                         
@@ -2444,6 +2501,66 @@ class TrailingUI:
     def _update_arrow_states(self):
         """Update arrow button states - wrapper for StatusBarManager"""
         self.status_bar_mgr._update_arrow_states()
+    
+    def _on_window_configure(self, event):
+        """Handle window move/resize - save geometry with debounce"""
+        # Only handle events from the main window, not child widgets
+        if event.widget != self.root:
+            return
+        
+        # Don't save during startup
+        if not self._geometry_save_enabled:
+            return
+        
+        # Cancel any pending save
+        if self._geometry_save_after_id:
+            self.root.after_cancel(self._geometry_save_after_id)
+        
+        # Schedule a save after 500ms of no changes (debounce)
+        self._geometry_save_after_id = self.root.after(500, self._save_window_geometry)
+    
+    def _enable_geometry_save(self):
+        """Enable geometry saving after startup completes"""
+        self._geometry_save_enabled = True
+        print("DEBUG: Geometry saving now enabled")
+    
+    def _save_window_geometry(self):
+        """Save current window geometry to config"""
+        try:
+            # Don't save if window is maximized or minimized
+            if os.name == 'nt':
+                if self.root.state() == 'zoomed':
+                    print("DEBUG: Window is zoomed, skipping geometry save")
+                    return
+            else:
+                try:
+                    if self.root.attributes('-zoomed'):
+                        print("DEBUG: Window is zoomed, skipping geometry save")
+                        return
+                except:
+                    pass
+            
+            # Get current geometry
+            geometry = self.root.geometry()
+            
+            # Ensure trailing section exists
+            if "trailing" not in self.config:
+                self.config["trailing"] = {}
+            
+            # Save geometry
+            self.config["trailing"]["window_geometry"] = geometry
+            
+            # Debug: show where we're saving
+            json_path = self.get_json_config_path()
+            print(f"DEBUG: Saving trailing geometry '{geometry}'")
+            print(f"DEBUG: machine_db_path = '{self.machine_db_path}'")
+            print(f"DEBUG: json_config_path = {json_path}")
+            
+            self.save_config()
+        except Exception as e:
+            import traceback
+            print(f"Error saving window geometry: {e}")
+            traceback.print_exc()
     
     def run(self):
         """Run the application"""
