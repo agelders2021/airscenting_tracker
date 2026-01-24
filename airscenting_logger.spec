@@ -3,6 +3,7 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = []
 binaries = []
+# hiddenimports = ['babel.numbers','http','http.client','http.server','http.cookies', 'http.cookiejar']
 hiddenimports = ['babel.numbers']
 tmp_ret = collect_all('tkinterdnd2')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
@@ -17,7 +18,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['matplotlib', 'numpy', 'scipy', 'PyQt5', 'pandas', 'unittest',  'http','pytest',  'torch'],
+    excludes=['matplotlib', 'numpy', 'scipy', 'PyQt5', 'pandas', 'unittest',  'pytest',  'torch'],
     noarchive=False,
 )
 pyz = PYZ(a.pure)

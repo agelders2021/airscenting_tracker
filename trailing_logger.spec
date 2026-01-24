@@ -17,7 +17,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['matplotlib', 'numpy', 'scipy', 'PyQt5', 'pandas', 'unittest',  'http','pytest',  'torch'],
+    excludes=['matplotlib', 'numpy', 'scipy', 'PyQt5', 'pandas', 'unittest', 'pytest',  'torch'],
     noarchive=False,
 )
 pyz = PYZ(a.pure)

@@ -151,7 +151,7 @@ class TrailingUI:
             final_geometry = f"{window_width}x{window_height}+{x_position}+{y_position}"
         
         # Now create splash screen centered over the final main window position
-        self.splash = SplashScreen(self.root, version="1.0.9-alpha", 
+        self.splash = SplashScreen(self.root, version="1.0.10-alpha", 
                                    app_title=T_APP_TITLE, github_url=T_GITHUB_URL,
                                    main_window_geometry=final_geometry)
         
@@ -444,7 +444,7 @@ class TrailingUI:
     
     def show_about_dialog(self):
         """Show the About dialog"""
-        show_about(self.root, version="1.0.9-alpha", 
+        show_about(self.root, version="1.0.10-alpha", 
                    app_title=T_APP_TITLE, github_url="https://" + T_GITHUB_URL)
     
     def get_json_config_path(self):

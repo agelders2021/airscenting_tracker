@@ -430,12 +430,13 @@ class TrailingEntryTab:
         
         tk.Label(behavior_frame, text="Start Behavior:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_start_behavior, width=54,
-                    values=["ExcellentÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂDirection of Travel immediately identified ",
-                            "Very GoodÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂDirection of travel not imediately identified",
-                            "GoodÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂDirection of travel identified with cueing",
-                            "FairÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂDirection of travel not identified",
-                            "PoorÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂDirection of travel incorrectly identified",
-                            "Needs WorkÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂCould not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
+                    values=["Excellent—Direction of Travel immediately identified ",
+                            "Very Good—Direction of travel not imediately identified",
+                            "Good—Direction of travel identified with cueing",
+                            "Fair—Direction of travel not identified",
+                            "Poor—Direction of travel incorrectly identified",
+                            "Needs Work—Could not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
+        
         
         tk.Label(behavior_frame, text="Pace:").grid(row=0, column=2, sticky="e", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_pace, width=18,

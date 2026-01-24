@@ -206,7 +206,7 @@ class AirScentingUI:
                 final_geometry = f"{window_width}x{window_height}+{x_position}+{y_position}"
         
         # Now create splash screen centered over the final main window position
-        self.splash = SplashScreen(self.root, version="1.0.9-alpha", main_window_geometry=final_geometry)
+        self.splash = SplashScreen(self.root, version="1.0.10-alpha", main_window_geometry=final_geometry)
         
         # Apply the geometry to the main window
         self.root.geometry(final_geometry)
@@ -619,7 +619,7 @@ class AirScentingUI:
     
     def show_about_dialog(self):
         """Show the About dialog"""
-        show_about(self.root, version="1.0.9-alpha")
+        show_about(self.root, version="1.0.10-alpha")
     
     def get_json_config_path(self):
         """Get the path to config file in JSON folder (primary location)"""
