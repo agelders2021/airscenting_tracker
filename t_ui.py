@@ -151,7 +151,7 @@ class TrailingUI:
             final_geometry = f"{window_width}x{window_height}+{x_position}+{y_position}"
         
         # Now create splash screen centered over the final main window position
-        self.splash = SplashScreen(self.root, version="1.0.8-alpha", 
+        self.splash = SplashScreen(self.root, version="1.0.9-alpha", 
                                    app_title=T_APP_TITLE, github_url=T_GITHUB_URL,
                                    main_window_geometry=final_geometry)
         
@@ -444,7 +444,7 @@ class TrailingUI:
     
     def show_about_dialog(self):
         """Show the About dialog"""
-        show_about(self.root, version="1.0.8-alpha", 
+        show_about(self.root, version="1.0.9-alpha", 
                    app_title=T_APP_TITLE, github_url="https://" + T_GITHUB_URL)
     
     def get_json_config_path(self):
@@ -722,6 +722,13 @@ class TrailingUI:
         dialog.title("Select Sessions to View/Edit/Hide")
         dialog.geometry("650x450")
         dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Center dialog over main window
+        dialog.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (dialog.winfo_width() // 2)
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
         
         # Instructions
         instructions = tk.Label(
@@ -1069,6 +1076,12 @@ class TrailingUI:
         dialog.transient(self.root)
         dialog.grab_set()
         
+        # Center dialog over main window
+        dialog.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (dialog.winfo_width() // 2)
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
+        
         # Dog display at top
         header_frame = tk.Frame(dialog, padx=10, pady=10)
         header_frame.pack(fill="x")
@@ -1079,9 +1092,9 @@ class TrailingUI:
         instructions = tk.Label(
             dialog,
             text="Select sessions to export:\n"
-                 "Ã¢â‚¬Â¢ Click to select one session\n"
-                 "Ã¢â‚¬Â¢ Ctrl+Click to select multiple sessions\n"
-                 "Ã¢â‚¬Â¢ Shift+Click to select a range",
+                 "\u2022 Click to select one session\n"
+                 "\u2022 Ctrl+Click to select multiple sessions\n"
+                 "\u2022 Shift+Click to select a range",
             justify="left",
             padx=10,
             pady=5
@@ -1168,6 +1181,7 @@ class TrailingUI:
             # Get file save location
             default_filename = f"Trailing_Log_{dog_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
             filepath = filedialog.asksaveasfilename(
+                parent=dialog,
                 title="Save PDF As",
                 defaultextension=".pdf",
                 initialfile=default_filename,

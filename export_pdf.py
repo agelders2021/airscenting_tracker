@@ -75,9 +75,9 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
     instructions = tk.Label(
         dialog, 
         text="Select sessions to export:\n"
-             "• Click to select one session\n"
-             "• Ctrl+Click to select multiple sessions\n"
-             "• Shift+Click to select a range",
+             "\u2022 Click to select one session\n"
+             "\u2022 Ctrl+Click to select multiple sessions\n"
+             "\u2022 Shift+Click to select a range",
         justify="left",
         padx=10,
         pady=5
@@ -186,6 +186,7 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
         # Get file save location
         default_filename = f"AirScenting_Log_{current_dog}_{datetime.now().strftime('%Y%m%d')}.pdf"
         filepath = filedialog.asksaveasfilename(
+            parent=dialog,
             title="Save PDF As",
             defaultextension=".pdf",
             initialfile=default_filename,
@@ -195,11 +196,8 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
         if not filepath:
             return
         
-        # Close dialog
-        dialog.destroy()
-        
-        # Perform export with selected sessions
-        export_sessions_to_pdf(
+        # Perform export with selected sessions (keep dialog open until complete)
+        success = export_sessions_to_pdf(
             filepath=filepath,
             dog_name=current_dog,
             session_numbers=selected_sessions,
@@ -207,6 +205,9 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
             trail_maps_folder=trail_maps_folder,
             status_msg_var=status_var
         )
+        
+        # Close dialog after export completes
+        dialog.destroy()
     
     tk.Button(button_frame, text="Export", command=do_export, bg="#4CAF50", fg="white", width=15).pack(side=tk.LEFT, padx=5)
     tk.Button(button_frame, text="Cancel", command=dialog.destroy, width=10).pack(side=tk.LEFT, padx=5)
@@ -222,41 +223,64 @@ def export_sessions_to_pdf(filepath, dog_name, session_numbers, get_connection_f
         get_connection_func: Function to get database connection
         trail_maps_folder: Path to trail maps folder
         status_msg_var: Optional StringVar for status messages
+        
+    Returns:
+        bool: True if export succeeded, False otherwise
     """
+    print(f"[PDF Export] Starting export to: {filepath}")
+    print(f"[PDF Export] Dog: {dog_name}, Sessions: {session_numbers}")
+    
     try:
         # Fetch sessions from database
+        print("[PDF Export] Fetching sessions from database...")
         sessions = fetch_sessions_by_numbers(
             dog_name, session_numbers, get_connection_func
         )
         
+        print(f"[PDF Export] Found {len(sessions)} sessions")
+        
         if not sessions:
             messagebox.showinfo("No Sessions", "No sessions found matching the specified criteria")
-            return
+            return False
         
         # Generate PDF
+        print(f"[PDF Export] Generating PDF with trail_maps_folder: {trail_maps_folder}")
         generate_pdf(filepath, dog_name, sessions, trail_maps_folder)
         
-        # Send success message to status bar instead of popup
-        if status_msg_var:
-            status_msg_var.set(f"Exported {len(sessions)} session(s) to: {filepath}")
-        else:
-            print(f"Exported {len(sessions)} session(s) to: {filepath}")
-        
-        # Ask to open the PDF
-        if messagebox.askyesno("Open File?", "Would you like to open the exported PDF?"):
-            import subprocess
-            import platform
-            if platform.system() == 'Windows':
-                os.startfile(filepath)
-            elif platform.system() == 'Darwin':
-                subprocess.run(['open', filepath])
+        # Verify file was created
+        if os.path.exists(filepath):
+            file_size = os.path.getsize(filepath)
+            print(f"[PDF Export] SUCCESS - File created: {filepath} ({file_size} bytes)")
+            
+            # Send success message to status bar instead of popup
+            if status_msg_var:
+                status_msg_var.set(f"Exported {len(sessions)} session(s) to: {filepath}")
             else:
-                subprocess.run(['xdg-open', filepath])
+                print(f"Exported {len(sessions)} session(s) to: {filepath}")
+            
+            # Ask to open the PDF
+            if messagebox.askyesno("Open File?", "Would you like to open the exported PDF?"):
+                import subprocess
+                import platform
+                if platform.system() == 'Windows':
+                    os.startfile(filepath)
+                elif platform.system() == 'Darwin':
+                    subprocess.run(['open', filepath])
+                else:
+                    subprocess.run(['xdg-open', filepath])
+            
+            return True
+        else:
+            print(f"[PDF Export] ERROR - File was not created at: {filepath}")
+            messagebox.showerror("Export Error", f"PDF file was not created.\nPath: {filepath}")
+            return False
         
     except Exception as e:
+        print(f"[PDF Export] EXCEPTION: {type(e).__name__}: {e}")
         messagebox.showerror("Export Error", f"Failed to export PDF:\n{str(e)}")
         import traceback
         traceback.print_exc()
+        return False
 
 
 def fetch_sessions_by_numbers(dog_name, session_numbers, get_connection_func):
@@ -493,6 +517,8 @@ def fetch_sessions_for_export(dog_name, range_type, start_value, end_value, sort
 
 def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
     """Generate the PDF document"""
+    print(f"[PDF Export] generate_pdf called with {len(sessions)} sessions")
+    
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import inch
@@ -501,6 +527,7 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
     from reportlab.lib.enums import TA_LEFT, TA_CENTER
     
     # Create PDF
+    print(f"[PDF Export] Creating SimpleDocTemplate for: {filepath}")
     doc = SimpleDocTemplate(filepath, pagesize=letter,
                            topMargin=0.5*inch, bottomMargin=0.5*inch,
                            leftMargin=0.75*inch, rightMargin=0.75*inch)
@@ -715,4 +742,6 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
                         story.append(Spacer(1, 0.1*inch))
     
     # Build PDF
+    print(f"[PDF Export] Building PDF with {len(story)} elements...")
     doc.build(story)
+    print(f"[PDF Export] doc.build() completed")

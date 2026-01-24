@@ -552,14 +552,21 @@ class Navigation:
         dialog.title("Select Sessions to View/Edit/Hide")
         dialog.geometry("600x400")
         dialog.transient(self.ui.root)
+        dialog.grab_set()
+        
+        # Center dialog over main window
+        dialog.update_idletasks()
+        x = self.ui.root.winfo_x() + (self.ui.root.winfo_width() // 2) - (dialog.winfo_width() // 2)
+        y = self.ui.root.winfo_y() + (self.ui.root.winfo_height() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
         
         # Instructions
         instructions = tk.Label(
             dialog, 
             text="Select sessions to navigate:\n"
-                 "Ã¢â‚¬Â¢ Click to select one session\n"
-                 "Ã¢â‚¬Â¢ Ctrl+Click to select multiple sessions\n"
-                 "Ã¢â‚¬Â¢ Shift+Click to select a range\n"
+                 "\u2022 Click to select one session\n"
+                 "\u2022 Ctrl+Click to select multiple sessions\n"
+                 "\u2022 Shift+Click to select a range\n"
                  "Use Previous/Next buttons to navigate through selected sessions",
             justify="left",
             padx=10,

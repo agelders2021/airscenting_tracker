@@ -22,7 +22,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
 Splash Screen for Training Tracker Applications
-Copyright (C) 2025 Al Gelders
+Copyright (C) 2026 Al Gelders
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -122,7 +122,7 @@ class SplashScreen:
         # Copyright
         copyright_label = tk.Label(
             frame,
-            text="Â© 2025 Al Gelders",
+            text="© 2026 Al Gelders",
             font=('Arial', 11),
             bg='white',
             fg='#34495e'
