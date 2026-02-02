@@ -145,7 +145,7 @@ class FileOperations:
             filepath = filepath.strip()
             if os.path.exists(filepath):
                 ext = os.path.splitext(filepath)[1].lower()
-                if ext in ['.pdf', '.jpg', '.jpeg', '.png']:
+                if ext in ['.pdf', '.jpg', '.jpeg', '.png', '.mp4', '.mov', '.avi', '.mkv', '.webm']:
                     # Create unique filename: a_{dog}_session{session}_{timestamp}_{original}
                     original_name = os.path.basename(filepath)
                     # Sanitize dog name for filename
@@ -197,7 +197,7 @@ class FileOperations:
                     sv.secondary_unavailable_notified = True
                     sv.status.set("Warning: Secondary backup folder unavailable - files saved to primary only")
         else:
-            messagebox.showerror("Error", "Only PDF, JPG, and PNG files supported!")
+            messagebox.showerror("Error", "Only PDF, JPG, PNG, and video files (MP4, MOV, AVI, MKV, WebM) supported!")
     
     # ========================================
     # FILE VIEWING AND DELETION
@@ -326,7 +326,7 @@ class FileOperations:
             else:
                 error_msg = f"Could not find file: {file_path}\n\nSearched in:\n"
                 for p in possible_paths:
-                    error_msg += f"  â€¢ {p}\n"
+                    error_msg += f"  Ã¢â‚¬Â¢ {p}\n"
                 error_msg += "\nTip: Check your trail maps folder setting in Setup tab."
                 messagebox.showerror("File Not Found", error_msg)
                 return

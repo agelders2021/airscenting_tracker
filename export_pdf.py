@@ -708,7 +708,10 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
         
         # Maps and images section
         if session.get('image_files') and trail_maps_folder:
-            story.append(Paragraph("<b>Maps and Images</b>", heading_style))
+            story.append(Paragraph("<b>Maps, Images, and Videos</b>", heading_style))
+            
+            # Video extensions to handle specially
+            video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm']
             
             for image_file in session['image_files']:
                 if image_file:
@@ -720,7 +723,7 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
                             file_ext = os.path.splitext(image_file)[1].lower()
                             
                             if file_ext in ['.jpg', '.jpeg', '.png']:
-                                # Regular image file
+                                # Regular image file - embed in PDF
                                 img = Image(image_path, width=6.5*inch, height=6.5*inch, kind='proportional')
                                 story.append(img)
                                 story.append(Spacer(1, 0.05*inch))
@@ -732,8 +735,27 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
                                 note_text = f"<i>{image_file}</i><br/><font color='blue'>PDF file (not embedded)</font>"
                                 story.append(Paragraph(note_text, value_style))
                                 story.append(Spacer(1, 0.1*inch))
+                            elif file_ext in video_extensions:
+                                # Video file - copy to PDF output folder and create link
+                                pdf_folder = os.path.dirname(filepath)
+                                video_dest = os.path.join(pdf_folder, image_file)
+                                
+                                # Copy video to same folder as PDF if not already there
+                                if not os.path.exists(video_dest):
+                                    try:
+                                        import shutil
+                                        shutil.copy2(image_path, video_dest)
+                                        print(f"[PDF Export] Copied video to: {video_dest}")
+                                    except Exception as copy_err:
+                                        print(f"[PDF Export] Warning: Could not copy video: {copy_err}")
+                                
+                                # Add link to video in PDF
+                                video_link = f'<a href="{image_file}" color="blue"><u>{image_file}</u></a>'
+                                note_text = f"<b>Video:</b> {video_link}<br/><font color='gray' size='8'>(Video file copied to PDF folder - click to open)</font>"
+                                story.append(Paragraph(note_text, value_style))
+                                story.append(Spacer(1, 0.1*inch))
                         except Exception as e:
-                            error_text = f"<i>{image_file}</i><br/><font color='red'>Error loading image: {str(e)}</font>"
+                            error_text = f"<i>{image_file}</i><br/><font color='red'>Error loading file: {str(e)}</font>"
                             story.append(Paragraph(error_text, value_style))
                             story.append(Spacer(1, 0.1*inch))
                     else:

@@ -486,7 +486,7 @@ class SetupTab:
             if result:
                 try:
                     folder_path.mkdir(parents=True, exist_ok=True)
-                    sv.status.set(f"Created folder: {new_path}")
+                    self.ui.show_status_message(f"Created folder: {new_path}", "info")
                 except Exception as e:
                     messagebox.showerror("Error", f"Could not create folder:\n{e}")
                     # Revert to old path
@@ -510,7 +510,7 @@ class SetupTab:
             
             # Save bootstrap file
             self.ui.save_bootstrap()
-            sv.status.set(f"Updated {label} and saved bootstrap")
+            self.ui.show_status_message(f"Updated {label} and saved bootstrap", "info")
         else:
             # Revert to old path
             path_var.set(old_path)
@@ -636,7 +636,7 @@ class SetupTab:
                         shutil.move(str(src), str(recover_subfolder / filename))
                         moved_items.append(filename)
                 
-                sv.status.set(f"Moved {len(moved_items)} item(s) to Recover folder")
+                self.ui.show_status_message(f"Moved {len(moved_items)} item(s) to Recover folder", "info")
                 
                 # Notify user
                 messagebox.showinfo(
@@ -688,7 +688,7 @@ class SetupTab:
             from schema import create_tables
             create_tables()
             
-            sv.status.set(f"Initialized: database, Images/, JSON/ in {folder}")
+            self.ui.show_status_message(f"Initialized: database, Images/, JSON/ in {folder}", "info")
             
             # Set up secondary backup folder if specified
             secondary_folder = sv.backup_folder.get().strip()
@@ -790,7 +790,7 @@ class SetupTab:
             # Update machine-specific path for bootstrap
             self.ui.machine_backup_folder = secondary_folder
             
-            sv.status.set(f"Secondary backup initialized at {secondary_folder}")
+            self.ui.show_status_message(f"Secondary backup initialized at {secondary_folder}", "info")
             
         except Exception as e:
             messagebox.showerror("Error", 
@@ -843,7 +843,7 @@ class SetupTab:
                     import time
                     time.sleep(1.0)
                     
-                    sv.status.set("Closed database connections...")
+                    self.ui.show_status_message("Closed database connections...", "info")
                     
                     # Give OS time to release file locks (especially on Windows)
                     import time
@@ -908,7 +908,7 @@ class SetupTab:
                 database.engine.dispose()
                 reload(database)
                 
-                sv.status.set(f"Database created: {db_path}")
+                self.ui.show_status_message(f"Database created: {db_path}", "info")
                 messagebox.showinfo(
                     "Success", 
                     f"SQLite database created successfully!\n\n{db_path}\n\n"
@@ -1017,7 +1017,7 @@ class SetupTab:
                     
                     # Drop existing tables
                     drop_tables()
-                    sv.status.set("Dropped existing tables...")
+                    self.ui.show_status_message("Dropped existing tables...", "info")
                 
                 # Create tables
                 create_tables()
@@ -1027,7 +1027,7 @@ class SetupTab:
                 database.engine.dispose()
                 reload(database)
                 
-                sv.status.set(f"{db_type.title()} schema created successfully")
+                self.ui.show_status_message(f"{db_type.title()} schema created successfully", "info")
                 messagebox.showinfo(
                     "Success",
                     f"{db_type.title()} database schema created successfully!\n\n"
@@ -1408,7 +1408,7 @@ class SetupTab:
                 self.refresh_location_list()
                 
                 sv.new_location.set("")
-                sv.status.set(f"Added location: {location}")
+                self.ui.show_status_message(f"Added location: {location}", "info")
                 
                 # Sync config with database and save
                 self._sync_config_from_database()
@@ -1476,7 +1476,7 @@ class SetupTab:
                 self.load_locations_from_database()
                 self.refresh_location_list()
                 
-                sv.status.set(f"Removed location: {location}")
+                self.ui.show_status_message(f"Removed location: {location}", "info")
                 self.s_remove_location_btn.config(state="disabled")
                 
                 # Sync config with database and save
@@ -1714,7 +1714,7 @@ class SetupTab:
                 sv.dog.set(dog_name)
                 
                 sv.new_dog.set("")
-                sv.status.set(f"Added dog: {dog_name}")
+                self.ui.show_status_message(f"Added dog: {dog_name}", "info")
                 
                 # Sync config with database and save
                 self._sync_config_from_database()
@@ -1790,7 +1790,7 @@ class SetupTab:
                 if hasattr(self.ui, 'a_dog_combo') and self.ui.a_dog_combo:
                     self.refresh_dog_list()
                 
-                sv.status.set(f"Removed dog: {dog_name}")
+                self.ui.show_status_message(f"Removed dog: {dog_name}", "info")
                 self.s_remove_dog_btn.config(state="disabled")
                 
                 # Sync config with database and save
@@ -1863,7 +1863,7 @@ class SetupTab:
                 self.load_terrain_from_database()
                 
                 sv.new_terrain.set("")
-                sv.status.set(f"Added terrain type: {terrain}")
+                self.ui.show_status_message(f"Added terrain type: {terrain}", "info")
                 
                 # Sync config with database and save
                 self._sync_config_from_database()
@@ -1932,7 +1932,7 @@ class SetupTab:
                 # Refresh UI
                 self.load_terrain_from_database()
                 
-                sv.status.set(f"Removed terrain type: {terrain}")
+                self.ui.show_status_message(f"Removed terrain type: {terrain}", "info")
                 
                 # Sync config with database and save
                 self._sync_config_from_database()
@@ -2018,7 +2018,7 @@ class SetupTab:
             for idx, terrain in enumerate(self.ui.config["terrain_types"], 1):
                 self.s_terrain_tree.insert('', tk.END, text=str(idx), values=(terrain,))
             
-            sv.status.set("Restored default terrain types")
+            self.ui.show_status_message("Restored default terrain types", "info")
             
             # Save config
             self.ui.save_config()
@@ -2075,7 +2075,7 @@ class SetupTab:
                 self.load_distraction_from_database()
                 
                 sv.new_distraction.set("")
-                sv.status.set(f"Added distraction type: {distraction}")
+                self.ui.show_status_message(f"Added distraction type: {distraction}", "info")
                 
                 # Sync config with database and save
                 self._sync_config_from_database()
@@ -2144,7 +2144,7 @@ class SetupTab:
                 # Refresh UI
                 self.load_distraction_from_database()
                 
-                sv.status.set(f"Removed distraction type: {distraction}")
+                self.ui.show_status_message(f"Removed distraction type: {distraction}", "info")
                 
                 # Sync config with database and save
                 self._sync_config_from_database()
@@ -2230,7 +2230,7 @@ class SetupTab:
             for idx, distraction in enumerate(self.ui.config["distraction_types"], 1):
                 self.s_distraction_type_tree.insert('', tk.END, text=str(idx), values=(distraction,))
             
-            sv.status.set("Restored default distraction types")
+            self.ui.show_status_message("Restored default distraction types", "info")
             
             # Save config
             self.ui.save_config()
@@ -2303,7 +2303,7 @@ class SetupTab:
         # Take new snapshot after saving
         self.ui.form_mgmt.take_form_snapshot()
         
-        sv.status.set("Configuration saved successfully!")
+        self.ui.show_status_message("Configuration saved successfully!", "info")
     
     def _sync_config_from_database(self):
         """Sync config with current database data and save to file.

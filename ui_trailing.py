@@ -430,12 +430,12 @@ class TrailingEntryTab:
         
         tk.Label(behavior_frame, text="Start Behavior:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_start_behavior, width=54,
-                    values=["Excellent—Direction of Travel immediately identified ",
-                            "Very Good—Direction of travel not imediately identified",
-                            "Good—Direction of travel identified with cueing",
-                            "Fair—Direction of travel not identified",
-                            "Poor—Direction of travel incorrectly identified",
-                            "Needs Work—Could not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
+                    values=["Excellent\u2014Direction of Travel immediately identified ",
+                            "Very Good\u2014Direction of travel not imediately identified",
+                            "Good\u2014Direction of travel identified with cueing",
+                            "Fair\u2014Direction of travel not identified",
+                            "Poor\u2014Direction of travel incorrectly identified",
+                            "Needs Work\u2014Could not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         
         tk.Label(behavior_frame, text="Pace:").grid(row=0, column=2, sticky="e", padx=5, pady=2)
@@ -453,9 +453,9 @@ class TrailingEntryTab:
         tk.Label(behavior_frame, text="Indication at Find:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_indication, width=54,
                     values=["Immediate Trained Final Response",
-                            "Strong AlertÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂExhibited Trained Final Response after hesitation",
-                            "Moderate AlertÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂAlert behavior but no TFR",
-                            "Weak AlertÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂHesitant, before clear response, needed cueing", 
+                            "Strong Alert\u2014Exhibited Trained Final Response after hesitation",
+                            "Moderate Alert\u2014Alert behavior but no TFR",
+                            "Weak Alert\u2014Hesitant, before clear response, needed cueing", 
                             "No Clear Indication"]).grid(row=1, column=1, sticky="w", padx=5, pady=2)
     
     def _create_distractions_section(self, frame):
@@ -567,7 +567,7 @@ class TrailingEntryTab:
         # RIGHT HALF: Nested LabelFrame for trail maps (with grey background)
         trail_map_labelframe = tk.LabelFrame(
             container, 
-            text="Drop Images Here (PDF/JPG/PNG)",
+            text="Drop Images/Videos Here\n(PDF/JPG/PNG/MP4/MOV)",
             padx=5, pady=5
         )
         trail_map_labelframe.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
@@ -1050,20 +1050,20 @@ class TrailingEntryTab:
             filepath = filepath.strip()
             if os.path.exists(filepath):
                 ext = os.path.splitext(filepath)[1].lower()
-                if ext in ['.pdf', '.jpg', '.jpeg', '.png']:
+                if ext in ['.pdf', '.jpg', '.jpeg', '.png', '.mp4', '.mov', '.avi', '.mkv', '.webm']:
                     valid_files.append(filepath)
         
         if valid_files:
             self._add_map_files(valid_files)
         else:
-            messagebox.showerror("Error", "Only PDF, JPG, and PNG files supported!")
+            messagebox.showerror("Error", "Only PDF, JPG, PNG, and video files (MP4, MOV, AVI, MKV, WebM) supported!")
     
     def _browse_trail_map(self):
         """Browse for trail map file"""
         filepaths = filedialog.askopenfilenames(
             title="Select Trail Map(s)",
             filetypes=[
-                ("Image/PDF files", "*.pdf *.jpg *.jpeg *.png"),
+                ("Image/PDF/Video files", "*.pdf *.jpg *.jpeg *.png *.mp4 *.mov *.avi *.mkv *.webm"),
                 ("All files", "*.*")
             ]
         )
@@ -1109,7 +1109,7 @@ class TrailingEntryTab:
             filepath = Path(filepath)
             if filepath.exists():
                 ext = filepath.suffix.lower()
-                if ext in ['.pdf', '.jpg', '.jpeg', '.png']:
+                if ext in ['.pdf', '.jpg', '.jpeg', '.png', '.mp4', '.mov', '.avi', '.mkv', '.webm']:
                     # Create unique filename: t_{dog}_session{session}_{timestamp}_{original}
                     original_name = filepath.name
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
