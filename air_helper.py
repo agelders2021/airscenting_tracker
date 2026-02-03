@@ -161,7 +161,8 @@ class AirScentingHelper:
             self.a_date_picker.set_date(date_obj)
             sv.date.set(date_string)
         except (ValueError, AttributeError) as e:
-            print(f"Error setting date: {e}")
+            # print(f"Error setting date: {e}")
+            pass
     
     def on_dog_changed(self, event=None):
         """Handle dog selection change - delegate to misc2_ops which saves to database"""
@@ -213,7 +214,8 @@ class AirScentingHelper:
             if hasattr(self, 'a_location_combo'):
                 self.a_location_combo['values'] = sorted(locations) if locations else []
         except Exception as e:
-            print(f"Error refreshing location list: {e}")
+            # print(f"Error refreshing location list: {e}")
+            pass
     
     def refresh_terrain_list(self):
         """Refresh the terrain combobox from database"""
@@ -225,7 +227,8 @@ class AirScentingHelper:
             if hasattr(self, 'a_terrain_combo'):
                 self.a_terrain_combo['values'] = terrain_types if terrain_types else []
         except Exception as e:
-            print(f"Error refreshing terrain list: {e}")
+            # print(f"Error refreshing terrain list: {e}")
+            pass
     
     def refresh_dog_list(self):
         """Refresh the dog combobox from database"""
@@ -237,7 +240,8 @@ class AirScentingHelper:
             if hasattr(self, 'a_dog_combo'):
                 self.a_dog_combo['values'] = dogs if dogs else []
         except Exception as e:
-            print(f"Error refreshing dog list: {e}")
+            # print(f"Error refreshing dog list: {e}")
+            pass
     
     # =========================================================================
     # SAVE BUTTON TEXT

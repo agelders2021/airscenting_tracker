@@ -313,6 +313,10 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
             cancel_button=self.status_cancel_button
         )
         
+        # Register with sv module for global access from any module
+        import sv as sv_module
+        sv_module.set_status_bar_manager(self.status_bar_mgr)
+        
         # Bind click on label to dismiss
         self.status_label.bind("<Button-1>", self.status_bar_mgr.dismiss_message)
         
@@ -370,7 +374,8 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                     else:
                         pass  # Dog not in valid dogs list
         except Exception as e:
-            print(f"Error loading last dog for air session: {e}")
+            # print(f"Error loading last dog for air session: {e}")
+            pass  # Non-critical error, dog can be selected manually
     
     # =========================================================================
     # BOOTSTRAP AND CONFIG
@@ -408,7 +413,8 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                         self.machine_trail_maps_folder = bootstrap.get("trail_maps_folder", "")
                         self.machine_backup_folder = bootstrap.get("backup_folder", "")
             except Exception as e:
-                print(f"Error loading bootstrap: {e}")
+                # print(f"Error loading bootstrap: {e}")
+                pass  # Will use defaults
         
         if not self.machine_current_user:
             self.machine_current_user = getuser()
@@ -501,16 +507,19 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                                 with open(secondary_config, 'w') as f:
                                     json.dump(self.config, f, indent=2)
                             except Exception as e:
-                                print(f"Warning: Could not mirror config: {e}")
+                                # print(f"Warning: Could not mirror config: {e}")
+                                pass  # Non-critical, primary saved
                 except Exception as e:
-                    print(f"Error saving config to JSON folder: {e}")
+                    # print(f"Error saving config to JSON folder: {e}")
+                    pass  # Non-critical, local config may work
         
         # Also save to local config
         try:
             with open(self.config_file, 'w') as f:
                 json.dump(self.config, f, indent=2)
         except Exception as e:
-            print(f"Error saving local config: {e}")
+            # print(f"Error saving local config: {e}")
+            pass  # Non-critical
     
     def get_json_config_path(self):
         """Get the path to config file in JSON folder"""
@@ -557,7 +566,8 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
             self.notebook.select(self.setup_tab)
             self.previous_tab_index = 0
             self.last_tab_index = 0
-            print("No database found - starting on Setup tab")
+            # print("No database found - starting on Setup tab")
+            pass
             # Disable other tabs until database exists
             self.notebook.tab(1, state='disabled')
             self.notebook.tab(2, state='disabled')
@@ -684,7 +694,8 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
             self.save_config()
             # print(f"DEBUG: Saved geometry '{geometry}'")
         except Exception as e:
-            print(f"Error saving window geometry: {e}")
+            # print(f"Error saving window geometry: {e}")
+            pass  # Non-critical
     
     # =========================================================================
     # WINDOW CLOSE
@@ -762,7 +773,8 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                 self.trailing_entry.update_location_list(sorted_locations)
                 
         except Exception as e:
-            print(f"Error refreshing location list: {e}")
+            # print(f"Error refreshing location list: {e}")
+            pass  # Non-critical
     
     def refresh_dog_list(self):
         """Refresh dog combobox in Air Scenting tab AND Trailing tab"""
@@ -792,7 +804,8 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                 # print(f"DEBUG refresh_dog_list: restored dog = '{current_dog}'")
                 
         except Exception as e:
-            print(f"Error refreshing dog list: {e}")
+            # print(f"Error refreshing dog list: {e}")
+            pass  # Non-critical
     
     def refresh_terrain_list(self):
         """Refresh terrain combobox in Air Scenting tab AND Trailing tab"""
@@ -819,7 +832,8 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                 self.trailing_entry.update_terrain_types(terrain_types)
                 
         except Exception as e:
-            print(f"Error refreshing terrain list: {e}")
+            # print(f"Error refreshing terrain list: {e}")
+            pass  # Non-critical
     
     def refresh_distraction_list(self):
         """Refresh distraction types in Trailing tab"""
@@ -842,7 +856,8 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                 self.trailing_entry.update_distraction_types(distraction_types)
                 
         except Exception as e:
-            print(f"Error refreshing distraction list: {e}")
+            # print(f"Error refreshing distraction list: {e}")
+            pass  # Non-critical
     
     # =========================================================================
     # DELEGATE METHODS (for setup_tab and other modules)

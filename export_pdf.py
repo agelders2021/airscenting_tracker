@@ -133,7 +133,8 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
                 for row in result:
                     sessions.append(row)
         except Exception as e:
-            print(f"Error fetching sessions: {e}")
+            # print(f"Error fetching sessions: {e}")
+            pass
         return sessions
     
     def populate_listbox():
@@ -227,36 +228,41 @@ def export_sessions_to_pdf(filepath, dog_name, session_numbers, get_connection_f
     Returns:
         bool: True if export succeeded, False otherwise
     """
-    print(f"[PDF Export] Starting export to: {filepath}")
-    print(f"[PDF Export] Dog: {dog_name}, Sessions: {session_numbers}")
+    # print(f"[PDF Export] Starting export to: {filepath}")
+    # print(f"[PDF Export] Dog: {dog_name}, Sessions: {session_numbers}")
+    
     
     try:
         # Fetch sessions from database
-        print("[PDF Export] Fetching sessions from database...")
+        # print("[PDF Export] Fetching sessions from database...")
         sessions = fetch_sessions_by_numbers(
             dog_name, session_numbers, get_connection_func
         )
         
-        print(f"[PDF Export] Found {len(sessions)} sessions")
+        # print(f"[PDF Export] Found {len(sessions)} sessions")
+        
         
         if not sessions:
             messagebox.showinfo("No Sessions", "No sessions found matching the specified criteria")
             return False
         
         # Generate PDF
-        print(f"[PDF Export] Generating PDF with trail_maps_folder: {trail_maps_folder}")
+        # print(f"[PDF Export] Generating PDF with trail_maps_folder: {trail_maps_folder}")
         generate_pdf(filepath, dog_name, sessions, trail_maps_folder)
         
         # Verify file was created
         if os.path.exists(filepath):
             file_size = os.path.getsize(filepath)
-            print(f"[PDF Export] SUCCESS - File created: {filepath} ({file_size} bytes)")
+            # print(f"[PDF Export] SUCCESS - File created: {filepath} ({file_size} bytes)")
+            
             
             # Send success message to status bar instead of popup
             if status_msg_var:
                 status_msg_var.set(f"Exported {len(sessions)} session(s) to: {filepath}")
             else:
-                print(f"Exported {len(sessions)} session(s) to: {filepath}")
+                # print(f"Exported {len(sessions)} session(s) to: {filepath}")
+            
+                pass
             
             # Ask to open the PDF
             if messagebox.askyesno("Open File?", "Would you like to open the exported PDF?"):
@@ -271,12 +277,12 @@ def export_sessions_to_pdf(filepath, dog_name, session_numbers, get_connection_f
             
             return True
         else:
-            print(f"[PDF Export] ERROR - File was not created at: {filepath}")
+            # print(f"[PDF Export] ERROR - File was not created at: {filepath}")
             messagebox.showerror("Export Error", f"PDF file was not created.\nPath: {filepath}")
             return False
         
     except Exception as e:
-        print(f"[PDF Export] EXCEPTION: {type(e).__name__}: {e}")
+        # print(f"[PDF Export] EXCEPTION: {type(e).__name__}: {e}")
         messagebox.showerror("Export Error", f"Failed to export PDF:\n{str(e)}")
         import traceback
         traceback.print_exc()
@@ -391,7 +397,9 @@ def export_to_pdf(filepath, dog_name, range_type, start_value, end_value, sort_o
         if status_msg_var:
             status_msg_var.set(f"Exported {len(sessions)} session(s) to: {filepath}")
         else:
-            print(f"Exported {len(sessions)} session(s) to: {filepath}")
+            # print(f"Exported {len(sessions)} session(s) to: {filepath}")
+        
+            pass
         
         # Ask to open the PDF
         if messagebox.askyesno("Open File?", "Would you like to open the exported PDF?"):
@@ -517,7 +525,8 @@ def fetch_sessions_for_export(dog_name, range_type, start_value, end_value, sort
 
 def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
     """Generate the PDF document"""
-    print(f"[PDF Export] generate_pdf called with {len(sessions)} sessions")
+    # print(f"[PDF Export] generate_pdf called with {len(sessions)} sessions")
+    
     
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -527,7 +536,7 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
     from reportlab.lib.enums import TA_LEFT, TA_CENTER
     
     # Create PDF
-    print(f"[PDF Export] Creating SimpleDocTemplate for: {filepath}")
+    # print(f"[PDF Export] Creating SimpleDocTemplate for: {filepath}")
     doc = SimpleDocTemplate(filepath, pagesize=letter,
                            topMargin=0.5*inch, bottomMargin=0.5*inch,
                            leftMargin=0.75*inch, rightMargin=0.75*inch)
@@ -745,9 +754,12 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
                                     try:
                                         import shutil
                                         shutil.copy2(image_path, video_dest)
-                                        print(f"[PDF Export] Copied video to: {video_dest}")
+                                        # print(f"[PDF Export] Copied video to: {video_dest}")
+                                        pass
                                     except Exception as copy_err:
-                                        print(f"[PDF Export] Warning: Could not copy video: {copy_err}")
+                                        # print(f"[PDF Export] Warning: Could not copy video: {copy_err}")
+                                
+                                        pass
                                 
                                 # Add link to video in PDF
                                 video_link = f'<a href="{image_file}" color="blue"><u>{image_file}</u></a>'
@@ -764,6 +776,6 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
                         story.append(Spacer(1, 0.1*inch))
     
     # Build PDF
-    print(f"[PDF Export] Building PDF with {len(story)} elements...")
+    # print(f"[PDF Export] Building PDF with {len(story)} elements...")
     doc.build(story)
-    print(f"[PDF Export] doc.build() completed")
+    # print(f"[PDF Export] doc.build() completed")

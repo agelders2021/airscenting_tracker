@@ -158,16 +158,19 @@ class FileOperations:
                     try:
                         shutil.copy2(filepath, dest_path)
                         copied_files.append(unique_name)  # Store just the filename, not full path
-                        print(f"Copied to primary: {dest_path}")
+                        # print(f"Copied to primary: {dest_path}")
+                        pass
                         
                         # Mirror to secondary Images folder if configured
                         if secondary_folder:
                             secondary_dest = secondary_folder / unique_name
                             try:
                                 shutil.copy2(filepath, str(secondary_dest))
-                                print(f"Mirrored to secondary: {secondary_dest}")
+                                # print(f"Mirrored to secondary: {secondary_dest}")
+                                pass
                             except Exception as e:
-                                print(f"Warning: Failed to mirror to secondary: {e}")
+                                # print(f"Warning: Failed to mirror to secondary: {e}")
+                                pass
                                 
                     except Exception as e:
                         messagebox.showerror("Copy Error", f"Failed to copy {original_name}:\n{e}")
@@ -188,14 +191,14 @@ class FileOperations:
             self.ui.a_view_map_button.config(state="normal")
             self.ui.a_delete_map_button.config(state="normal")
             
-            sv.status.set(f"{len(copied_files)} file(s) copied to trail maps folder")
+            sv.show_status_message(f"{len(copied_files)} file(s) copied to trail maps folder", "info")
             
             # Check if secondary backup was configured but unavailable
             # Notify user once per session via status bar
             if not secondary_folder and sv.backup_folder.get().strip():
                 if not sv.secondary_unavailable_notified:
                     sv.secondary_unavailable_notified = True
-                    sv.status.set("Warning: Secondary backup folder unavailable - files saved to primary only")
+                    sv.show_status_message("Warning: Secondary backup folder unavailable - files saved to primary only", "warning")
         else:
             messagebox.showerror("Error", "Only PDF, JPG, PNG, and video files (MP4, MOV, AVI, MKV, WebM) supported!")
     
@@ -262,10 +265,10 @@ class FileOperations:
             
             if os.path.exists(full_path):
                 os.remove(full_path)
-                print(f"Deleted from primary: {full_path}")
-                sv.status.set(f"Deleted file: {filename}")
+                # print(f"Deleted from primary: {full_path}")
+                sv.show_status_message(f"Deleted file: {filename}", "info")
             else:
-                sv.status.set(f"Removed from list (file not found): {filename}")
+                sv.show_status_message(f"Removed from list (file not found): {filename}", "info")
             
             # Also delete from secondary Images folder if it exists there
             secondary_folder = get_secondary_images_folder()
@@ -274,9 +277,11 @@ class FileOperations:
                 if secondary_path.exists():
                     try:
                         secondary_path.unlink()
-                        print(f"Deleted from secondary: {secondary_path}")
+                        # print(f"Deleted from secondary: {secondary_path}")
+                        pass
                     except Exception as e:
-                        print(f"Warning: Failed to delete from secondary: {e}")
+                        # print(f"Warning: Failed to delete from secondary: {e}")
+                        pass
                         
         except Exception as e:
             messagebox.showerror("Error", f"Failed to delete file:\n{str(e)}")

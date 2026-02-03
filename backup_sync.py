@@ -138,7 +138,7 @@ def validate_json_file(filepath: Path) -> Tuple[bool, Optional[dict]]:
             data = json.load(f)
         return True, data
     except Exception as e:
-        print(f"Invalid JSON file {filepath}: {e}")
+        # print(f"Invalid JSON file {filepath}: {e}")
         return False, None
 
 
@@ -227,7 +227,7 @@ class DatabaseOps:
                 conn.execute(text("SELECT COUNT(*) FROM t_training_sessions"))
             return True
         except Exception as e:
-            print(f"Database health check failed: {e}")
+            # print(f"Database health check failed: {e}")
             return False
     
     def get_all_sessions(self) -> List[SessionInfo]:
@@ -306,7 +306,8 @@ class DatabaseOps:
                         user_name=user_name
                     ))
         except Exception as e:
-            print(f"Error getting airscenting sessions: {e}")
+            # print(f"Error getting airscenting sessions: {e}")
+            pass
         
         return sessions
     
@@ -396,7 +397,8 @@ class DatabaseOps:
                         user_name=user_name
                     ))
         except Exception as e:
-            print(f"Error getting trailing sessions: {e}")
+            # print(f"Error getting trailing sessions: {e}")
+            pass
         
         return sessions
     
@@ -528,7 +530,7 @@ class DatabaseOps:
                 return True
                 
         except Exception as e:
-            print(f"Error upserting airscenting session: {e}")
+            # print(f"Error upserting airscenting session: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -690,7 +692,7 @@ class DatabaseOps:
                 return True
                 
         except Exception as e:
-            print(f"Error upserting trailing session: {e}")
+            # print(f"Error upserting trailing session: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -732,7 +734,7 @@ class DatabaseOps:
                 conn.commit()
                 return True
         except Exception as e:
-            print(f"Error updating timestamps: {e}")
+            # print(f"Error updating timestamps: {e}")
             return False
 
 
@@ -835,7 +837,7 @@ def write_json_file(folder_path: Path, session: SessionInfo) -> Optional[datetim
         return get_file_mtime(filepath)
         
     except Exception as e:
-        print(f"Error writing JSON file: {e}")
+        # print(f"Error writing JSON file: {e}")
         return None
 
 
@@ -856,13 +858,13 @@ def rename_legacy_json_file(filepath: Path, session: SessionInfo) -> Optional[Pa
         
         if filepath != new_filepath:
             shutil.move(str(filepath), str(new_filepath))
-            print(f"Renamed: {filepath.name} -> {new_filename}")
+            # print(f"Renamed: {filepath.name} -> {new_filename}")
             return new_filepath
         
         return filepath
         
     except Exception as e:
-        print(f"Error renaming file: {e}")
+        # print(f"Error renaming file: {e}")
         return None
 
 
@@ -1024,7 +1026,7 @@ class BackupSyncManager:
             try:
                 secondary_images.mkdir(parents=True, exist_ok=True)
             except Exception as e:
-                print(f"Could not create secondary Images folder: {e}")
+                # print(f"Could not create secondary Images folder: {e}")
                 return count
         
         # Image extensions to sync
@@ -1048,9 +1050,11 @@ class BackupSyncManager:
                     dest = secondary_images / name
                     shutil.copy2(str(filepath), str(dest))
                     count += 1
-                    print(f"  Copied image to secondary: {name}")
+                    # print(f"  Copied image to secondary: {name}")
+                    pass
                 except Exception as e:
-                    print(f"  Error copying {name} to secondary: {e}")
+                    # print(f"  Error copying {name} to secondary: {e}")
+                    pass
         
         # Copy missing files from secondary to primary
         for name, filepath in secondary_files.items():
@@ -1059,9 +1063,11 @@ class BackupSyncManager:
                     dest = primary_images / name
                     shutil.copy2(str(filepath), str(dest))
                     count += 1
-                    print(f"  Copied image to primary: {name}")
+                    # print(f"  Copied image to primary: {name}")
+                    pass
                 except Exception as e:
-                    print(f"  Error copying {name} to primary: {e}")
+                    # print(f"  Error copying {name} to primary: {e}")
+                    pass
         
         if count > 0:
             status(f"Synced {count} image(s)")
@@ -1301,7 +1307,8 @@ def save_session_with_backup(session_data: dict, session_type: str,
     if secondary_folder:
         secondary_ts = write_json_file(Path(secondary_folder), session)
         if not secondary_ts:
-            print("Warning: Failed to write secondary backup")
+            # print("Warning: Failed to write secondary backup")
+            pass
     
     # Update timestamps in DB
     db_ops = DatabaseOps(db_type)

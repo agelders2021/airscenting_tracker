@@ -686,6 +686,42 @@ class Stringvars:
 #   sv.initialize(self.root)
 sv = None
 
+# Global status bar manager - set by the main UI after StatusBarManager is created
+# This allows any module to call show_status_message() without needing a UI reference
+_status_bar_mgr = None
+
+
+def set_status_bar_manager(mgr):
+    """
+    Set the global status bar manager reference.
+    Called by the main UI after creating the StatusBarManager.
+    
+    Args:
+        mgr: The StatusBarManager instance
+    """
+    global _status_bar_mgr
+    _status_bar_mgr = mgr
+
+
+def show_status_message(message, msg_type="info"):
+    """
+    Display a status message using the global StatusBarManager.
+    Can be called from any module after the UI is initialized.
+    
+    Args:
+        message: Message text to display
+        msg_type: "info", "warning", or "error"
+    
+    Falls back to sv.status.set() if StatusBarManager not yet initialized.
+    """
+    global _status_bar_mgr, sv
+    
+    if _status_bar_mgr is not None:
+        _status_bar_mgr.show_message(message, msg_type)
+    elif sv is not None:
+        # Fallback to direct StringVar set if StatusBarManager not ready
+        sv.status.set(message)
+
 
 def initialize(master=None):
     """
@@ -780,7 +816,7 @@ if __name__ == "__main__":
     # Example 5: Change detection
     print("\nExample 5: Change detection")
     snapshot = sv.get_state_string()
-    sv.temperature.set("72Ãƒâ€šÃ‚Â°F")
+    sv.temperature.set("72ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°F")
     has_changes = sv.has_changes_from(snapshot)
     print(f"Has changes: {has_changes}")
     

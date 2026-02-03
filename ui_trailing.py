@@ -390,7 +390,7 @@ class TrailingEntryTab:
                                      values=["North", "South", "East", "West", "NE", "NW", "SE", "SW"])
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
-        tk.Label(weather_frame, text="Temperature (°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        tk.Label(weather_frame, text="Temperature (Â°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         tk.Entry(weather_frame, textvariable=sv.t_temp_laying, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="e", padx=5, pady=2)
@@ -414,7 +414,7 @@ class TrailingEntryTab:
                                      values=["North", "South", "East", "West", "NE", "NW", "SE", "SW"])
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
-        tk.Label(weather_frame, text="Temperature (°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        tk.Label(weather_frame, text="Temperature (Â°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         tk.Entry(weather_frame, textvariable=sv.t_temp_running, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="e", padx=5, pady=2)
@@ -430,12 +430,12 @@ class TrailingEntryTab:
         
         tk.Label(behavior_frame, text="Start Behavior:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_start_behavior, width=54,
-                    values=["Excellent\u2014Direction of Travel immediately identified ",
-                            "Very Good\u2014Direction of travel not imediately identified",
-                            "Good\u2014Direction of travel identified with cueing",
-                            "Fair\u2014Direction of travel not identified",
-                            "Poor\u2014Direction of travel incorrectly identified",
-                            "Needs Work\u2014Could not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
+                    values=["Excellentâ€”Direction of Travel immediately identified ",
+                            "Very Goodâ€”Direction of travel not imediately identified",
+                            "Goodâ€”Direction of travel identified with cueing",
+                            "Fairâ€”Direction of travel not identified",
+                            "Poorâ€”Direction of travel incorrectly identified",
+                            "Needs Workâ€”Could not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         
         tk.Label(behavior_frame, text="Pace:").grid(row=0, column=2, sticky="e", padx=5, pady=2)
@@ -453,9 +453,9 @@ class TrailingEntryTab:
         tk.Label(behavior_frame, text="Indication at Find:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_indication, width=54,
                     values=["Immediate Trained Final Response",
-                            "Strong Alert\u2014Exhibited Trained Final Response after hesitation",
-                            "Moderate Alert\u2014Alert behavior but no TFR",
-                            "Weak Alert\u2014Hesitant, before clear response, needed cueing", 
+                            "Strong AlertÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂExhibited Trained Final Response after hesitation",
+                            "Moderate AlertÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂAlert behavior but no TFR",
+                            "Weak AlertÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂHesitant, before clear response, needed cueing", 
                             "No Clear Indication"]).grid(row=1, column=1, sticky="w", padx=5, pady=2)
     
     def _create_distractions_section(self, frame):
@@ -613,7 +613,8 @@ class TrailingEntryTab:
             self.impression_map_frame.dnd_bind('<<DragEnter>>', self._drag_enter)
             self.impression_map_frame.dnd_bind('<<DragLeave>>', self._drag_leave)
         except Exception as e:
-            print(f"Drag-and-drop not available: {e}")
+            # print(f"Drag-and-drop not available: {e}")
+            pass
     
     def _create_trail_map_section(self, frame):
         """Trail map section is now combined with impression section - this is a no-op"""
@@ -1120,19 +1121,22 @@ class TrailingEntryTab:
                         primary_dest = primary_folder / unique_name
                         shutil.copy2(str(filepath), str(primary_dest))
                         copied_files.append(unique_name)  # Store just filename, not full path
-                        print(f"Copied to primary: {primary_dest}")
+                        # print(f"Copied to primary: {primary_dest}")
+                        pass
                         
                         # Mirror to secondary Images folder
                         if secondary_folder:
                             try:
                                 secondary_dest = secondary_folder / unique_name
                                 shutil.copy2(str(filepath), str(secondary_dest))
-                                print(f"Mirrored to secondary: {secondary_dest}")
+                                # print(f"Mirrored to secondary: {secondary_dest}")
+                                pass
                             except Exception as e:
-                                print(f"Warning: Failed to mirror to secondary: {e}")
+                                # print(f"Warning: Failed to mirror to secondary: {e}")
+                                pass
                                 
                     except Exception as e:
-                        print(f"Error copying {filepath}: {e}")
+                        # print(f"Error copying {filepath}: {e}")
                         messagebox.showerror("Copy Error", f"Failed to copy {filepath.name}:\n{e}")
         
         if copied_files:
@@ -1204,7 +1208,7 @@ class TrailingEntryTab:
             
             if os.path.exists(full_path):
                 os.remove(full_path)
-                print(f"Deleted from primary: {full_path}")
+                # print(f"Deleted from primary: {full_path}")
                 sv.t_status.set(f"Deleted file: {filename}")
             else:
                 sv.t_status.set(f"Removed from list (file not found): {filename}")
@@ -1216,9 +1220,11 @@ class TrailingEntryTab:
                 if secondary_path.exists():
                     try:
                         secondary_path.unlink()
-                        print(f"Deleted from secondary: {secondary_path}")
+                        # print(f"Deleted from secondary: {secondary_path}")
+                        pass
                     except Exception as e:
-                        print(f"Warning: Failed to delete from secondary: {e}")
+                        # print(f"Warning: Failed to delete from secondary: {e}")
+                        pass
                         
         except Exception as e:
             messagebox.showerror("Error", f"Failed to delete file:\n{str(e)}")
@@ -1638,7 +1644,8 @@ class TrailingEntryTab:
                 self.impression_map_frame.dnd_bind('<<DragEnter>>', self._drag_enter)
                 self.impression_map_frame.dnd_bind('<<DragLeave>>', self._drag_leave)
         except Exception as e:
-            print(f"Could not enable drag-drop: {e}")
+            # print(f"Could not enable drag-drop: {e}")
+            pass
 
 
 # Example usage / testing
@@ -1680,9 +1687,10 @@ if __name__ == "__main__":
     
     # Test callbacks
     def on_save(data):
-        print("Save requested with data:")
+        # print("Save requested with data:")
         for k, v in data.items():
-            print(f"  {k}: {v}")
+            # print(f"  {k}: {v}")
+            pass
         return True
     
     callbacks = {

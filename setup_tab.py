@@ -783,9 +783,10 @@ class SetupTab:
         try:
             secondary_images.mkdir(exist_ok=True)
             secondary_json.mkdir(exist_ok=True)
-            print(f"Created/verified secondary backup folders:")
-            print(f"  Images: {secondary_images} (exists={secondary_images.exists()})")
-            print(f"  JSON: {secondary_json} (exists={secondary_json.exists()})")
+            # print(f"Created/verified secondary backup folders:")
+            # print(f"  Images: {secondary_images} (exists={secondary_images.exists()})")
+            # print(f"  JSON: {secondary_json} (exists={secondary_json.exists()})")
+            
             
             # Update machine-specific path for bootstrap
             self.ui.machine_backup_folder = secondary_folder
@@ -849,7 +850,9 @@ class SetupTab:
                     import time
                     time.sleep(0.5)
                 except Exception as e:
-                    print(f"Note: Could not dispose engine: {e}")
+                    # print(f"Note: Could not dispose engine: {e}")
+                
+                    pass
                 
                 # Delete existing database AND WAL files
                 try:
@@ -1158,7 +1161,9 @@ class SetupTab:
                     self.s_location_listbox.delete(0, tk.END)
                 # Don't print - this is expected before database is created
             else:
-                print(f"Error loading locations: {e}")
+                # print(f"Error loading locations: {e}")
+
+                pass
 
     def refresh_location_list(self):
         """Refresh the location combobox in Entry tab"""
@@ -1225,7 +1230,9 @@ class SetupTab:
                 if hasattr(self.ui, 'a_location_combo') and self.ui.a_location_combo:
                     self.ui.a_location_combo['values'] = []
             else:
-                print(f"Error refreshing location list: {e}")
+                # print(f"Error refreshing location list: {e}")
+
+                pass
 
     def load_terrain_from_database(self):
         """Load terrain types from database into Setup tab treeview"""
@@ -1293,7 +1300,9 @@ class SetupTab:
                 if hasattr(self, 'terrain_tree'):
                     self.s_terrain_tree.delete(*self.s_terrain_tree.get_children())
             else:
-                print(f"Error loading terrain types: {e}")
+                # print(f"Error loading terrain types: {e}")
+
+                pass
 
     def load_distraction_from_database(self):
         """Load distraction types from database into Setup tab treeview"""
@@ -1357,7 +1366,9 @@ class SetupTab:
                 if hasattr(self, 'distraction_type_tree'):
                     self.s_distraction_type_tree.delete(*self.s_distraction_type_tree.get_children())
             else:
-                print(f"Error loading distraction types: {e}")
+                # print(f"Error loading distraction types: {e}")
+
+                pass
 
     def update_location_button_states(self, *args):
         """Enable/disable location buttons based on entry content"""
@@ -1429,7 +1440,9 @@ class SetupTab:
                     messagebox.showinfo("Duplicate", f"Location '{location}' already exists")
                 else:
                     messagebox.showerror("Database Error", f"Failed to add location:\n{e}")
-                    print(f"Error adding location: {e}")
+                    # print(f"Error adding location: {e}")
+
+                    pass
 
     def remove_location(self):
         """Remove selected training location from database"""
@@ -1495,7 +1508,10 @@ class SetupTab:
                     pass
                 
                 messagebox.showerror("Database Error", f"Failed to remove location:\n{e}")
-                print(f"Error removing location: {e}")
+                # print(f"Error removing location: {e}")
+    
+
+                pass
     
 
     def load_dogs_from_database(self):
@@ -1503,6 +1519,7 @@ class SetupTab:
         db_type = sv.db_type.get()
         
         # print(f"DEBUG load_dogs_from_database: db_type={db_type}")  # DEBUG
+        
         
         # For SQLite, check if database file exists before trying to connect
         if db_type == "sqlite":
@@ -1538,6 +1555,7 @@ class SetupTab:
             
             # print(f"DEBUG load_dogs_from_database: Found {len(dogs)} dogs: {dogs}")  # DEBUG
             
+            
             # Restore original DB_TYPE
             config.DB_TYPE = old_db_type
             database.engine.dispose()
@@ -1549,6 +1567,8 @@ class SetupTab:
                 self.s_dog_listbox.insert(tk.END, dog)
             
             # print(f"DEBUG load_dogs_from_database: Populated listbox with {len(dogs)} dogs")  # DEBUG
+                
+            pass
                 
         except Exception as e:
             # Restore original DB_TYPE on error
@@ -1569,13 +1589,16 @@ class SetupTab:
                     self.s_dog_listbox.delete(0, tk.END)
                 # Don't print - this is expected before database is created
             else:
-                print(f"Error loading dogs: {e}")
+                # print(f"Error loading dogs: {e}")
+
+                pass
 
     def refresh_dog_list(self):
         """Refresh the dog combobox in Entry tab"""
         db_type = sv.db_type.get()
         
         # print(f"DEBUG refresh_dog_list: db_type={db_type}")  # DEBUG
+        
         
         # For SQLite, check if database file exists before trying to connect
         if db_type == "sqlite":
@@ -1613,6 +1636,7 @@ class SetupTab:
             
             # print(f"DEBUG refresh_dog_list: Found {len(dogs)} dogs: {dogs}")  # DEBUG
             
+            
             # Restore original DB_TYPE
             config.DB_TYPE = old_db_type
             database.engine.dispose()
@@ -1633,6 +1657,8 @@ class SetupTab:
                 self.s_dog_listbox.insert(tk.END, dog)
             
             # print(f"DEBUG refresh_dog_list: Updated dog_listbox with {len(dogs)} dogs")  # DEBUG
+                
+            pass
                 
         except Exception as e:
             # Restore original DB_TYPE on error
@@ -1656,7 +1682,9 @@ class SetupTab:
                 # Don't print error - this is expected before database is created
             else:
                 # Unexpected error - print it
-                print(f"Error refreshing dog list: {e}")
+                # print(f"Error refreshing dog list: {e}")
+
+                pass
 
     def update_dog_button_states(self, *args):
         """Enable/disable dog buttons based on entry content"""
@@ -1736,7 +1764,9 @@ class SetupTab:
                     messagebox.showinfo("Duplicate", f"Dog '{dog_name}' already exists")
                 else:
                     messagebox.showerror("Database Error", f"Failed to add dog:\n{e}")
-                    print(f"Error adding dog: {e}")
+                    # print(f"Error adding dog: {e}")
+
+                    pass
 
     def remove_dog(self):
         """Remove selected dog name"""
@@ -1809,7 +1839,10 @@ class SetupTab:
                     pass
                 
                 messagebox.showerror("Database Error", f"Failed to remove dog:\n{e}")
-                print(f"Error removing dog: {e}")
+                # print(f"Error removing dog: {e}")
+    
+
+                pass
     
 
     def update_terrain_button_states(self, *args):
@@ -1884,7 +1917,9 @@ class SetupTab:
                     messagebox.showinfo("Duplicate", f"Terrain type '{terrain}' already exists")
                 else:
                     messagebox.showerror("Database Error", f"Failed to add terrain type:\n{e}")
-                    print(f"Error adding terrain type: {e}")
+                    # print(f"Error adding terrain type: {e}")
+
+                    pass
 
     def remove_terrain_type(self):
         """Remove selected terrain type from database"""
@@ -1950,7 +1985,9 @@ class SetupTab:
                     pass
                 
                 messagebox.showerror("Database Error", f"Failed to remove terrain type:\n{e}")
-                print(f"Error removing terrain type: {e}")
+                # print(f"Error removing terrain type: {e}")
+
+                pass
 
     def move_terrain_up(self):
         """Move selected terrain type up"""
@@ -2096,7 +2133,9 @@ class SetupTab:
                     messagebox.showinfo("Duplicate", f"Distraction type '{distraction}' already exists")
                 else:
                     messagebox.showerror("Database Error", f"Failed to add distraction type:\n{e}")
-                    print(f"Error adding distraction type: {e}")
+                    # print(f"Error adding distraction type: {e}")
+
+                    pass
 
     def remove_distraction_type(self):
         """Remove selected distraction type from database"""
@@ -2162,7 +2201,9 @@ class SetupTab:
                     pass
                 
                 messagebox.showerror("Database Error", f"Failed to remove distraction type:\n{e}")
-                print(f"Error removing distraction type: {e}")
+                # print(f"Error removing distraction type: {e}")
+
+                pass
 
     def move_distraction_up(self):
         """Move selected distraction type up"""
@@ -2286,7 +2327,9 @@ class SetupTab:
             self.ui.config["training_locations"] = locations if locations else []
             
         except Exception as e:
-            print(f"Warning: Could not load data from database for config: {e}")
+            # print(f"Warning: Could not load data from database for config: {e}")
+        
+            pass
         
         # Save machine-specific paths first (so JSON folder path is known)
         self.ui.machine_db_path = sv.db_path.get()
@@ -2335,7 +2378,9 @@ class SetupTab:
             self.ui.save_config()
             
         except Exception as e:
-            print(f"Warning: Could not sync config from database: {e}")
+            # print(f"Warning: Could not sync config from database: {e}")
+    
+            pass
     
     def _on_user_combo_focus_out(self, event=None):
         """Handle user combobox focus out - save new user and prompt for restart.

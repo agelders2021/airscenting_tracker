@@ -153,7 +153,7 @@ class BackupSyncManager:
             status_callback: Callback to update status bar (receives message string)
         """
         if self.sync_in_progress:
-            print("Sync already in progress")
+            # print("Sync already in progress")
             return False
         
         self.sync_in_progress = True
@@ -175,7 +175,7 @@ class BackupSyncManager:
                 
             except Exception as e:
                 self.sync_results["errors"].append(f"Sync error: {e}")
-                print(f"Sync error: {e}")
+                # print(f"Sync error: {e}")
                 import traceback
                 traceback.print_exc()
             finally:
@@ -210,6 +210,7 @@ class BackupSyncManager:
                 status_callback("Sync: Scanning primary JSON folder...")
             primary_dict = scan_json_folder(primary_path)
             # print(f"Sync: Found {len(primary_dict)} sessions in primary JSON")
+            pass
         
         # Step 2: Scan secondary JSON folder
         secondary_dict = {}
@@ -218,12 +219,14 @@ class BackupSyncManager:
                 status_callback("Sync: Scanning secondary JSON folder...")
             secondary_dict = scan_json_folder(secondary_path)
             # print(f"Sync: Found {len(secondary_dict)} sessions in secondary JSON")
+            pass
         
         # Step 3: Get DB sessions
         if status_callback:
             status_callback("Sync: Reading database sessions...")
         db_sessions = get_db_sessions_for_sync(db_type)
         # print(f"Sync: Found {len(db_sessions)} sessions in database")
+        pass
         
         # Step 4: Sync DB Ã¢â€ â€™ Primary JSON
         if primary_path and primary_path.exists():
@@ -258,7 +261,8 @@ class BackupSyncManager:
             count = sync_secondary_to_primary(secondary_dict, primary_dict, primary_path, db_type)
             self.sync_results["secondary_to_primary"] = count
         
-        print(f"Sync complete: {self.sync_results}")
+        # print(f"Sync complete: {self.sync_results}")
+        pass
 
 
 def scan_json_folder(folder_path):
@@ -313,7 +317,8 @@ def scan_json_folder(folder_path):
             }
             
         except Exception as e:
-            print(f"Warning: Could not read {json_file}: {e}")
+            # print(f"Warning: Could not read {json_file}: {e}")
+            pass
     
     return result
 
@@ -464,7 +469,8 @@ def get_db_sessions_for_sync(db_type):
                         }
             except Exception as te:
                 # t_training_sessions table might not exist
-                print(f"Note: Could not query t_training_sessions: {te}")
+                # print(f"Note: Could not query t_training_sessions: {te}")
+                pass
         
         # Restore original DB type
         if old_db_type != db_type:
@@ -473,7 +479,7 @@ def get_db_sessions_for_sync(db_type):
             reload(database)
             
     except Exception as e:
-        print(f"Error getting DB sessions for sync: {e}")
+        # print(f"Error getting DB sessions for sync: {e}")
         import traceback
         traceback.print_exc()
     
@@ -506,6 +512,7 @@ def sync_db_to_json(db_sessions, json_dict, json_folder, db_type):
             # Session not in JSON - create it
             should_write = True
             # print(f"Sync: DB session {session_uuid} not in JSON, creating...")
+            pass
         else:
             # Compare DB update time with JSON file modification time
             db_time = _parse_update_time(db_info["update_time"])
@@ -515,6 +522,7 @@ def sync_db_to_json(db_sessions, json_dict, json_folder, db_type):
             if db_time and json_time and db_time > json_time:
                 should_write = True
                 # print(f"Sync: DB newer than JSON file for {session_uuid}")
+                pass
         
         if should_write:
             try:
@@ -543,9 +551,11 @@ def sync_db_to_json(db_sessions, json_dict, json_folder, db_type):
                     
                     count += 1
                     # print(f"Sync: Wrote {filepath}")
+                    pass
                     
             except Exception as e:
-                print(f"Sync error writing JSON for {session_uuid}: {e}")
+                # print(f"Sync error writing JSON for {session_uuid}: {e}")
+                pass
     
     return count
 
@@ -644,7 +654,7 @@ def load_full_session_from_db(session_number, dog_name, db_type):
         return session_data
         
     except Exception as e:
-        print(f"Error loading full session from DB: {e}")
+        # print(f"Error loading full session from DB: {e}")
         return None
 
 
@@ -672,7 +682,8 @@ def sync_json_to_db(json_dict, db_sessions, db_type):
                 if insert_session_from_json(json_info["data"], db_type):
                     count += 1
             except Exception as e:
-                print(f"Sync error inserting session from JSON: {e}")
+                # print(f"Sync error inserting session from JSON: {e}")
+                pass
         else:
             # Both exist - check if JSON file is newer (use file mtime for manual edits)
             db_time = _parse_update_time(db_info["update_time"])
@@ -685,7 +696,8 @@ def sync_json_to_db(json_dict, db_sessions, db_type):
                     if update_db_from_json(json_info["data"], db_type):
                         count += 1
                 except Exception as e:
-                    print(f"Sync error updating DB from JSON: {e}")
+                    # print(f"Sync error updating DB from JSON: {e}")
+                    pass
     
     return count
     
@@ -845,6 +857,7 @@ def insert_airscenting_session_from_json(json_data, db_type):
             
             conn.commit()
             # print(f"Sync: Inserted/updated airscenting session {json_data.get('session_number')} for {json_data.get('dog_name')}")
+            pass
         
         # Restore original DB type
         if old_db_type != db_type:
@@ -855,7 +868,7 @@ def insert_airscenting_session_from_json(json_data, db_type):
         return True
         
     except Exception as e:
-        print(f"Error inserting airscenting session from JSON: {e}")
+        # print(f"Error inserting airscenting session from JSON: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -1043,6 +1056,7 @@ def insert_trailing_session_from_json(json_data, db_type):
             
             conn.commit()
             # print(f"Sync: Inserted/updated trailing session {json_data.get('t_session_number')} for {json_data.get('t_dog_name')}")
+            pass
         
         # Restore original DB type
         if old_db_type != db_type:
@@ -1053,7 +1067,7 @@ def insert_trailing_session_from_json(json_data, db_type):
         return True
         
     except Exception as e:
-        print(f"Error inserting trailing session from JSON: {e}")
+        # print(f"Error inserting trailing session from JSON: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -1157,7 +1171,7 @@ def update_airscenting_db_from_json(json_data, db_type):
         return True
         
     except Exception as e:
-        print(f"Error updating airscenting DB from JSON: {e}")
+        # print(f"Error updating airscenting DB from JSON: {e}")
         return False
 
 
@@ -1261,6 +1275,7 @@ def update_trailing_db_from_json(json_data, db_type):
             )
             conn.commit()
             # print(f"Sync: Updated trailing session {json_data.get('t_session_number')} from JSON")
+            pass
         
         # Restore original DB type
         if old_db_type != db_type:
@@ -1271,7 +1286,7 @@ def update_trailing_db_from_json(json_data, db_type):
         return True
         
     except Exception as e:
-        print(f"Error updating trailing DB from JSON: {e}")
+        # print(f"Error updating trailing DB from JSON: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -1291,7 +1306,7 @@ def validate_json_file(filepath):
             json.load(f)
         return True
     except Exception as e:
-        print(f"JSON validation failed for {filepath}: {e}")
+        # print(f"JSON validation failed for {filepath}: {e}")
         return False
 
 
@@ -1336,8 +1351,10 @@ def sync_primary_to_secondary(primary_dict, secondary_dict, secondary_folder):
                 shutil.copy2(str(src), str(dst))
                 count += 1
                 # print(f"Sync: Copied to secondary: {dst.name}")
+                pass
             except Exception as e:
-                print(f"Sync error copying to secondary: {e}")
+                # print(f"Sync error copying to secondary: {e}")
+                pass
     
     return count
 
@@ -1383,13 +1400,15 @@ def sync_secondary_to_primary(secondary_dict, primary_dict, primary_folder, db_t
                 shutil.copy2(str(src), str(dst))
                 count += 1
                 # print(f"Sync: Copied from secondary to primary: {dst.name}")
+                pass
                 
                 # Also update DB if this file has a UUID
                 if secondary_info.get("has_uuid"):
                     update_db_from_json(secondary_info["data"], db_type)
                     
             except Exception as e:
-                print(f"Sync error copying from secondary: {e}")
+                # print(f"Sync error copying from secondary: {e}")
+                pass
     
     return count
 

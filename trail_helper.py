@@ -71,7 +71,7 @@ class TrailingHelper:
             self.show_status_message(message, "info")
             return True
         else:
-            print(f"ERROR saving trailing session: {message}")
+            # print(f"ERROR saving trailing session: {message}")
             self.show_status_message(f"Error: {message}", "error")
             return False
     
@@ -99,13 +99,13 @@ class TrailingHelper:
             
             primary, secondary, checksum, primary_ts, secondary_ts = save_json_mirrored(filename, backup_data)
             
-            if primary:
-                print(f"Trailing session saved to JSON: {primary}")
-            if secondary:
-                print(f"Trailing session mirrored to: {secondary}")
+            # if primary:
+            #     print(f"Trailing session saved to JSON: {primary}")
+            # if secondary:
+            #     print(f"Trailing session mirrored to: {secondary}")
                 
         except Exception as e:
-            print(f"Warning: Failed to save trailing session to JSON: {e}")
+            # print(f"Warning: Failed to save trailing session to JSON: {e}")
             self.show_status_message(f"Backup failed: {str(e)}", "error")
     
     # =========================================================================
@@ -859,9 +859,11 @@ class TrailingHelper:
                                             if not os.path.exists(video_dest):
                                                 try:
                                                     shutil.copy2(image_path, video_dest)
-                                                    print(f"[PDF Export] Copied video to: {video_dest}")
+                                                    # print(f"[PDF Export] Copied video to: {video_dest}")
+                                                    pass
                                                 except Exception as copy_err:
-                                                    print(f"[PDF Export] Warning: Could not copy video: {copy_err}")
+                                                    # print(f"[PDF Export] Warning: Could not copy video: {copy_err}")
+                                                    pass
                                             
                                             video_link = f'<a href="{display_name}" color="blue"><u>{display_name}</u></a>'
                                             note_text = f"<b>Video:</b> {video_link}<br/><font color='gray' size='8'>(Video file copied to PDF folder - click to open)</font>"
@@ -940,14 +942,15 @@ class TrailingHelper:
                     self.root.after(1300, lambda: self.show_status_message(
                         f"Trailing ready - {last_dog} - Next session: #{next_session}", "info"))
                 except Exception as e:
-                    print(f"Error getting next session number: {e}")
+                    # print(f"Error getting next session number: {e}")
+                    pass
             
             # Take form snapshot after data is loaded
             if hasattr(self, 'trailing_entry'):
                 self.trailing_entry.take_form_snapshot()
                 
         except Exception as e:
-            print(f"Error loading trailing initial data: {e}")
+            # print(f"Error loading trailing initial data: {e}")
             import traceback
             traceback.print_exc()
     
@@ -989,7 +992,7 @@ class TrailingHelper:
                 terrain_types = get_default_terrain_types()
             return terrain_types
         except Exception as e:
-            print(f"Error loading terrain types: {e}")
+            # print(f"Error loading terrain types: {e}")
             terrain_types = self.config.get("terrain_types", [])
             if not terrain_types:
                 from ui_utils import get_default_terrain_types
@@ -1013,7 +1016,7 @@ class TrailingHelper:
                 distraction_types = get_default_distraction_types()
             return distraction_types
         except Exception as e:
-            print(f"Error loading distraction types: {e}")
+            # print(f"Error loading distraction types: {e}")
             distraction_types = self.config.get("distraction_types", [])
             if not distraction_types:
                 from ui_utils import get_default_distraction_types

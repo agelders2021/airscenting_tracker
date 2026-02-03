@@ -113,7 +113,8 @@ class MiscDataOperations:
             
         except Exception as e:
             error_msg = str(e)
-            print(f"Database validation error: {error_msg}")
+            # print(f"Database validation error: {error_msg}")
+            pass
             
             # Database exists but is corrupted or inaccessible
             return self._offer_rebuild_from_json(db_path, json_path, f"Database error: {error_msg}")
@@ -216,7 +217,7 @@ class MiscDataOperations:
             from schema import create_tables
             create_tables()
             
-            sv.status.set("Database recreated, restoring from backups...")
+            sv.show_status_message("Database recreated, restoring from backups...", "info")
             
             # Now restore from JSON backups (reuse existing logic but without asking)
             self._restore_sessions_from_json(json_path)
@@ -307,7 +308,7 @@ class MiscDataOperations:
                 restored_count += 1
                 
             except Exception as e:
-                print(f"Failed to restore {json_file}: {e}")
+                # print(f"Failed to restore {json_file}: {e}")
                 failed_count += 1
         
         # Add dog names to database
@@ -337,7 +338,7 @@ class MiscDataOperations:
         # Also restore from config file if it exists
         config_restored = self._restore_config_data_to_db(json_path)
         
-        sv.status.set(f"Restored {restored_count} session(s) from backup")
+        sv.show_status_message(f"Restored {restored_count} session(s) from backup", "info")
         if restored_count > 0 or config_restored:
             msg = f"Successfully restored {restored_count} session(s) from JSON backups."
             if config_restored:
@@ -366,7 +367,7 @@ class MiscDataOperations:
             with open(config_file, 'r') as f:
                 config_data = json.load(f)
         except Exception as e:
-            print(f"Could not load config file: {e}")
+            # print(f"Could not load config file: {e}")
             return False
         
         restored_something = False
@@ -447,7 +448,7 @@ class MiscDataOperations:
             if not self.validate_database_at_startup():
                 # Database not valid and couldn't be rebuilt
                 # Skip loading data, user needs to set up
-                sv.status.set("Database not configured - please complete Setup")
+                sv.show_status_message("Database not configured - please complete Setup", "warning")
                 self._enable_sync_sensitive_buttons()  # Re-enable since we're done
                 return
             
@@ -459,7 +460,7 @@ class MiscDataOperations:
                 self._start_startup_sync_thread()
             else:
                 # DB appears damaged - run sync synchronously to rebuild
-                print("Database appears damaged - running synchronous rebuild...")
+                # print("Database appears damaged - running synchronous rebuild...")
                 self._perform_synchronous_startup_sync()
                 self._enable_sync_sensitive_buttons()
             
@@ -497,7 +498,8 @@ class MiscDataOperations:
                     next_computed = len(filtered_sessions) + 1
                     sv.session_number.set(str(next_computed))
             except Exception as e:
-                print(f"Could not load last dog: {e}")
+                # print(f"Could not load last dog: {e}")
+                pass
             self.ui.root.after(50, step6)
         
         def step6():
@@ -531,6 +533,7 @@ class MiscDataOperations:
             if hasattr(self.ui, 'notebook') and hasattr(self.ui, 'entry_tab'):
                 self.ui.notebook.select(self.ui.entry_tab)
                 # print("Database valid - starting on Entry tab")
+                pass
         
         # Start the chain with database validation
         step0()
@@ -563,7 +566,7 @@ class MiscDataOperations:
                 conn.execute(text("SELECT COUNT(*) FROM t_training_sessions"))
             return True
         except Exception as e:
-            print(f"Database health check failed: {e}")
+            # print(f"Database health check failed: {e}")
             return False
     
     def _start_startup_sync_thread(self):
@@ -593,7 +596,7 @@ class MiscDataOperations:
                 
                 def status_callback(message):
                     def update():
-                        sv.status.set(message)
+                        sv.show_status_message(message, "info")
                     self.ui.root.after(0, update)
                 
                 results = sync_manager.perform_full_sync(status_callback=status_callback)
@@ -616,6 +619,7 @@ class MiscDataOperations:
                                 next_computed = len(filtered_sessions) + 1
                                 sv.session_number.set(str(next_computed))
                                 # print(f"Startup sync: Updated session number to {next_computed} for {dog_name}")
+                                pass
                             except Exception as e:
                                 pass  # Error updating session number
                     
@@ -628,26 +632,27 @@ class MiscDataOperations:
                     )
                     
                     if total_changes > 0:
-                        sv.status.set(f"Sync complete: {total_changes} file(s) synchronized")
+                        sv.show_status_message(f"Sync complete: {total_changes} file(s) synchronized", "info")
                     else:
-                        sv.status.set("Ready")
+                        sv.show_status_message("Ready", "info")
                 
                 self.ui.root.after(0, on_complete)
                 
             except Exception as e:
-                print(f"Startup sync error: {e}")
+                # print(f"Startup sync error: {e}")
                 import traceback
                 traceback.print_exc()
                 
                 def reset():
                     self._enable_sync_sensitive_buttons()
-                    sv.status.set("Ready")
+                    sv.show_status_message("Ready", "info")
                 self.ui.root.after(0, reset)
         
         # Start sync thread
         sync_thread = threading.Thread(target=do_sync, daemon=True)
         sync_thread.start()
         # print("Startup sync: Started in background thread")
+        pass
     
     def _perform_synchronous_startup_sync(self):
         """Perform startup sync synchronously (blocking) for DB rebuild."""
@@ -664,7 +669,7 @@ class MiscDataOperations:
                 return
             
             # print("Startup sync: Beginning synchronous synchronization...")
-            sv.status.set("Rebuilding database from backups...")
+            sv.show_status_message("Rebuilding database from backups...", "info")
             self.ui.root.update_idletasks()
             
             sync_manager = BackupSyncManager(
@@ -674,8 +679,8 @@ class MiscDataOperations:
             )
             
             def status_callback(message):
-                print(f"  {message}")
-                sv.status.set(message)
+                # print(f"  {message}")
+                sv.show_status_message(message, "info")
                 self.ui.root.update_idletasks()
             
             results = sync_manager.perform_full_sync(status_callback=status_callback)
@@ -688,14 +693,14 @@ class MiscDataOperations:
             )
             
             if total_changes > 0:
-                print(f"Startup sync complete: {total_changes} change(s)")
-                sv.status.set(f"Rebuild complete: {total_changes} file(s) synchronized")
+                # print(f"Startup sync complete: {total_changes} change(s)")
+                sv.show_status_message(f"Rebuild complete: {total_changes} file(s) synchronized", "info")
             else:
-                print("Startup sync complete: All backups already in sync")
-                sv.status.set("Ready")
+                # print("Startup sync complete: All backups already in sync")
+                sv.show_status_message("Ready", "info")
             
         except Exception as e:
-            print(f"Startup sync error: {e}")
+            # print(f"Startup sync error: {e}")
             import traceback
             traceback.print_exc()
     
@@ -717,7 +722,7 @@ class MiscDataOperations:
             secondary_folder = get_secondary_json_folder()
             
             if not primary_folder:
-                print("Sync: No primary JSON folder configured, skipping sync")
+                # print("Sync: No primary JSON folder configured, skipping sync")
                 self._enable_sync_sensitive_buttons()
                 return
             
@@ -734,7 +739,7 @@ class MiscDataOperations:
                     
                     def status_callback(message):
                         def update():
-                            sv.status.set(message)
+                            sv.show_status_message(message, "info")
                         self.ui.root.after(0, update)
                     
                     results = sync_manager.perform_full_sync(status_callback=status_callback)
@@ -757,9 +762,11 @@ class MiscDataOperations:
                                     )
                                     next_computed = len(filtered_sessions) + 1
                                     sv.session_number.set(str(next_computed))
-                                    print(f"Sync: Updated session number to {next_computed} for {dog_name}")
+                                    # print(f"Sync: Updated session number to {next_computed} for {dog_name}")
+                                    pass
                                 except Exception as e:
-                                    print(f"Sync: Error updating session number: {e}")
+                                    # print(f"Sync: Error updating session number: {e}")
+                                    pass
                         
                         # Build status message
                         total_changes = (
@@ -770,17 +777,18 @@ class MiscDataOperations:
                         )
                         
                         if total_changes > 0:
-                            sv.status.set(f"Sync complete: {total_changes} file(s) synchronized")
+                            sv.show_status_message(f"Sync complete: {total_changes} file(s) synchronized", "info")
                         else:
-                            sv.status.set("Sync complete: All backups up to date")
+                            sv.show_status_message("Sync complete: All backups up to date", "info")
                         
                         if results.get('errors'):
-                            print(f"Sync errors: {results['errors']}")
+                            # print(f"Sync errors: {results['errors']}")
+                            pass
                     
                     self.ui.root.after(0, update_ui)
                     
                 except Exception as e:
-                    print(f"Background sync error: {e}")
+                    # print(f"Background sync error: {e}")
                     import traceback
                     traceback.print_exc()
                     
@@ -792,10 +800,11 @@ class MiscDataOperations:
             sync_thread = threading.Thread(target=do_sync, daemon=True)
             sync_thread.start()
             
-            print("Sync: Background sync started")
+            # print("Sync: Background sync started")
+            pass
             
         except Exception as e:
-            print(f"Error starting background sync: {e}")
+            # print(f"Error starting background sync: {e}")
             self._enable_sync_sensitive_buttons()
     
     def select_initial_tab(self):
@@ -918,27 +927,30 @@ class MiscDataOperations:
             primary, secondary, checksum, primary_ts, secondary_ts = save_json_mirrored(filename, session_data)
             
             if primary:
-                print(f"Session backup saved: {primary}")
+                # print(f"Session backup saved: {primary}")
+                pass
             if secondary:
-                print(f"Session backup mirrored: {secondary}")
+                # print(f"Session backup mirrored: {secondary}")
+                pass
             
             # Update database with checksum and timestamps
             if checksum:
                 try:
                     self._update_session_backup_info(session_num, dog_name, checksum, primary_ts, secondary_ts)
                 except Exception as e:
-                    print(f"Warning: Could not update backup info in DB: {e}")
+                    # print(f"Warning: Could not update backup info in DB: {e}")
+                    pass
             
             # Check if secondary backup was configured but unavailable
             # Notify user once per session via status bar
             if not secondary and sv.backup_folder.get().strip():
                 if not sv.secondary_unavailable_notified:
                     sv.secondary_unavailable_notified = True
-                    sv.status.set("Warning: Secondary backup folder unavailable - backup saved to primary only")
+                    sv.show_status_message("Warning: Secondary backup folder unavailable - backup saved to primary only", "warning")
                     
         except Exception as e:
             error_msg = f"Backup failed: {str(e)}"
-            print(f"Warning: Failed to save session to JSON: {e}")
+            # print(f"Warning: Failed to save session to JSON: {e}")
             self.ui.show_status_message(error_msg, "error")
     
     def _update_session_backup_info(self, session_number, dog_name, checksum, primary_ts, secondary_ts):
@@ -962,9 +974,11 @@ class MiscDataOperations:
                     'dog_name': dog_name
                 })
                 conn.commit()
-                print(f"Updated backup info: checksum={checksum[:16]}..., primary_ts={primary_ts}, secondary_ts={secondary_ts}")
+                # print(f"Updated backup info: checksum={checksum[:16]}..., primary_ts={primary_ts}, secondary_ts={secondary_ts}")
+                pass
         except Exception as e:
-            print(f"Error updating session backup info: {e}")
+            # print(f"Error updating session backup info: {e}")
+            pass
     
     def save_settings_backup(self):
         """Save settings to JSON backup file in both primary and secondary locations.
@@ -975,9 +989,11 @@ class MiscDataOperations:
             # The main config file already contains all settings and is mirrored
             # Just ensure config is up-to-date and save it
             self.ui.save_config()
-            print("Settings backup saved via main config file")
+            # print("Settings backup saved via main config file")
+            pass
         except Exception as e:
-            print(f"Warning: Failed to save settings backup: {e}")
+            # print(f"Warning: Failed to save settings backup: {e}")
+            pass
     
     def restore_settings_from_json(self):
         """Restore settings from JSON config file in secondary backup folder"""
@@ -1026,7 +1042,8 @@ class MiscDataOperations:
             with open(settings_path, 'r') as f:
                 settings = json.load(f)
             
-            print(f"Restore: Loaded settings from {settings_path}")
+            # print(f"Restore: Loaded settings from {settings_path}")
+            pass
             
             # Handle both old and new config formats
             # New format uses 'dog_names', old uses 'dogs'
@@ -1039,8 +1056,9 @@ class MiscDataOperations:
             airscenting_config = settings.get("airscenting", {})
             handler_name = airscenting_config.get("default_handler", settings.get("handler_name", ""))
             
-            print(f"Restore: Found dogs: {dogs}")
-            print(f"Restore: Found locations: {locations}")
+            # print(f"Restore: Found dogs: {dogs}")
+            # print(f"Restore: Found locations: {locations}")
+            pass
             
             db_type = sv.db_type.get()
             
@@ -1062,7 +1080,7 @@ class MiscDataOperations:
             
             # Insert dogs to database
             if dogs:
-                print(f"Restore: Attempting to restore {len(dogs)} dogs...")
+                # print(f"Restore: Attempting to restore {len(dogs)} dogs...")
                 for dog_name in dogs:
                     try:
                         with database.get_connection() as conn:
@@ -1079,15 +1097,18 @@ class MiscDataOperations:
                                 )
                                 conn.commit()
                                 dogs_added += 1
-                                print(f"Restore: Added dog '{dog_name}'")
+                                # print(f"Restore: Added dog '{dog_name}'")
+                                pass
                             else:
-                                print(f"Restore: Dog '{dog_name}' already exists")
+                                # print(f"Restore: Dog '{dog_name}' already exists")
+                                pass
                     except Exception as e:
-                        print(f"Restore: Failed to add dog '{dog_name}': {e}")
+                        # print(f"Restore: Failed to add dog '{dog_name}': {e}")
+                        pass
             
             # Insert locations to database
             if locations:
-                print(f"Restore: Attempting to restore {len(locations)} locations...")
+                # print(f"Restore: Attempting to restore {len(locations)} locations...")
                 for location in locations:
                     try:
                         with database.get_connection() as conn:
@@ -1104,15 +1125,18 @@ class MiscDataOperations:
                                 )
                                 conn.commit()
                                 locations_added += 1
-                                print(f"Restore: Added location '{location}'")
+                                # print(f"Restore: Added location '{location}'")
+                                pass
                             else:
-                                print(f"Restore: Location '{location}' already exists")
+                                # print(f"Restore: Location '{location}' already exists")
+                                pass
                     except Exception as e:
-                        print(f"Restore: Failed to add location '{location}': {e}")
+                        # print(f"Restore: Failed to add location '{location}': {e}")
+                        pass
             
             # Insert terrain types to database
             if terrain_types:
-                print(f"Restore: Attempting to restore {len(terrain_types)} terrain types...")
+                # print(f"Restore: Attempting to restore {len(terrain_types)} terrain types...")
                 for terrain in terrain_types:
                     try:
                         with database.get_connection() as conn:
@@ -1128,13 +1152,15 @@ class MiscDataOperations:
                                 )
                                 conn.commit()
                                 terrain_added += 1
-                                print(f"Restore: Added terrain type '{terrain}'")
+                                # print(f"Restore: Added terrain type '{terrain}'")
+                                pass
                     except Exception as e:
-                        print(f"Restore: Failed to add terrain type '{terrain}': {e}")
+                        # print(f"Restore: Failed to add terrain type '{terrain}': {e}")
+                        pass
             
             # Insert distraction types to database
             if distraction_types:
-                print(f"Restore: Attempting to restore {len(distraction_types)} distraction types...")
+                # print(f"Restore: Attempting to restore {len(distraction_types)} distraction types...")
                 for distraction in distraction_types:
                     try:
                         with database.get_connection() as conn:
@@ -1150,9 +1176,11 @@ class MiscDataOperations:
                                 )
                                 conn.commit()
                                 distraction_added += 1
-                                print(f"Restore: Added distraction type '{distraction}'")
+                                # print(f"Restore: Added distraction type '{distraction}'")
+                                pass
                     except Exception as e:
-                        print(f"Restore: Failed to add distraction type '{distraction}': {e}")
+                        # print(f"Restore: Failed to add distraction type '{distraction}': {e}")
+                        pass
             
             # Restore original DB_TYPE
             config.DB_TYPE = old_db_type
@@ -1169,7 +1197,7 @@ class MiscDataOperations:
             self.ui.save_config()
             
             # Refresh UI
-            print("Restore: Refreshing UI...")
+            # print("Restore: Refreshing UI...")
             self.ui.load_dogs_from_database()
             if hasattr(self.ui, 'a_dog_combo'):
                 self.ui.refresh_dog_list()
@@ -1185,7 +1213,8 @@ class MiscDataOperations:
             if hasattr(self.ui, 'a_terrain_combo'):
                 self.ui.refresh_terrain_list()
             
-            print(f"Restore: Complete - {dogs_added} dogs, {locations_added} locations, {terrain_added} terrains, {distraction_added} distractions added")
+            # print(f"Restore: Complete - {dogs_added} dogs, {locations_added} locations, {terrain_added} terrains, {distraction_added} distractions added")
+            pass
             
             # Now restore sessions from JSON files in secondary backup
             sessions_restored = 0
@@ -1221,7 +1250,8 @@ class MiscDataOperations:
             
         except Exception as e:
             messagebox.showerror("Restore Error", f"Failed to restore settings:\n{e}")
-            print(f"Error restoring settings: {e}")
+            # print(f"Error restoring settings: {e}")
+            pass
     
     def _restore_sessions_from_backup_folder(self, json_folder, db_type):
         """
@@ -1358,7 +1388,8 @@ class MiscDataOperations:
                         restored_count += 1
                         
                 except Exception as e:
-                    print(f"Failed to restore session from {json_file}: {e}")
+                    # print(f"Failed to restore session from {json_file}: {e}")
+                    pass
             
             # Restore original DB_TYPE
             if old_db_type:
@@ -1367,7 +1398,7 @@ class MiscDataOperations:
                 reload(database)
                 
         except Exception as e:
-            print(f"Error during session restore: {e}")
+            # print(f"Error during session restore: {e}")
             if old_db_type:
                 try:
                     import config
@@ -1549,7 +1580,7 @@ class MiscDataOperations:
                     restored_count += 1
                     
                 except Exception as e:
-                    print(f"Failed to restore {json_file.name}: {e}")
+                    # print(f"Failed to restore {json_file.name}: {e}")
                     failed_count += 1
             
             # Now insert all unique dog names into dogs table
@@ -1631,7 +1662,8 @@ class MiscDataOperations:
                             terrain_added += 1
                         except Exception as e:
                             if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add terrain type '{terrain}': {e}")
+                                # print(f"Failed to add terrain type '{terrain}': {e}")
+                                pass
                     
                     # Insert distraction types
                     distraction_types = settings.get("distraction_types", [])
@@ -1646,7 +1678,8 @@ class MiscDataOperations:
                             distraction_added += 1
                         except Exception as e:
                             if "UNIQUE constraint failed" not in str(e) and "duplicate key" not in str(e):
-                                print(f"Failed to add distraction type '{distraction}': {e}")
+                                # print(f"Failed to add distraction type '{distraction}': {e}")
+                                pass
                     
                     # Refresh UI
                     self.ui.load_terrain_from_database()
@@ -1658,7 +1691,8 @@ class MiscDataOperations:
                     settings_restored = True
                     
                 except Exception as e:
-                    print(f"Could not restore settings backup: {e}")
+                    # print(f"Could not restore settings backup: {e}")
+                    pass
             
             # Show results
             if restored_count > 0:
@@ -1742,7 +1776,7 @@ class MiscDataOperations:
         
         # Show summary
         if terrain_success and distraction_success:
-            sv.status.set(f"{terrain_msg}; {distraction_msg}")
+            sv.show_status_message(f"{terrain_msg}; {distraction_msg}", "info")
             # Auto-backup settings after loading defaults
             self.save_settings_backup()
         else:
