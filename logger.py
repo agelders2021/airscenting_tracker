@@ -703,7 +703,12 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
     
     def on_closing(self):
         """Handle window close event"""
-        # Check for unsaved changes in airscenting
+        # Check for unsaved session entry changes in airscenting
+        if hasattr(self, 'form_mgmt') and hasattr(self.form_mgmt, 'check_entry_tab_changes'):
+            if not self.form_mgmt.check_entry_tab_changes():
+                return  # User cancelled
+        
+        # Check for unsaved setup/config changes in airscenting
         if hasattr(self, 'form_mgmt') and not self.form_mgmt.check_unsaved_changes("quit"):
             return
         

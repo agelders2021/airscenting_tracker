@@ -67,11 +67,11 @@ def setup_airscent_tab(ui):
                                       bg="#4169E1", fg="white")
     ui.a_edit_delete_btn.grid(row=0, column=5, padx=5, pady=2)
     
-    ui.a_prev_session_btn = tk.Button(session_frame, text="◄ Previous", bg="#FF8C00", fg="white",
+    ui.a_prev_session_btn = tk.Button(session_frame, text="â—„ Previous", bg="#FF8C00", fg="white",
                                        width=10, command=ui.navigation.navigate_previous_session, state=tk.DISABLED)
     ui.a_prev_session_btn.grid(row=0, column=6, padx=2, pady=2)
     
-    ui.a_next_session_btn = tk.Button(session_frame, text="Next ►", bg="#FF8C00", fg="white",
+    ui.a_next_session_btn = tk.Button(session_frame, text="Next â–º", bg="#FF8C00", fg="white",
                                        width=10, command=ui.navigation.navigate_next_session, state=tk.DISABLED)
     ui.a_next_session_btn.grid(row=0, column=7, padx=2, pady=2)
     
@@ -286,45 +286,30 @@ def setup_airscent_tab(ui):
     ToolTip(ui.a_finish_time_entry, "Enter search finish time (e.g., 11:45 AM)")
     
     # =========================================================================
-    # MAPS AND IMAGES FRAME (Row 3)
+    # MAPS AND IMAGES FRAME (Row 3) - LabelFrame with drag-drop target
     # =========================================================================
     from tkinterdnd2 import DND_FILES
     
-    map_frame = tk.LabelFrame(frame, text="Maps and Images", padx=10, pady=5)
-    map_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=5)
-    
-    map_container = tk.Frame(map_frame)
-    map_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-    
-    # Left side - Drag and drop area
-    drop_frame = tk.Frame(map_container)
-    drop_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
-    
-    ui.a_drop_label = tk.Label(
-        drop_frame,
-        text="Drag & Drop Images/Videos Here\n(PDF/JPG/PNG/MP4/Mov)",
-        bg="#e0e0e0",
-        relief="ridge",
-        height=4
+    # Main frame - Maps and Images (drag-drop target for entire frame)
+    ui.a_map_frame = tk.LabelFrame(
+        frame, 
+        text="Drop Images/Videos Here (PDF/JPG/PNG/MP4/MOV)",
+        padx=10, pady=5
     )
-    ui.a_drop_label.pack(fill=tk.BOTH, expand=True)
+    ui.a_map_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=5)
     
-    ui.a_drop_label.drop_target_register(DND_FILES)
-    ui.a_drop_label.dnd_bind('<<Drop>>', ui.file_ops.handle_drop)
-    ui.a_drop_label.dnd_bind('<<DragEnter>>', ui.file_ops.drag_enter)
-    ui.a_drop_label.dnd_bind('<<DragLeave>>', ui.file_ops.drag_leave)
+    # Container inside the map frame (for visual feedback on drag)
+    ui.a_drop_container = tk.Frame(ui.a_map_frame)
+    ui.a_drop_container.pack(fill=tk.BOTH, expand=True)
     
-    # Right side - Listbox with scrollbar and buttons
-    list_frame = tk.Frame(map_container)
-    list_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
-    
-    list_button_container = tk.Frame(list_frame)
-    list_button_container.pack(fill=tk.BOTH, expand=True)
+    list_button_container = tk.Frame(ui.a_drop_container)
+    list_button_container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
     
     listbox_container = tk.Frame(list_button_container)
     listbox_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
     
-    ui.a_map_listbox = tk.Listbox(listbox_container, height=3, font=('Arial', 9))
+    # Listbox with grey background (visual drop indicator)
+    ui.a_map_listbox = tk.Listbox(listbox_container, height=4, font=('Arial', 9), bg="#e0e0e0")
     map_scroll = ttk.Scrollbar(listbox_container, orient=tk.VERTICAL, command=ui.a_map_listbox.yview)
     ui.a_map_listbox.config(yscrollcommand=map_scroll.set)
     
@@ -344,7 +329,22 @@ def setup_airscent_tab(ui):
                                         command=ui.file_ops.delete_selected_map, state=tk.DISABLED, width=12)
     ui.a_delete_map_button.pack(pady=(2, 0))
     
+    # Add Browse button (matching trailing session)
+    ui.a_browse_map_button = tk.Button(map_button_frame, text="Browse...",
+                                        command=ui.file_ops.browse_map_files, width=12)
+    ui.a_browse_map_button.pack(pady=(2, 0))
+    
     ui.map_files_list = []
+    
+    # Register drag-and-drop on the entire main LabelFrame
+    try:
+        ui.a_map_frame.drop_target_register(DND_FILES)
+        ui.a_map_frame.dnd_bind('<<Drop>>', ui.file_ops.handle_drop)
+        ui.a_map_frame.dnd_bind('<<DragEnter>>', ui.file_ops.drag_enter)
+        ui.a_map_frame.dnd_bind('<<DragLeave>>', ui.file_ops.drag_leave)
+    except Exception as e:
+        # Drag-and-drop not available
+        pass
     
     # =========================================================================
     # BUTTON FRAME (Row 4)

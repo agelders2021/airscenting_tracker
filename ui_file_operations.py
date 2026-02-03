@@ -84,18 +84,30 @@ class FileOperations:
     
     def drag_enter(self, event):
         """Visual feedback when dragging over drop zone"""
-        self.ui.a_drop_label.configure(bg="#90EE90")
+        # Use drop container if available (new format), otherwise fall back to drop label
+        if hasattr(self.ui, 'a_drop_container'):
+            self.ui.a_drop_container.configure(bg="#90EE90")
+        elif hasattr(self.ui, 'a_drop_label'):
+            self.ui.a_drop_label.configure(bg="#90EE90")
     
     def drag_leave(self, event):
         """Reset visual feedback"""
-        self.ui.a_drop_label.configure(bg="#e0e0e0")
+        # Use drop container if available (new format), otherwise fall back to drop label
+        if hasattr(self.ui, 'a_drop_container'):
+            self.ui.a_drop_container.configure(bg="SystemButtonFace")
+        elif hasattr(self.ui, 'a_drop_label'):
+            self.ui.a_drop_label.configure(bg="#e0e0e0")
     
     def handle_drop(self, event):
         """Handle dropped files (supports multiple) - copies to primary and secondary Images folders"""
         from sv import sv
         from ui_utils import get_secondary_images_folder
         
-        self.ui.a_drop_label.configure(bg="#e0e0e0")
+        # Reset visual feedback
+        if hasattr(self.ui, 'a_drop_container'):
+            self.ui.a_drop_container.configure(bg="SystemButtonFace")
+        elif hasattr(self.ui, 'a_drop_label'):
+            self.ui.a_drop_label.configure(bg="#e0e0e0")
         
         # Check if trail maps folder is configured (primary Images folder)
         trail_maps_folder = sv.trail_maps_folder.get().strip()
@@ -196,6 +208,107 @@ class FileOperations:
             
             # Check if secondary backup was configured but unavailable
             # Notify user once per session via status bar
+            if not secondary_folder and sv.backup_folder.get().strip():
+                if not sv.secondary_unavailable_notified:
+                    sv.secondary_unavailable_notified = True
+                    sv_module.show_status_message("Warning: Secondary backup folder unavailable - files saved to primary only", "warning")
+        else:
+            messagebox.showerror("Error", "Only PDF, JPG, PNG, and video files (MP4, MOV, AVI, MKV, WebM) supported!")
+    
+    def browse_map_files(self):
+        """Browse for map/image files to add"""
+        from sv import sv
+        from ui_utils import get_secondary_images_folder
+        import re
+        
+        # Check if trail maps folder is configured (primary Images folder)
+        trail_maps_folder = sv.trail_maps_folder.get().strip()
+        if not trail_maps_folder or not os.path.exists(trail_maps_folder):
+            messagebox.showerror(
+                "Images Folder Not Set",
+                "Primary storage folder not properly initialized.\n\n"
+                "Please use 'Initialize Data Structures' in the Setup tab first."
+            )
+            return
+        
+        # Check if dog is selected (needed for unique filename)
+        if not sv.dog.get():
+            messagebox.showwarning(
+                "No Dog Selected",
+                "Please select a dog before adding maps/images.\n\n"
+                "The dog name is used to organize files."
+            )
+            return
+        
+        dog_name = sv.dog.get()
+        session_number = sv.session_number.get()
+        
+        # Open file dialog
+        filepaths = filedialog.askopenfilenames(
+            title="Select Map/Image Files",
+            filetypes=[
+                ("Image/PDF/Video files", "*.pdf *.jpg *.jpeg *.png *.mp4 *.mov *.avi *.mkv *.webm"),
+                ("All files", "*.*")
+            ]
+        )
+        
+        if not filepaths:
+            return
+        
+        # Process selected files
+        copied_files = []
+        
+        # Get secondary images folder for mirroring
+        secondary_folder = get_secondary_images_folder()
+        
+        for filepath in filepaths:
+            filepath = filepath.strip()
+            if os.path.exists(filepath):
+                ext = os.path.splitext(filepath)[1].lower()
+                if ext in ['.pdf', '.jpg', '.jpeg', '.png', '.mp4', '.mov', '.avi', '.mkv', '.webm']:
+                    # Create unique filename: a_{dog}_session{session}_{timestamp}_{original}
+                    original_name = os.path.basename(filepath)
+                    # Sanitize dog name for filename
+                    safe_dog_name = re.sub(r'[^\w\-]', '_', dog_name)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    unique_name = f"a_{safe_dog_name}_session{session_number}_{timestamp}_{original_name}"
+                    
+                    # Copy file to primary Images folder
+                    dest_path = os.path.join(trail_maps_folder, unique_name)
+                    try:
+                        shutil.copy2(filepath, dest_path)
+                        copied_files.append(unique_name)
+                        
+                        # Mirror to secondary Images folder if configured
+                        if secondary_folder:
+                            secondary_dest = secondary_folder / unique_name
+                            try:
+                                shutil.copy2(filepath, str(secondary_dest))
+                            except Exception as e:
+                                pass
+                                
+                    except Exception as e:
+                        messagebox.showerror("Copy Error", f"Failed to copy {original_name}:\n{e}")
+        
+        if copied_files:
+            # Add to list (don't replace, accumulate)
+            self.ui.map_files_list.extend(copied_files)
+            # Remove duplicates while preserving order
+            seen = set()
+            self.ui.map_files_list = [x for x in self.ui.map_files_list if not (x in seen or seen.add(x))]
+            
+            # Update listbox
+            self.ui.a_map_listbox.delete(0, "end")
+            for filename in self.ui.map_files_list:
+                self.ui.a_map_listbox.insert("end", filename)
+            
+            # Enable view and delete buttons
+            self.ui.a_view_map_button.config(state="normal")
+            self.ui.a_delete_map_button.config(state="normal")
+            
+            sv_module.show_status_message(f"{len(copied_files)} file(s) added", "info")
+            
+            # Check if secondary backup was configured but unavailable
             if not secondary_folder and sv.backup_folder.get().strip():
                 if not sv.secondary_unavailable_notified:
                     sv.secondary_unavailable_notified = True
@@ -332,7 +445,7 @@ class FileOperations:
             else:
                 error_msg = f"Could not find file: {file_path}\n\nSearched in:\n"
                 for p in possible_paths:
-                    error_msg += f"  Ã¢â‚¬Â¢ {p}\n"
+                    error_msg += f"  ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {p}\n"
                 error_msg += "\nTip: Check your trail maps folder setting in Setup tab."
                 messagebox.showerror("File Not Found", error_msg)
                 return

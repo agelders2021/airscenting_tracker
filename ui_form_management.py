@@ -110,39 +110,27 @@ class FormManagement:
     def check_entry_tab_changes(self): # ahg
         """Check for unsaved changes in Entry tab. Returns True if OK to proceed."""
         from sv import sv
-        from ui_database import DatabaseOperations
         import tkinter as tk
-        import json
+        from tkinter import messagebox
         
-        print("DEBUG: entering check_entry_tab_changes")
+        # DEBUG: Confirm function is being called
+        print("=" * 50)
+        print("DEBUG: check_entry_tab_changes() CALLED")
+        
         # Get current form state
-        current_date = sv.date.get()
         current_session = sv.session_number.get()
-        # When in view mode, use the actual database session number being viewed
-        if hasattr(self.ui, 'selected_sessions') and self.ui.selected_sessions:
-            from ui_navigation import Navigation
-            nav = Navigation(self.ui)
-            db_num = nav.get_current_db_session_number()
-            current_session = str(db_num) if db_num else sv.session_number.get()
-        else:
-            current_session = sv.session_number.get()
-        # When in view mode, use the actual database session number being viewed
-        if hasattr(self.ui, 'selected_sessions') and self.ui.selected_sessions:
-            from ui_navigation import Navigation
-            nav = Navigation(self.ui)
-            db_num = nav.get_current_db_session_number()
-            print(f"DEBUG: get_current_db_session_number() returned {db_num}")  # ADD THIS
-            print(f"DEBUG: sv.session_number.get() = {sv.session_number.get()}")  # ADD THIS
-            current_session = str(db_num) if db_num else sv.session_number.get()
-            print(f"DEBUG: Using current_session = {current_session}")  # ADD THIS
-        else:
-            current_session = sv.session_number.get()
-            print(f"DEBUG: Not in view mode, current_session = {current_session}")  # ADD THIS
         
+        # When in view mode, use the actual database session number being viewed
+        if hasattr(self.ui, 'selected_sessions') and self.ui.selected_sessions:
+            from ui_navigation import Navigation
+            nav = Navigation(self.ui)
+            db_num = nav.get_current_db_session_number()
+            current_session = str(db_num) if db_num else sv.session_number.get()
+        
+        current_dog = sv.dog.get()
         current_handler = sv.handler.get()
         current_purpose = sv.session_purpose.get()
         current_field_support = sv.field_support.get()
-        current_dog = sv.dog.get()
         current_location = sv.location.get()
         current_search_area = sv.search_area_size.get()
         current_num_subjects = sv.num_subjects.get()
@@ -156,18 +144,121 @@ class FormManagement:
         current_subjects_found = sv.subjects_found.get()
         current_start_time = sv.start_time.get()
         current_finish_time = sv.finish_time.get()
-        current_comments = self.ui.a_comments_text.get("1.0", tk.END).strip()
+        
+        # Safely get comments text
+        try:
+            current_comments = self.ui.a_comments_text.get("1.0", tk.END).strip()
+        except (AttributeError, tk.TclError):
+            current_comments = ""
+        
+        # Get purposes from listbox
+        current_purposes = self.ui.get_selected_purposes() if hasattr(self.ui, 'get_selected_purposes') else []
+        
+        # Get terrains
+        current_terrains = self.ui.accumulated_terrains if hasattr(self.ui, 'accumulated_terrains') else []
+        
+        # Get map files
+        current_map_files = self.ui.map_files_list if hasattr(self.ui, 'map_files_list') else []
+        
+        # DEBUG: Print all values
+        print(f"DEBUG: current_session = '{current_session}'")
+        print(f"DEBUG: current_dog = '{current_dog}'")
+        print(f"DEBUG: current_purpose = '{current_purpose}'")
+        print(f"DEBUG: current_field_support = '{current_field_support}'")
+        print(f"DEBUG: current_location = '{current_location}'")
+        print(f"DEBUG: current_search_area = '{current_search_area}'")
+        print(f"DEBUG: current_num_subjects = '{current_num_subjects}'")
+        print(f"DEBUG: current_handler_knowledge = '{current_handler_knowledge}'")
+        print(f"DEBUG: current_weather = '{current_weather}'")
+        print(f"DEBUG: current_temperature = '{current_temperature}'")
+        print(f"DEBUG: current_wind_direction = '{current_wind_direction}'")
+        print(f"DEBUG: current_wind_speed = '{current_wind_speed}'")
+        print(f"DEBUG: current_search_type = '{current_search_type}'")
+        print(f"DEBUG: current_drive_level = '{current_drive_level}'")
+        print(f"DEBUG: current_subjects_found = '{current_subjects_found}'")
+        print(f"DEBUG: current_start_time = '{current_start_time}'")
+        print(f"DEBUG: current_finish_time = '{current_finish_time}'")
+        print(f"DEBUG: current_comments = '{current_comments}'")
+        print(f"DEBUG: current_terrains = {current_terrains}")
+        print(f"DEBUG: current_map_files = {current_map_files}")
+        print(f"DEBUG: current_purposes = {current_purposes}")
+        
+        # Check if any form data has been entered (quick check before database lookup)
+        form_has_data = (
+            current_purpose or
+            current_field_support or
+            current_location or
+            current_search_area or
+            current_num_subjects or
+            current_handler_knowledge or
+            current_weather or
+            current_temperature or
+            current_wind_direction or
+            current_wind_speed or
+            current_search_type or
+            current_drive_level or
+            current_subjects_found or
+            current_start_time or
+            current_finish_time or
+            current_comments or
+            current_terrains or
+            current_map_files or
+            current_purposes
+        )
+        
+        print(f"DEBUG: form_has_data = {form_has_data}")
+        
+        # Also check if any subject responses have been entered
+        if not form_has_data:
+            try:
+                for i in range(1, 11):
+                    item_id = f'subject_{i}'
+                    tags = self.ui.a_subject_responses_tree.item(item_id, 'tags')
+                    if 'enabled' in tags:
+                        values = self.ui.a_subject_responses_tree.item(item_id, 'values')
+                        print(f"DEBUG: subject_{i} tags={tags}, values={values}")
+                        if (len(values) > 1 and values[1]) or (len(values) > 2 and values[2]):
+                            form_has_data = True
+                            print(f"DEBUG: Found subject response data at subject_{i}")
+                            break
+            except (AttributeError, tk.TclError) as e:
+                print(f"DEBUG: Exception checking subject responses: {e}")
+                pass
+        
+        print(f"DEBUG: form_has_data after subject check = {form_has_data}")
+        
+        # If no data entered, no need to prompt
+        if not form_has_data:
+            print("DEBUG: No form data, returning True (allow exit)")
+            return True
+        
+        print("DEBUG: Form has data, will check database...")
         
         # Check if this session exists in database and compare
         try:
             session_num = int(current_session)
         except ValueError:
-            return True  # Invalid session number, OK to proceed
+            # Invalid session number but form has data - prompt to save
+            result = messagebox.askyesnocancel(
+                "Unsaved Session",
+                "You have unsaved session data.\n\nDo you want to save before proceeding?",
+                icon='warning'
+            )
+            
+            if result is None:  # Cancel
+                return False
+            elif result:  # Yes - save first
+                self.ui.save_session()
+                return True
+            else:  # No - discard changes
+                return True
         
         db_type = sv.db_type.get()
+        current_date = sv.date.get()
         
         try:
             # Get data from database using get_session_with_related_data
+            from ui_database import DatabaseOperations
             db_ops = DatabaseOperations(self.ui)
             session_dict = db_ops.get_session_with_related_data(session_num, current_dog)
             
@@ -287,64 +378,44 @@ class FormManagement:
                     else:
                         return True
             else:
-                # Session doesn't exist in database - check if form has data entered
-                # (This handles the case of a NEW session with unsaved data)
-                current_purposes = self.ui.get_selected_purposes() if hasattr(self.ui, 'get_selected_purposes') else []
-                form_has_data = (
-                    current_purpose or
-                    current_field_support or
-                    current_location or
-                    current_search_area or
-                    current_num_subjects or
-                    current_handler_knowledge or
-                    current_weather or
-                    current_temperature or
-                    current_wind_direction or
-                    current_wind_speed or
-                    current_search_type or
-                    current_drive_level or
-                    current_subjects_found or
-                    current_start_time or
-                    current_finish_time or
-                    current_comments or
-                    self.ui.accumulated_terrains or
-                    self.ui.map_files_list or
-                    current_purposes
+                # Session doesn't exist in database but we already confirmed form has data
+                # (via the early check), so prompt to save
+                result = messagebox.askyesnocancel(
+                    "Unsaved Session",
+                    "You have unsaved session data.\n\nDo you want to save before proceeding?",
+                    icon='warning'
                 )
                 
-                # Also check if any subject responses have been entered
-                if not form_has_data:
-                    for i in range(1, 11):
-                        item_id = f'subject_{i}'
-                        tags = self.ui.a_subject_responses_tree.item(item_id, 'tags')
-                        if 'enabled' in tags:
-                            values = self.ui.a_subject_responses_tree.item(item_id, 'values')
-                            if (len(values) > 1 and values[1]) or (len(values) > 2 and values[2]):
-                                form_has_data = True
-                                break
-                
-                if form_has_data:
-                    result = messagebox.askyesnocancel(
-                        "Unsaved Session",
-                        "Session info not saved. Save current session?",
-                        icon='warning'
-                    )
-                    
-                    if result is None:  # Cancel
-                        return False
-                    elif result:  # Yes - save first
-                        self.ui.save_session()
-                        return True
-                    else:  # No - discard changes
-                        return True
+                if result is None:  # Cancel
+                    return False
+                elif result:  # Yes - save first
+                    self.ui.save_session()
+                    return True
+                else:  # No - discard changes
+                    return True
             
-            # No changes or empty new session
+            # No changes detected
             return True
             
         except Exception as e:
-            # If error checking, just proceed
-            print(f"Error in check_entry_tab_changes: {e}")
-            return True
+            # Database error - if form has data, prompt to save anyway
+            import traceback
+            traceback.print_exc()
+            
+            # We already know form_has_data is True if we got here, so prompt
+            result = messagebox.askyesnocancel(
+                "Unsaved Session",
+                "Could not verify session status.\nYou may have unsaved data.\n\nDo you want to save before proceeding?",
+                icon='warning'
+            )
+            
+            if result is None:  # Cancel
+                return False
+            elif result:  # Yes - save first
+                self.ui.save_session()
+                return True
+            else:  # No - discard changes
+                return True
     
     def clear_form(self):
         """Clear the form"""
@@ -433,10 +504,8 @@ class FormManagement:
         import tkinter as tk
         
         # Check for unsaved changes first (unless skip requested)
-        print("DEBUG: before check_entry_tab_changes")
         if not skip_change_check and not self.check_entry_tab_changes():
             return
-        print("DEBUG: after check_entry_tab_changes")
         
         # Reset filter to active FIRST, before computing session numbers
         # This ensures we count active sessions, not deleted ones
