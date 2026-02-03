@@ -29,6 +29,7 @@ import json
 from pathlib import Path
 from datetime import datetime
 from tkinter import filedialog, messagebox
+import sv as sv_module
 
 
 class FileOperations:
@@ -191,14 +192,14 @@ class FileOperations:
             self.ui.a_view_map_button.config(state="normal")
             self.ui.a_delete_map_button.config(state="normal")
             
-            sv.show_status_message(f"{len(copied_files)} file(s) copied to trail maps folder", "info")
+            sv_module.show_status_message(f"{len(copied_files)} file(s) copied to trail maps folder", "info")
             
             # Check if secondary backup was configured but unavailable
             # Notify user once per session via status bar
             if not secondary_folder and sv.backup_folder.get().strip():
                 if not sv.secondary_unavailable_notified:
                     sv.secondary_unavailable_notified = True
-                    sv.show_status_message("Warning: Secondary backup folder unavailable - files saved to primary only", "warning")
+                    sv_module.show_status_message("Warning: Secondary backup folder unavailable - files saved to primary only", "warning")
         else:
             messagebox.showerror("Error", "Only PDF, JPG, PNG, and video files (MP4, MOV, AVI, MKV, WebM) supported!")
     
@@ -266,9 +267,9 @@ class FileOperations:
             if os.path.exists(full_path):
                 os.remove(full_path)
                 # print(f"Deleted from primary: {full_path}")
-                sv.show_status_message(f"Deleted file: {filename}", "info")
+                sv_module.show_status_message(f"Deleted file: {filename}", "info")
             else:
-                sv.show_status_message(f"Removed from list (file not found): {filename}", "info")
+                sv_module.show_status_message(f"Removed from list (file not found): {filename}", "info")
             
             # Also delete from secondary Images folder if it exists there
             secondary_folder = get_secondary_images_folder()

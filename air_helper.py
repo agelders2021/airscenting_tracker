@@ -253,6 +253,35 @@ class AirScentingHelper:
             self.a_save_session_btn.config(text=text)
     
     # =========================================================================
+    # SUBJECT RESPONSES GRID METHODS
+    # =========================================================================
+    
+    def update_subject_responses_grid(self, event=None):
+        """Update subject responses grid - enable/disable rows based on Subjects Found value"""
+        subjects_found = sv.subjects_found.get()
+        
+        # Parse subjects found value (e.g., "2 out of 3" -> 2 found)
+        num_found = 0
+        if subjects_found and " out of " in subjects_found:
+            try:
+                num_found = int(subjects_found.split(" out of ")[0])
+            except:
+                pass
+        
+        # Update tags on all 10 rows - enable those within num_found, disable others
+        for i in range(1, 11):
+            item_id = f'subject_{i}'
+            # Determine odd/even tag for this row
+            row_tag = 'odd' if i % 2 == 1 else 'even'
+            
+            if i <= num_found:
+                # Enable this row (keep odd/even tag for background shading)
+                self.a_subject_responses_tree.item(item_id, tags=(row_tag, 'enabled'))
+            else:
+                # Disable this row and clear values (keep odd/even tag for background shading)
+                self.a_subject_responses_tree.item(item_id, values=(f'Subject {i}', '', ''), tags=(row_tag, 'disabled'))
+    
+    # =========================================================================
     # TREEVIEW EDITING METHODS (for Subject Responses)
     # =========================================================================
     
