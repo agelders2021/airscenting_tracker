@@ -86,7 +86,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
     
     def __init__(self):
         """Initialize the combined UI"""
-        print("DEBUG: TrainingLoggerUI init starting")
+        # print(f"DEBUG: TrainingLoggerUI init starting")
         
         # Load configuration
         self.config_file = CONFIG_FILE
@@ -181,16 +181,16 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         geometry_restored = False
         final_geometry = None
         
-        print(f"DEBUG: Attempting to restore geometry")
-        print(f"DEBUG: saved_geometry from config = '{saved_geometry}'")
-        print(f"DEBUG: screen dimensions = {screen_width}x{screen_height}")
+        # print(f"DEBUG: Attempting to restore geometry")
+        # print(f"DEBUG: saved_geometry from config = '{saved_geometry}'")
+        # print(f"DEBUG: screen dimensions = {screen_width}x{screen_height}")
         
         if saved_geometry:
             match = re.match(r'(\d+)x(\d+)([+-]\d+)([+-]\d+)', saved_geometry)
             if match:
                 w, h, x, y = match.groups()
                 w, h, x, y = int(w), int(h), int(x), int(y)
-                print(f"DEBUG: parsed geometry: w={w}, h={h}, x={x}, y={y}")
+                # print(f"DEBUG: parsed geometry: w={w}, h={h}, x={x}, y={y}")
                 
                 # Sanity check
                 sanity_check = (w >= 400 and w <= 5000 and
@@ -201,13 +201,13 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                 if sanity_check:
                     final_geometry = saved_geometry
                     geometry_restored = True
-                    print(f"DEBUG: Applying saved geometry: {final_geometry}")
+                    # print(f"DEBUG: Applying saved geometry: {final_geometry}")
         
         if not geometry_restored:
             x = (screen_width - window_width) // 2
             y = 0
             final_geometry = f"{window_width}x{window_height}+{x}+{y}"
-            print(f"DEBUG: Using default geometry: {final_geometry}")
+            # print(f"DEBUG: Using default geometry: {final_geometry}")
         
         self.root.geometry(final_geometry)
         self.root.minsize(1100, 800)
@@ -336,7 +336,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
             next_computed = len(filtered_sessions) + 1
             
             sv.session_number.set(str(next_computed))
-            print(f"DEBUG update_initial_session: set to computed {next_computed}")
+            # print(f"DEBUG update_initial_session: set to computed {next_computed}")
             self.show_status_message(f"Ready - {loaded_dog} - Next session: #{next_computed}", "info")
             self.navigation.update_navigation_buttons()
     
@@ -345,16 +345,16 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         try:
             db_ops = DatabaseOperations(self)
             last_dog = db_ops.load_db_setting("last_dog_name", "")
-            print(f"DEBUG _load_last_dog_for_air_session: last_dog from db = '{last_dog}'")
+            # print(f"DEBUG _load_last_dog_for_air_session: last_dog from db = '{last_dog}'")
             
             if last_dog:
                 # Check if dog exists in the combobox values
                 if hasattr(self, 'a_dog_combo'):
                     valid_dogs = self.a_dog_combo['values']
-                    print(f"DEBUG _load_last_dog_for_air_session: valid_dogs = {valid_dogs}")
+                    # print(f"DEBUG _load_last_dog_for_air_session: valid_dogs = {valid_dogs}")
                     if last_dog in valid_dogs:
                         sv.dog.set(last_dog)
-                        print(f"DEBUG _load_last_dog_for_air_session: set sv.dog to '{last_dog}'")
+                        # print(f"DEBUG _load_last_dog_for_air_session: set sv.dog to '{last_dog}'")
                         
                         # Update session number
                         status_filter = sv.session_status_filter.get()
@@ -368,7 +368,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                         self.show_status_message(f"Ready - {last_dog} - Next session: #{next_computed}", "info")
                         self.navigation.update_navigation_buttons()
                     else:
-                        print(f"DEBUG _load_last_dog_for_air_session: '{last_dog}' not in valid dogs")
+                        pass  # Dog not in valid dogs list
         except Exception as e:
             print(f"Error loading last dog for air session: {e}")
     
@@ -387,7 +387,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                     
                     # Load last tab index
                     self.last_tab_index = bootstrap.get("last_tab", 0)
-                    print(f"DEBUG load_bootstrap: last_tab from file = {self.last_tab_index}")
+                    # print(f"DEBUG load_bootstrap: last_tab from file = {self.last_tab_index}")
                     
                     # Check for multi-user format
                     if "users" in bootstrap:
@@ -462,7 +462,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
             if json_config.exists():
                 try:
                     with open(json_config, 'r') as f:
-                        print(f"Loaded config from JSON folder: {json_config}")
+                        # print(f"Loaded config from JSON folder: {json_config}")
                         return json.load(f)
                 except:
                     pass
@@ -551,7 +551,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
             db_file = Path(self.machine_db_path) / "air_scenting.db"
             db_exists = db_file.exists()
         
-        print(f"DEBUG restore_last_tab: db_exists={db_exists}, last_tab_index={self.last_tab_index}")
+        # print(f"DEBUG restore_last_tab: db_exists={db_exists}, last_tab_index={self.last_tab_index}")
         
         if not db_exists:
             self.notebook.select(self.setup_tab)
@@ -575,7 +575,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         tabs = [self.setup_tab, self.airscent_tab, self.trailing_tab]
         self.notebook.select(tabs[last_tab])
         self.previous_tab_index = last_tab
-        print(f"Restored to last tab: {['Setup', 'Air Scenting', 'Trailing'][last_tab]}")
+        # print(f"Restored to last tab: {['Setup', 'Air Scenting', 'Trailing'][last_tab]}")
         
         # Clear flag after a short delay to allow the tab change event to complete
         self.root.after(100, self._clear_restoring_flag)
@@ -583,17 +583,17 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
     def _clear_restoring_flag(self):
         """Clear the restoring flag after tab restore is complete"""
         self._restoring_tab = False
-        print("DEBUG: Tab restore complete, saving enabled")
+        # print(f"DEBUG: Tab restore complete, saving enabled")
     
     def on_tab_changed(self, event):
         """Handle tab change event"""
         current_tab_index = self.notebook.index(self.notebook.select())
-        print(f"DEBUG on_tab_changed: switching from {self.previous_tab_index} to {current_tab_index}, restoring={getattr(self, '_restoring_tab', False)}")
+        # print(f"DEBUG on_tab_changed: switching from {self.previous_tab_index} to {current_tab_index}, restoring={getattr(self, '_restoring_tab', False)}")
         
         # Skip saving if we're restoring the last tab on startup
         if getattr(self, '_restoring_tab', False):
             self.previous_tab_index = current_tab_index
-            print("DEBUG on_tab_changed: skipping save during restore")
+            # print(f"DEBUG on_tab_changed: skipping save during restore")
             return
         
         # Check if leaving Setup tab to a session tab
@@ -615,7 +615,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         self.previous_tab_index = current_tab_index
         self.last_tab_index = current_tab_index
         self.save_bootstrap()
-        print(f"DEBUG on_tab_changed: saved last_tab_index={self.last_tab_index}")
+        # print(f"DEBUG on_tab_changed: saved last_tab_index={self.last_tab_index}")
     
     def check_setup_requirements(self):
         """Check if database and required folders are configured"""
@@ -663,7 +663,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
     def _enable_geometry_save(self):
         """Enable geometry saving after startup"""
         self._geometry_save_enabled = True
-        print("DEBUG: Geometry saving now enabled")
+        # print(f"DEBUG: Geometry saving now enabled")
     
     def _save_window_geometry(self):
         """Save current window geometry to config"""
@@ -682,7 +682,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
             geometry = self.root.geometry()
             self.config["window_geometry"] = geometry
             self.save_config()
-            print(f"DEBUG: Saved geometry '{geometry}'")
+            # print(f"DEBUG: Saved geometry '{geometry}'")
         except Exception as e:
             print(f"Error saving window geometry: {e}")
     
@@ -771,12 +771,12 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         try:
             # Save current selection before refreshing
             current_dog = sv.dog.get()
-            print(f"DEBUG refresh_dog_list: current dog before refresh = '{current_dog}'")
+            # print(f"DEBUG refresh_dog_list: current dog before refresh = '{current_dog}'")
             
             self.misc_data_ops.ensure_db_ready()
             db_mgr = get_db_manager(sv.db_type.get())
             dogs = db_mgr.load_dogs()
-            print(f"DEBUG refresh_dog_list: loaded dogs = {dogs}")
+            # print(f"DEBUG refresh_dog_list: loaded dogs = {dogs}")
             
             # Update Air Scenting tab
             if hasattr(self, 'a_dog_combo'):
@@ -789,7 +789,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
             # Restore selection if it was valid
             if current_dog and dogs and current_dog in dogs:
                 sv.dog.set(current_dog)
-                print(f"DEBUG refresh_dog_list: restored dog = '{current_dog}'")
+                # print(f"DEBUG refresh_dog_list: restored dog = '{current_dog}'")
                 
         except Exception as e:
             print(f"Error refreshing dog list: {e}")

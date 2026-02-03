@@ -955,7 +955,7 @@ class BackupSyncManager:
         }
         
         def status(msg):
-            print(f"Sync: {msg}")
+            # print(f"Sync: {msg}")
             if status_callback:
                 status_callback(msg)
         
@@ -1170,7 +1170,7 @@ class BackupSyncManager:
             # Sort by modification time, most recent first
             file_sources.sort(key=lambda x: x[2] if x[2] else datetime.min, reverse=True)
             winner = file_sources[0]
-            print(f"  Authority: {winner[0]} (mtime: {winner[2]})")
+            # print(f"  Authority: {winner[0]} (mtime: {winner[2]})")
             return winner[1], winner[0]
         
         # Fallback to DB

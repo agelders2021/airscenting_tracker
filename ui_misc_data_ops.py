@@ -164,7 +164,7 @@ class MiscDataOperations:
         result = messagebox.askyesno(
             "Rebuild Database?",
             f"{reason}\n\n"
-            f"Found in {json_path}:\n" + "\n".join(f"  â€¢ {item}" for item in restore_items) + "\n\n"
+            f"Found in {json_path}:\n" + "\n".join(f"  Ã¢â‚¬Â¢ {item}" for item in restore_items) + "\n\n"
             "Would you like to rebuild the database from these backups?",
             icon='question'
         )
@@ -530,7 +530,7 @@ class MiscDataOperations:
             # (We only get here if validate_database_at_startup returned True)
             if hasattr(self.ui, 'notebook') and hasattr(self.ui, 'entry_tab'):
                 self.ui.notebook.select(self.ui.entry_tab)
-                print("Database valid - starting on Entry tab")
+                # print("Database valid - starting on Entry tab")
         
         # Start the chain with database validation
         step0()
@@ -576,7 +576,7 @@ class MiscDataOperations:
         secondary_folder = get_secondary_json_folder()
         
         if not primary_folder:
-            print("Startup sync: No primary JSON folder configured, skipping")
+            # print("Startup sync: No primary JSON folder configured, skipping")
             self._enable_sync_sensitive_buttons()
             return
         
@@ -615,9 +615,9 @@ class MiscDataOperations:
                                 )
                                 next_computed = len(filtered_sessions) + 1
                                 sv.session_number.set(str(next_computed))
-                                print(f"Startup sync: Updated session number to {next_computed} for {dog_name}")
+                                # print(f"Startup sync: Updated session number to {next_computed} for {dog_name}")
                             except Exception as e:
-                                print(f"Startup sync: Error updating session number: {e}")
+                                pass  # Error updating session number
                     
                     # Update status
                     total_changes = (
@@ -647,7 +647,7 @@ class MiscDataOperations:
         # Start sync thread
         sync_thread = threading.Thread(target=do_sync, daemon=True)
         sync_thread.start()
-        print("Startup sync: Started in background thread")
+        # print("Startup sync: Started in background thread")
     
     def _perform_synchronous_startup_sync(self):
         """Perform startup sync synchronously (blocking) for DB rebuild."""
@@ -660,10 +660,10 @@ class MiscDataOperations:
             secondary_folder = get_secondary_json_folder()
             
             if not primary_folder:
-                print("Startup sync: No primary JSON folder configured, skipping")
+                # print("Startup sync: No primary JSON folder configured, skipping")
                 return
             
-            print("Startup sync: Beginning synchronous synchronization...")
+            # print("Startup sync: Beginning synchronous synchronization...")
             sv.status.set("Rebuilding database from backups...")
             self.ui.root.update_idletasks()
             

@@ -905,22 +905,22 @@ class TrailingHelper:
         try:
             # Load dog names
             dog_names = self._get_dog_names()
-            print(f"DEBUG: Trailing - loaded {len(dog_names)} dogs")
+            # print(f"DEBUG: Trailing - loaded {len(dog_names)} dogs")
             self.trailing_entry.update_dog_list(dog_names)
             
             # Load locations
             locations = self._get_training_locations()
-            print(f"DEBUG: Trailing - loaded {len(locations)} locations")
+            # print(f"DEBUG: Trailing - loaded {len(locations)} locations")
             self.trailing_entry.update_location_list(locations)
             
             # Load terrain types
             terrain_types = self._get_terrain_types()
-            print(f"DEBUG: Trailing - loaded {len(terrain_types)} terrain types")
+            # print(f"DEBUG: Trailing - loaded {len(terrain_types)} terrain types")
             self.trailing_entry.update_terrain_types(terrain_types)
             
             # Load distraction types
             distraction_types = self._get_distraction_types()
-            print(f"DEBUG: Trailing - loaded {len(distraction_types)} distraction types")
+            # print(f"DEBUG: Trailing - loaded {len(distraction_types)} distraction types")
             self.trailing_entry.update_distraction_types(distraction_types)
             
             # Set default handler from config
@@ -936,6 +936,9 @@ class TrailingHelper:
                 try:
                     next_session = self.get_trailing_next_session_number(last_dog)
                     sv.t_session.set(str(next_session))
+                    # Show status message for trailing (queued after air scenting message)
+                    self.root.after(1300, lambda: self.show_status_message(
+                        f"Trailing ready - {last_dog} - Next session: #{next_session}", "info"))
                 except Exception as e:
                     print(f"Error getting next session number: {e}")
             

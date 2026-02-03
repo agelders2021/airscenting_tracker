@@ -195,10 +195,10 @@ class BackupSyncManager:
         1. Scan primary JSON folder
         2. Scan secondary JSON folder (if exists)
         3. Get DB sessions with UUID/update_time
-        4. Sync DB â†’ Primary JSON (DB newer or missing in JSON)
-        5. Sync Primary JSON â†’ DB (JSON newer)
-        6. Sync Primary â†’ Secondary (Primary newer or missing)
-        7. Sync Secondary â†’ Primary (Secondary newer, also update DB)
+        4. Sync DB Ã¢â€ â€™ Primary JSON (DB newer or missing in JSON)
+        5. Sync Primary JSON Ã¢â€ â€™ DB (JSON newer)
+        6. Sync Primary Ã¢â€ â€™ Secondary (Primary newer or missing)
+        7. Sync Secondary Ã¢â€ â€™ Primary (Secondary newer, also update DB)
         """
         primary_path = Path(primary_folder) if primary_folder else None
         secondary_path = Path(secondary_folder) if secondary_folder else None
@@ -209,7 +209,7 @@ class BackupSyncManager:
             if status_callback:
                 status_callback("Sync: Scanning primary JSON folder...")
             primary_dict = scan_json_folder(primary_path)
-            print(f"Sync: Found {len(primary_dict)} sessions in primary JSON")
+            # print(f"Sync: Found {len(primary_dict)} sessions in primary JSON")
         
         # Step 2: Scan secondary JSON folder
         secondary_dict = {}
@@ -217,15 +217,15 @@ class BackupSyncManager:
             if status_callback:
                 status_callback("Sync: Scanning secondary JSON folder...")
             secondary_dict = scan_json_folder(secondary_path)
-            print(f"Sync: Found {len(secondary_dict)} sessions in secondary JSON")
+            # print(f"Sync: Found {len(secondary_dict)} sessions in secondary JSON")
         
         # Step 3: Get DB sessions
         if status_callback:
             status_callback("Sync: Reading database sessions...")
         db_sessions = get_db_sessions_for_sync(db_type)
-        print(f"Sync: Found {len(db_sessions)} sessions in database")
+        # print(f"Sync: Found {len(db_sessions)} sessions in database")
         
-        # Step 4: Sync DB â†’ Primary JSON
+        # Step 4: Sync DB Ã¢â€ â€™ Primary JSON
         if primary_path and primary_path.exists():
             if status_callback:
                 status_callback("Sync: Updating JSON from database...")
@@ -235,21 +235,21 @@ class BackupSyncManager:
                 # Re-scan primary after updates
                 primary_dict = scan_json_folder(primary_path)
         
-        # Step 5: Sync Primary JSON â†’ DB
+        # Step 5: Sync Primary JSON Ã¢â€ â€™ DB
         if primary_dict:
             if status_callback:
                 status_callback("Sync: Updating database from JSON...")
             count = sync_json_to_db(primary_dict, db_sessions, db_type)
             self.sync_results["json_to_db"] = count
         
-        # Step 6: Sync Primary â†’ Secondary
+        # Step 6: Sync Primary Ã¢â€ â€™ Secondary
         if secondary_path and secondary_path.exists() and primary_dict:
             if status_callback:
                 status_callback("Sync: Mirroring to secondary backup...")
             count = sync_primary_to_secondary(primary_dict, secondary_dict, secondary_path)
             self.sync_results["primary_to_secondary"] = count
         
-        # Step 7: Sync Secondary â†’ Primary (and DB)
+        # Step 7: Sync Secondary Ã¢â€ â€™ Primary (and DB)
         if secondary_path and secondary_path.exists() and primary_path and primary_path.exists():
             if status_callback:
                 status_callback("Sync: Checking secondary for newer files...")
@@ -505,7 +505,7 @@ def sync_db_to_json(db_sessions, json_dict, json_folder, db_type):
         if not json_info:
             # Session not in JSON - create it
             should_write = True
-            print(f"Sync: DB session {session_uuid} not in JSON, creating...")
+            # print(f"Sync: DB session {session_uuid} not in JSON, creating...")
         else:
             # Compare DB update time with JSON file modification time
             db_time = _parse_update_time(db_info["update_time"])
@@ -514,7 +514,7 @@ def sync_db_to_json(db_sessions, json_dict, json_folder, db_type):
             
             if db_time and json_time and db_time > json_time:
                 should_write = True
-                print(f"Sync: DB newer than JSON file for {session_uuid}")
+                # print(f"Sync: DB newer than JSON file for {session_uuid}")
         
         if should_write:
             try:
@@ -542,7 +542,7 @@ def sync_db_to_json(db_sessions, json_dict, json_folder, db_type):
                         json.dump(session_data, f, indent=2, default=str)
                     
                     count += 1
-                    print(f"Sync: Wrote {filepath}")
+                    # print(f"Sync: Wrote {filepath}")
                     
             except Exception as e:
                 print(f"Sync error writing JSON for {session_uuid}: {e}")
@@ -667,7 +667,7 @@ def sync_json_to_db(json_dict, db_sessions, db_type):
         
         if not db_info:
             # Session exists in JSON but NOT in DB - create it
-            print(f"Sync: Session {session_uuid} in JSON but not in DB, creating...")
+            # print(f"Sync: Session {session_uuid} in JSON but not in DB, creating...")
             try:
                 if insert_session_from_json(json_info["data"], db_type):
                     count += 1
@@ -680,7 +680,7 @@ def sync_json_to_db(json_dict, db_sessions, db_type):
             json_time = json_info.get("file_mtime") or _parse_update_time(json_info.get("update_time"))
             
             if db_time and json_time and json_time > db_time:
-                print(f"Sync: JSON file newer than DB for {session_uuid}, updating DB...")
+                # print(f"Sync: JSON file newer than DB for {session_uuid}, updating DB...")
                 try:
                     if update_db_from_json(json_info["data"], db_type):
                         count += 1
@@ -747,7 +747,7 @@ def insert_airscenting_session_from_json(json_data, db_type):
             
             if existing:
                 # Session exists with same number/dog but different UUID - update it
-                print(f"Sync: Session {json_data.get('session_number')}/{json_data.get('dog_name')} exists, updating with UUID...")
+                # print(f"Sync: Session {json_data.get('session_number')}/{json_data.get('dog_name')} exists, updating with UUID...")
                 conn.execute(
                     text("""
                         UPDATE training_sessions SET
@@ -844,7 +844,7 @@ def insert_airscenting_session_from_json(json_data, db_type):
                 )
             
             conn.commit()
-            print(f"Sync: Inserted/updated airscenting session {json_data.get('session_number')} for {json_data.get('dog_name')}")
+            # print(f"Sync: Inserted/updated airscenting session {json_data.get('session_number')} for {json_data.get('dog_name')}")
         
         # Restore original DB type
         if old_db_type != db_type:
@@ -901,7 +901,7 @@ def insert_trailing_session_from_json(json_data, db_type):
             
             if existing:
                 # Session exists - update it
-                print(f"Sync: Trailing session {json_data.get('t_session_number')}/{json_data.get('t_dog_name')} exists, updating...")
+                # print(f"Sync: Trailing session {json_data.get('t_session_number')}/{json_data.get('t_dog_name')} exists, updating...")
                 conn.execute(
                     text("""
                         UPDATE t_training_sessions SET
@@ -1042,7 +1042,7 @@ def insert_trailing_session_from_json(json_data, db_type):
                 )
             
             conn.commit()
-            print(f"Sync: Inserted/updated trailing session {json_data.get('t_session_number')} for {json_data.get('t_dog_name')}")
+            # print(f"Sync: Inserted/updated trailing session {json_data.get('t_session_number')} for {json_data.get('t_dog_name')}")
         
         # Restore original DB type
         if old_db_type != db_type:
@@ -1260,7 +1260,7 @@ def update_trailing_db_from_json(json_data, db_type):
                 }
             )
             conn.commit()
-            print(f"Sync: Updated trailing session {json_data.get('t_session_number')} from JSON")
+            # print(f"Sync: Updated trailing session {json_data.get('t_session_number')} from JSON")
         
         # Restore original DB type
         if old_db_type != db_type:
@@ -1329,13 +1329,13 @@ def sync_primary_to_secondary(primary_dict, secondary_dict, secondary_folder):
                 
                 # Validate JSON before copying
                 if not validate_json_file(src):
-                    print(f"Sync: Skipping invalid JSON file: {src.name}")
+                    # print(f"Sync: Skipping invalid JSON file: {src.name}")
                     continue
                 
                 dst = Path(secondary_folder) / src.name
                 shutil.copy2(str(src), str(dst))
                 count += 1
-                print(f"Sync: Copied to secondary: {dst.name}")
+                # print(f"Sync: Copied to secondary: {dst.name}")
             except Exception as e:
                 print(f"Sync error copying to secondary: {e}")
     
@@ -1376,13 +1376,13 @@ def sync_secondary_to_primary(secondary_dict, primary_dict, primary_folder, db_t
                 
                 # Validate JSON before copying
                 if not validate_json_file(src):
-                    print(f"Sync: Skipping invalid JSON file from secondary: {src.name}")
+                    # print(f"Sync: Skipping invalid JSON file from secondary: {src.name}")
                     continue
                 
                 dst = Path(primary_folder) / src.name
                 shutil.copy2(str(src), str(dst))
                 count += 1
-                print(f"Sync: Copied from secondary to primary: {dst.name}")
+                # print(f"Sync: Copied from secondary to primary: {dst.name}")
                 
                 # Also update DB if this file has a UUID
                 if secondary_info.get("has_uuid"):

@@ -175,11 +175,11 @@ class FormManagement:
                 # Compare basic fields (handle empty strings vs None)
                 def safe_str(val):
                     """Convert to string, treating None and empty string as equivalent"""
-                    print(f"DEBUG: Test Convert to string:{val}")
+                    # print(f"DEBUG: Test Convert to string:{val}")
                     return str(val) if val is not None else ""
                 
-                print(f"DEBUG: current_location")
-                print(len(current_purpose),'==',len(session_dict.get('session_purpose')))
+                # print(f"DEBUG: current_location")
+                # print(len(current_purpose),'==',len(session_dict.get('session_purpose')))
                 # Compare basic fields
                 if (safe_str(current_date) != safe_str(session_dict.get("date")) or
                     safe_str(current_handler) != safe_str(session_dict.get("handler")) or

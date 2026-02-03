@@ -103,7 +103,7 @@ class StatusBarManager:
         # Debug: show queue counts
         counts = self.get_queue_counts()
         total = counts['error'] + counts['warning'] + counts['info']
-        print(f"Status bar: Added {msg_type} message. Queues: E={counts['error']}, W={counts['warning']}, I={counts['info']} (Total: {total})")
+        # print(f"Status bar: Added {msg_type} message. Queues: E={counts['error']}, W={counts['warning']}, I={counts['info']} (Total: {total})")
         
         # Reset to most recent of highest priority
         self._reset_to_highest_priority()
@@ -115,7 +115,7 @@ class StatusBarManager:
         if queue_len == self.QUEUE_WARNING_THRESHOLD:
             if queue_name not in self._warning_shown:
                 self._warning_shown[queue_name] = True
-                print(f"Status bar: {queue_name.capitalize()} queue has {queue_len} messages")
+                # print(f"Status bar: {queue_name.capitalize()} queue has {queue_len} messages")
         elif queue_len < self.QUEUE_WARNING_THRESHOLD:
             # Reset warning flag when queue drops below threshold
             if queue_name in self._warning_shown:
@@ -288,7 +288,7 @@ class StatusBarManager:
         # Debug output
         left_state = self.left_arrow.cget('state')
         right_state = self.right_arrow.cget('state')
-        print(f"Status bar arrows: queue={self.current_queue}, len={queue_len}, idx={self.current_index}, left={left_state}, right={right_state}")
+        # print(f"Status bar arrows: queue={self.current_queue}, len={queue_len}, idx={self.current_index}, left={left_state}, right={right_state}")
     
     def _start_flash(self):
         """Start flashing for error messages"""
