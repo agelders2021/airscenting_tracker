@@ -71,8 +71,8 @@ import sv
 
 # App constants
 APP_TITLE = "SAR Dog Training Logger"
-APP_VERSION = "1.0.10-alpha"
-GITHUB_URL = "github.com/your-repo/sar_dog_training_logger"
+APP_VERSION = "1.0.11-alpha"
+GITHUB_URL = "github.com/agelders2021/sar_dog_training_log"
 
 
 class TrainingLoggerUI(AirScentingHelper, TrailingHelper):

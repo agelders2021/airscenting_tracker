@@ -25,8 +25,75 @@ Helper functions used throughout the application
 """
 import json
 import shutil
+import platform
 from pathlib import Path
 from getpass import getuser
+
+
+def enable_mousewheel_scroll(canvas, parent_frame):
+    """
+    Enable mouse wheel scrolling anywhere within a scrollable canvas area.
+    
+    This binds mouse wheel events to the parent frame so scrolling works
+    when the mouse is anywhere on the tab, not just over the scrollbar.
+    
+    Args:
+        canvas: The tk.Canvas that handles scrolling
+        parent_frame: The parent frame/tab that contains the canvas
+        
+    Usage:
+        canvas = tk.Canvas(parent_frame)
+        scrollbar = ttk.Scrollbar(parent_frame, orient="vertical", command=canvas.yview)
+        # ... setup canvas ...
+        enable_mousewheel_scroll(canvas, parent_frame)
+    """
+    def _on_mousewheel(event):
+        """Handle mouse wheel scroll events"""
+        # Check if canvas is scrollable (content taller than visible area)
+        if canvas.bbox("all") is None:
+            return
+        
+        bbox = canvas.bbox("all")
+        canvas_height = canvas.winfo_height()
+        content_height = bbox[3] - bbox[1] if bbox else 0
+        
+        if content_height <= canvas_height:
+            return  # No need to scroll
+        
+        # Platform-specific scroll handling
+        if platform.system() == 'Windows':
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        elif platform.system() == 'Darwin':  # macOS
+            canvas.yview_scroll(int(-1 * event.delta), "units")
+        else:  # Linux and others
+            if event.num == 4:
+                canvas.yview_scroll(-1, "units")
+            elif event.num == 5:
+                canvas.yview_scroll(1, "units")
+    
+    def _bind_mousewheel(event=None):
+        """Bind mouse wheel events when mouse enters the area"""
+        if platform.system() == 'Linux':
+            canvas.bind_all("<Button-4>", _on_mousewheel)
+            canvas.bind_all("<Button-5>", _on_mousewheel)
+        else:
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+    
+    def _unbind_mousewheel(event=None):
+        """Unbind mouse wheel events when mouse leaves the area"""
+        if platform.system() == 'Linux':
+            canvas.unbind_all("<Button-4>")
+            canvas.unbind_all("<Button-5>")
+        else:
+            canvas.unbind_all("<MouseWheel>")
+    
+    # Bind enter/leave events to the parent frame
+    parent_frame.bind("<Enter>", _bind_mousewheel)
+    parent_frame.bind("<Leave>", _unbind_mousewheel)
+    
+    # Also bind to canvas itself for good measure
+    canvas.bind("<Enter>", _bind_mousewheel)
+    canvas.bind("<Leave>", _unbind_mousewheel)
 
 
 def get_username():

@@ -29,6 +29,7 @@ from tkinter import ttk
 from tkcalendar import DateEntry
 from datetime import datetime
 from tips import ToolTip, ConditionalToolTip
+from ui_utils import enable_mousewheel_scroll
 import sv as sv_module
 
 
@@ -58,6 +59,9 @@ def setup_airscent_tab(ui):
     
     canvas.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
+    
+    # Enable mouse wheel scrolling anywhere on the tab
+    enable_mousewheel_scroll(canvas, ui.airscent_tab)
     
     frame = tk.Frame(scrollable_frame, padx=20, pady=20)
     frame.pack(fill="both", expand=True)
