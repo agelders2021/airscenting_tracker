@@ -111,13 +111,13 @@ def setup_airscent_tab(ui):
     
     tk.Label(session_frame, text="Add Session Purpose:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
     ui.a_purpose_combo = ttk.Combobox(session_frame, textvariable=sv.a_purpose, width=22, state="normal",
-                                       values=['Area Search Training', 'Refind Training',
+                                       values=['Area Search Training', 'Re-find Training','Building Search Training',
                                               'Motivational Training', 'Obedience',
-                                              'Mock Certification Test', 'Mission'])
+                                               'Mock Certification Test','Certification Testing', 'Mission'])
     ui.a_purpose_combo.grid(row=1, column=3, sticky="w", padx=5, pady=2)
     ui.a_purpose_combo.bind('<<ComboboxSelected>>', ui._add_to_purpose_accumulator)
     ui.a_purpose_combo.bind('<Return>', ui._add_to_purpose_accumulator)
-    ToolTip(ui.a_purpose_combo, "Select purpose to add to list, or type custom and press Enter", delay=250)
+    ToolTip(ui.a_purpose_combo, "Select purpose to add to list, or type custom and press Enter\nThis entry automatically cleared. See list to right. \N{black right-pointing triangle}", delay=250)
     
     # Session Purposes listbox (accumulator) - spans rows 1-2
     purpose_list_frame = tk.Frame(session_frame)

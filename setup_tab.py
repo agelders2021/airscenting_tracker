@@ -1382,7 +1382,7 @@ class SetupTab:
 
     def add_location(self):
         """Add a new training location to database"""
-        location = sv.new_location.get().strip()
+        location = sv.new_location.get().strip().title()  # Capitalize all words
         if location:
             db_type = sv.db_type.get()
             
@@ -1698,7 +1698,7 @@ class SetupTab:
 
     def add_dog(self):
         """Add a new dog name"""
-        dog_name = sv.new_dog.get().strip()
+        dog_name = sv.new_dog.get().strip().capitalize()  # Capitalize first word
         if dog_name:
             # Check database type and selected type
             db_type = sv.db_type.get()
@@ -1860,7 +1860,7 @@ class SetupTab:
 
     def add_terrain_type(self):
         """Add a new terrain type to database"""
-        terrain = sv.new_terrain.get().strip()
+        terrain = sv.new_terrain.get().strip().capitalize()  # Capitalize first word
         if terrain:
             db_type = sv.db_type.get()
             
@@ -2076,7 +2076,7 @@ class SetupTab:
 
     def add_distraction_type(self):
         """Add a new distraction type to database"""
-        distraction = sv.new_distraction.get().strip()
+        distraction = sv.new_distraction.get().strip().capitalize()  # Capitalize first word
         if distraction:
             db_type = sv.db_type.get()
             

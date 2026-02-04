@@ -20,11 +20,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 """
-SAR Dog Training Logger - Combined Application
+SAR Dog Training Log - Combined Application
 Main entry point that integrates Air Scenting and Trailing training session entry.
 
 Structure:
-- logger.py: Main class and startup (this file)
+- sar-dog-training-log.py: Main class and startup (this file)
 - air_ui.py: Air Scenting tab widget construction
 - air_helper.py: Air Scenting helper methods (mixin)
 - trail_ui.py: Trailing tab widget construction  
@@ -70,7 +70,7 @@ from trail_helper import TrailingHelper
 import sv
 
 # App constants
-APP_TITLE = "SAR Dog Training Logger"
+APP_TITLE = "SAR Dog Training Log"
 APP_VERSION = "1.0.11-alpha"
 GITHUB_URL = "github.com/agelders2021/sar_dog_training_log"
 
