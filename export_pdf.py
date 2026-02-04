@@ -75,9 +75,9 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
     instructions = tk.Label(
         dialog, 
         text="Select sessions to export:\n"
-             "\u2022 Click to select one session\n"
-             "\u2022 Ctrl+Click to select multiple sessions\n"
-             "\u2022 Shift+Click to select a range",
+             "\N{Bullet} Click to select one session\n"
+             "\N{Bullet} Ctrl+Click to select multiple sessions\n"
+             "\N{Bullet} Shift+Click to select a range",
         justify="left",
         padx=10,
         pady=5
@@ -747,7 +747,8 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
                             elif file_ext in video_extensions:
                                 # Video file - copy to PDF output folder and create link
                                 pdf_folder = os.path.dirname(filepath)
-                                video_dest = os.path.join(pdf_folder, image_file)
+                                video_filename = os.path.basename(image_file)
+                                video_dest = os.path.join(pdf_folder, video_filename)
                                 
                                 # Copy video to same folder as PDF if not already there
                                 if not os.path.exists(video_dest):
@@ -761,8 +762,9 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
                                 
                                         pass
                                 
-                                # Add link to video in PDF
-                                video_link = f'<a href="{image_file}" color="blue"><u>{image_file}</u></a>'
+                                # Add link to video in PDF using file:/// URI for reliable opening
+                                video_uri = 'file:///' + video_dest.replace('\\', '/').replace(' ', '%20')
+                                video_link = f'<a href="{video_uri}" color="blue"><u>{video_filename}</u></a>'
                                 note_text = f"<b>Video:</b> {video_link}<br/><font color='gray' size='8'>(Video file copied to PDF folder - click to open)</font>"
                                 story.append(Paragraph(note_text, value_style))
                                 story.append(Spacer(1, 0.1*inch))

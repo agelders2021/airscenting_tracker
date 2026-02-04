@@ -1,4 +1,25 @@
 """
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Copyright (C) 2026 Al Gelders
+
+This file is part of the airscenting an trailing logging programs
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+"""
 Trailing Helper Module
 Contains helper methods for the Trailing Training Session tab.
 These methods handle data manipulation, callbacks, and business logic.
@@ -158,9 +179,9 @@ class TrailingHelper:
         
         instructions = tk.Label(dialog,
             text="Select sessions to navigate:\n"
-                 "• Click to select one session\n"
-                 "• Ctrl+Click to select multiple sessions\n"
-                 "• Shift+Click to select a range",
+                 "\N{Bullet} Click to select one session\n"
+                 "\N{Bullet} Ctrl+Click to select multiple sessions\n"
+                 "\N{Bullet} Shift+Click to select a range",
             justify="left", padx=10, pady=10)
         instructions.pack()
         
@@ -231,6 +252,8 @@ class TrailingHelper:
             self._load_trailing_session_into_form(selected_sessions[0])
             self._update_trailing_navigation_buttons()
             
+            # Reset filter to active for next dialog open
+            sv.t_session_status_filter.set("active")
             dialog.destroy()
             self.show_status_message(f"Viewing {len(selected_sessions)} selected trailing session(s)", "info")
         
@@ -252,6 +275,17 @@ class TrailingHelper:
                     for session_num in selected_nums:
                         db_ops.update_session_status(session_num, dog_name, 'active')
                     self.show_status_message(f"Restored {len(selected_nums)} trailing session(s)", "info")
+                    # Reset filter to active for next dialog open
+                    sv.t_session_status_filter.set("active")
+                    # Clear session list and reset form for new entry
+                    self.trailing_entry.dog_sessions_list = []
+                    self.trailing_entry.current_session_index = -1
+                    self.trailing_entry.editing_session = False
+                    self.trailing_entry.editing_row = None
+                    # Update session number to next available
+                    next_session = self.get_trailing_next_session_number(dog_name)
+                    sv.t_session.set(str(next_session))
+                    self.trailing_entry.update_session_frame_title('active')
                     dialog.destroy()
             else:
                 result = messagebox.askyesno("Confirm Hide",
@@ -261,6 +295,17 @@ class TrailingHelper:
                     for session_num in selected_nums:
                         db_ops.update_session_status(session_num, dog_name, 'deleted')
                     self.show_status_message(f"Hidden {len(selected_nums)} trailing session(s)", "info")
+                    # Reset filter to active for next dialog open
+                    sv.t_session_status_filter.set("active")
+                    # Clear session list and reset form for new entry
+                    self.trailing_entry.dog_sessions_list = []
+                    self.trailing_entry.current_session_index = -1
+                    self.trailing_entry.editing_session = False
+                    self.trailing_entry.editing_row = None
+                    # Update session number to next available
+                    next_session = self.get_trailing_next_session_number(dog_name)
+                    sv.t_session.set(str(next_session))
+                    self.trailing_entry.update_session_frame_title('active')
                     dialog.destroy()
         
         btn_frame = tk.Frame(dialog)
@@ -276,7 +321,16 @@ class TrailingHelper:
         delete_button = tk.Button(btn_frame, text=button_text, command=delete_restore_selected,
                                    bg=button_color, fg="white", width=15)
         delete_button.pack(side=tk.LEFT, padx=5)
-        tk.Button(btn_frame, text="Cancel", command=dialog.destroy, width=10).pack(side=tk.LEFT, padx=5)
+        
+        def on_cancel():
+            # Reset filter to active for next dialog open
+            sv.t_session_status_filter.set("active")
+            dialog.destroy()
+        
+        tk.Button(btn_frame, text="Cancel", command=on_cancel, width=10).pack(side=tk.LEFT, padx=5)
+        
+        # Also reset filter if dialog is closed via window manager (X button)
+        dialog.protocol("WM_DELETE_WINDOW", on_cancel)
         
         session_listbox.bind('<Double-Button-1>', lambda e: view_selected())
     
@@ -484,9 +538,9 @@ class TrailingHelper:
         instructions = tk.Label(
             dialog,
             text="Select sessions to export:\n"
-                 "\u2022 Click to select one session\n"
-                 "\u2022 Ctrl+Click to select multiple sessions\n"
-                 "\u2022 Shift+Click to select a range",
+                 "\N{Bullet} Click to select one session\n"
+                 "\N{Bullet} Ctrl+Click to select multiple sessions\n"
+                 "\N{Bullet} Shift+Click to select a range",
             justify="left",
             padx=10,
             pady=5
@@ -865,7 +919,9 @@ class TrailingHelper:
                                                     # print(f"[PDF Export] Warning: Could not copy video: {copy_err}")
                                                     pass
                                             
-                                            video_link = f'<a href="{display_name}" color="blue"><u>{display_name}</u></a>'
+                                            # Use file:/// URI for reliable opening in PDF viewers
+                                            video_uri = 'file:///' + video_dest.replace('\\', '/').replace(' ', '%20')
+                                            video_link = f'<a href="{video_uri}" color="blue"><u>{display_name}</u></a>'
                                             note_text = f"<b>Video:</b> {video_link}<br/><font color='gray' size='8'>(Video file copied to PDF folder - click to open)</font>"
                                             elements.append(Paragraph(note_text, value_style))
                                             elements.append(Spacer(1, 0.1*inch))

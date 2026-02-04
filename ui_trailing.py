@@ -231,11 +231,11 @@ class TrailingEntryTab:
         self.view_edit_hide_btn.grid(row=0, column=5, sticky='e', padx=5, pady=2)
         
         # Navigation buttons
-        self.prev_session_btn = tk.Button(session_frame, text="\u25C0 Previous", bg="#FF8C00", fg="white", 
+        self.prev_session_btn = tk.Button(session_frame, text="\N{BLACK LEFT-POINTING TRIANGLE} Previous", bg="#FF8C00", fg="white", 
                                          width=10, command=self._navigate_previous_session, state=tk.DISABLED)
         self.prev_session_btn.grid(row=0, column=6, padx=2, pady=2)
         
-        self.next_session_btn = tk.Button(session_frame, text="Next \u25B6", bg="#FF8C00", fg="white",
+        self.next_session_btn = tk.Button(session_frame, text="Next \N{BLACK RIGHT-POINTING TRIANGLE}", bg="#FF8C00", fg="white",
                                          width=10, command=self._navigate_next_session, state=tk.DISABLED)
         self.next_session_btn.grid(row=0, column=7, padx=2, pady=2)
         
@@ -258,7 +258,7 @@ class TrailingEntryTab:
         self.purpose_combo.grid(row=1, column=3, sticky="w", padx=5, pady=2)
         self.purpose_combo.bind('<<ComboboxSelected>>', self._add_to_purpose_accumulator)
         self.purpose_combo.bind('<Return>', self._add_to_purpose_accumulator)
-        ToolTip(self.purpose_combo,"Select purpose to be added to 'Session Purposes' list to right \u25B6\nOr type custom purpose and press 'Enter'\n(Selections are not shown in this entry box)",delay=250)
+        ToolTip(self.purpose_combo,"Select purpose to be added to 'Session Purposes' list to right \N{BLACK RIGHT-POINTING TRIANGLE}\nOr type custom purpose and press 'Enter'\n(Selections are not shown in this entry box)",delay=250)
         
         # Session Purposes listbox (accumulator)
         purpose_list_frame = tk.Frame(session_frame)
@@ -324,7 +324,7 @@ class TrailingEntryTab:
                                          state="readonly", values=terrain_types)
         self.terrain_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         self.terrain_combo.bind('<<ComboboxSelected>>', self._add_to_terrain_accumulator)
-        ToolTip(self.terrain_combo,"Select terrain type to be added to 'Terrain Types' to right \u25B6\n(Selections are not shown in this entry box)",delay=250)
+        ToolTip(self.terrain_combo,"Select terrain type to be added to 'Terrain Types' to right \N{BLACK RIGHT-POINTING TRIANGLE}\n(Selections are not shown in this entry box)",delay=250)
         
         # Terrain listbox
         tk.Label(trail_frame, text="Terrain Types:").grid(row=0,column=4,sticky="e",padx=5,pady=2)
@@ -390,7 +390,7 @@ class TrailingEntryTab:
                                      values=["North", "South", "East", "West", "NE", "NW", "SE", "SW"])
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
-        tk.Label(weather_frame, text="Temperature (Â°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        tk.Label(weather_frame, text="Temperature (\N{Degree Sign}F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         tk.Entry(weather_frame, textvariable=sv.t_temp_laying, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="e", padx=5, pady=2)
@@ -414,7 +414,7 @@ class TrailingEntryTab:
                                      values=["North", "South", "East", "West", "NE", "NW", "SE", "SW"])
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
-        tk.Label(weather_frame, text="Temperature (Â°F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        tk.Label(weather_frame, text="Temperature (\N{Degree Sign}F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         tk.Entry(weather_frame, textvariable=sv.t_temp_running, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="e", padx=5, pady=2)
@@ -430,12 +430,12 @@ class TrailingEntryTab:
         
         tk.Label(behavior_frame, text="Start Behavior:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_start_behavior, width=54,
-                    values=["Excellentâ€”Direction of Travel immediately identified ",
-                            "Very Goodâ€”Direction of travel not imediately identified",
-                            "Goodâ€”Direction of travel identified with cueing",
-                            "Fairâ€”Direction of travel not identified",
-                            "Poorâ€”Direction of travel incorrectly identified",
-                            "Needs Workâ€”Could not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
+                    values=["Excellent\N{EM DASH}Direction of Travel immediately identified ",
+                            "Very Good\N{EM DASH}Direction of travel not imediately identified",
+                            "Good\N{EM DASH}Direction of travel identified with cueing",
+                            "Fair\N{EM DASH}Direction of travel not identified",
+                            "Poor\N{EM DASH}Direction of travel incorrectly identified",
+                            "Needs Work\N{EM DASH}Could not identify trail"]).grid(row=0, column=1, sticky="w", padx=5, pady=2)
         
         
         tk.Label(behavior_frame, text="Pace:").grid(row=0, column=2, sticky="e", padx=5, pady=2)
@@ -469,7 +469,7 @@ class TrailingEntryTab:
         self.distraction_combo = ttk.Combobox(distraction_frame, textvariable=sv.t_distractions, width=20,
                                              values=distraction_types)
         self.distraction_combo.grid(row=0, column=1, sticky="nw", padx=5, pady=2)
-        ToolTip(self.distraction_combo,"Select Distraction via dropdown list or type custom distraction\nThen select 'Response' to the right \u25B6",delay=250) 
+        ToolTip(self.distraction_combo,"Select Distraction via dropdown list or type custom distraction\nThen select 'Response' to the right \N{BLACK RIGHT-POINTING TRIANGLE}",delay=250) 
         
         tk.Label(distraction_frame, text="Response:").grid(row=0, column=2, sticky="ne", padx=5, pady=2)
         self.response_combo = ttk.Combobox(distraction_frame, textvariable=sv.t_distraction_response, width=20,

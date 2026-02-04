@@ -114,8 +114,8 @@ class FormManagement:
         from tkinter import messagebox
         
         # DEBUG: Confirm function is being called
-        print("=" * 50)
-        print("DEBUG: check_entry_tab_changes() CALLED")
+        # print("=" * 50)
+        # print("DEBUG: check_entry_tab_changes() CALLED")
         
         # Get current form state
         current_session = sv.session_number.get()
@@ -160,6 +160,7 @@ class FormManagement:
         # Get map files
         current_map_files = self.ui.map_files_list if hasattr(self.ui, 'map_files_list') else []
         
+        """
         # DEBUG: Print all values
         print(f"DEBUG: current_session = '{current_session}'")
         print(f"DEBUG: current_dog = '{current_dog}'")
@@ -182,6 +183,7 @@ class FormManagement:
         print(f"DEBUG: current_terrains = {current_terrains}")
         print(f"DEBUG: current_map_files = {current_map_files}")
         print(f"DEBUG: current_purposes = {current_purposes}")
+        """
         
         # Check if any form data has been entered (quick check before database lookup)
         form_has_data = (
@@ -206,7 +208,7 @@ class FormManagement:
             current_purposes
         )
         
-        print(f"DEBUG: form_has_data = {form_has_data}")
+        # print(f"DEBUG: form_has_data = {form_has_data}")
         
         # Also check if any subject responses have been entered
         if not form_has_data:
@@ -216,23 +218,23 @@ class FormManagement:
                     tags = self.ui.a_subject_responses_tree.item(item_id, 'tags')
                     if 'enabled' in tags:
                         values = self.ui.a_subject_responses_tree.item(item_id, 'values')
-                        print(f"DEBUG: subject_{i} tags={tags}, values={values}")
+                        # print(f"DEBUG: subject_{i} tags={tags}, values={values}")
                         if (len(values) > 1 and values[1]) or (len(values) > 2 and values[2]):
                             form_has_data = True
-                            print(f"DEBUG: Found subject response data at subject_{i}")
+                            # print(f"DEBUG: Found subject response data at subject_{i}")
                             break
             except (AttributeError, tk.TclError) as e:
-                print(f"DEBUG: Exception checking subject responses: {e}")
+                # print(f"DEBUG: Exception checking subject responses: {e}")
                 pass
         
-        print(f"DEBUG: form_has_data after subject check = {form_has_data}")
+        # print(f"DEBUG: form_has_data after subject check = {form_has_data}")
         
         # If no data entered, no need to prompt
         if not form_has_data:
-            print("DEBUG: No form data, returning True (allow exit)")
+            # print("DEBUG: No form data, returning True (allow exit)")
             return True
         
-        print("DEBUG: Form has data, will check database...")
+        # print("DEBUG: Form has data, will check database...")
         
         # Check if this session exists in database and compare
         try:

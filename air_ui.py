@@ -1,4 +1,25 @@
 """
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Copyright (C) 2026 Al Gelders
+
+This file is part of the airscenting an trailing logging programs
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+
+"""
 Air Scenting UI Module
 Contains only tkinter widget construction for the Air Scenting Training Session tab.
 Helper methods are in air_helper.py
@@ -67,11 +88,11 @@ def setup_airscent_tab(ui):
                                       bg="#4169E1", fg="white")
     ui.a_edit_delete_btn.grid(row=0, column=5, padx=5, pady=2)
     
-    ui.a_prev_session_btn = tk.Button(session_frame, text="â—„ Previous", bg="#FF8C00", fg="white",
+    ui.a_prev_session_btn = tk.Button(session_frame, text="\N{BLACK LEFT-POINTING TRIANGLE} Previous", bg="#FF8C00", fg="white",
                                        width=10, command=ui.navigation.navigate_previous_session, state=tk.DISABLED)
     ui.a_prev_session_btn.grid(row=0, column=6, padx=2, pady=2)
     
-    ui.a_next_session_btn = tk.Button(session_frame, text="Next â–º", bg="#FF8C00", fg="white",
+    ui.a_next_session_btn = tk.Button(session_frame, text="Next \N{BLACK RIGHT-POINTING TRIANGLE}", bg="#FF8C00", fg="white",
                                        width=10, command=ui.navigation.navigate_next_session, state=tk.DISABLED)
     ui.a_next_session_btn.grid(row=0, column=7, padx=2, pady=2)
     
@@ -372,6 +393,7 @@ def setup_airscent_tab(ui):
 def open_export_dialog(ui):
     """Open the export PDF dialog"""
     import export_pdf
+    from database import get_connection
     sv = sv_module.sv
     
     if not sv.dog.get():
@@ -388,4 +410,14 @@ def open_export_dialog(ui):
                               "Please configure the Images/Trail Maps folder in Setup tab first.")
         return
     
-    export_pdf.show_export_dialog(ui)
+    backup_folder = sv.backup_folder.get().strip()
+    
+    export_pdf.show_export_dialog(
+        parent=ui.root,
+        db_type=sv.db_type.get(),
+        current_dog=sv.dog.get(),
+        get_connection_func=get_connection,
+        backup_folder=backup_folder,
+        trail_maps_folder=trail_maps_folder,
+        status_var=sv.status
+    )

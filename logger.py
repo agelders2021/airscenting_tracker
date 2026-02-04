@@ -287,11 +287,11 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         status_bar_frame.pack(side=tk.BOTTOM, fill=tk.X)
         
         # Status bar widgets
-        self.status_left_arrow = tk.Button(status_bar_frame, text="\u25C0",
+        self.status_left_arrow = tk.Button(status_bar_frame, text="\N{BLACK LEFT-POINTING TRIANGLE}",
                                            width=2, state="disabled")
         self.status_left_arrow.pack(side=tk.LEFT, padx=(2, 0))
         
-        self.status_right_arrow = tk.Button(status_bar_frame, text="\u25B6",
+        self.status_right_arrow = tk.Button(status_bar_frame, text="\N{BLACK RIGHT-POINTING TRIANGLE}",
                                             width=2, state="disabled")
         self.status_right_arrow.pack(side=tk.LEFT, padx=(2, 0))
         

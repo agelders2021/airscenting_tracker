@@ -128,7 +128,7 @@ class DatabaseManager:
     # ===== TRAILING SESSION OPERATIONS =====
     
     def get_next_session_number(self, dog_name=None):
-        """Get the next session number for a dog"""
+        """Get the next session number for a dog (counts active sessions only)"""
         if not self._db_exists() or not dog_name:
             return 1
         
@@ -136,8 +136,10 @@ class DatabaseManager:
             old_db_type = self._switch_db_context()
             
             with get_connection() as conn:
+                # Count active sessions only (status = 'active' or status IS NULL)
+                # This is consistent with air scenting behavior
                 result = conn.execute(
-                    text("SELECT MAX(t_session_number) FROM t_training_sessions WHERE t_dog_name = :dog_name"),
+                    text("SELECT COUNT(*) FROM t_training_sessions WHERE t_dog_name = :dog_name AND (status = 'active' OR status IS NULL)"),
                     {"dog_name": dog_name}
                 )
                 row = result.fetchone()
