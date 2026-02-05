@@ -163,6 +163,7 @@ class Stringvars:
         self.db_path = tk.StringVar(master=master)
         self.trail_maps_folder = tk.StringVar(master=master)
         self.backup_folder = tk.StringVar(master=master)
+        self.pdf_folder = tk.StringVar(master=master)
         self.config_path = tk.StringVar(master=master)
         
         # ===== SETUP TAB - DATABASE =====
@@ -659,6 +660,7 @@ class Stringvars:
             'db_path': self.db_path.get(),
             'trail_maps_folder': self.trail_maps_folder.get(),
             'backup_folder': self.backup_folder.get(),
+            'pdf_folder': self.pdf_folder.get(),
             'default_handler': self.default_handler.get(),
         }
     
@@ -673,6 +675,7 @@ class Stringvars:
         self.db_path.set(config.get('db_path', ''))
         self.trail_maps_folder.set(config.get('trail_maps_folder', ''))
         self.backup_folder.set(config.get('backup_folder', ''))
+        self.pdf_folder.set(config.get('pdf_folder', ''))
         self.default_handler.set(config.get('default_handler', ''))
 
 
@@ -816,7 +819,7 @@ if __name__ == "__main__":
     # Example 5: Change detection
     print("\nExample 5: Change detection")
     snapshot = sv.get_state_string()
-    sv.temperature.set("72ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°F")
+    sv.temperature.set("72ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°F")
     has_changes = sv.has_changes_from(snapshot)
     print(f"Has changes: {has_changes}")
     

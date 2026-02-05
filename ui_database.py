@@ -388,7 +388,7 @@ class DatabaseManager:
             with get_connection() as conn:
                 # Build query based on filters
                 base_query = """
-                    SELECT session_number, date, handler, dog_name
+                    SELECT session_number, date, handler, location
                     FROM training_sessions 
                     WHERE dog_name = :dog_name
                 """
@@ -1253,7 +1253,7 @@ class DatabaseOperations:
             session_dict["drive_level"],    # row[14]
             session_dict["subjects_found"], # row[15]
             session_dict["image_files"],    # row[16]
-            session_dict["comments"]        # row[17] ÃƒÂ¢Ã¢â‚¬Â Ã‚Â ADDED!
+            session_dict["comments"]        # row[17] ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Ãƒâ€šÃ‚Â ADDED!
         )
     
     def get_session_with_related_data(self, session_number, dog_name):

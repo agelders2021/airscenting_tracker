@@ -96,6 +96,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         self.machine_db_path = ""
         self.machine_trail_maps_folder = ""
         self.machine_backup_folder = ""
+        self.machine_pdf_folder = ""
         self.machine_current_user = ""
         self.machine_user_list = []
         self.last_tab_index = 0  # Track last selected tab
@@ -136,6 +137,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         sv.db_path.set(self.machine_db_path)
         sv.trail_maps_folder.set(self.machine_trail_maps_folder)
         sv.backup_folder.set(self.machine_backup_folder)
+        sv.pdf_folder.set(self.machine_pdf_folder)
         sv.current_user.set(self.machine_current_user)
         
         # Initialize helper modules
@@ -404,6 +406,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                             self.machine_db_path = user_settings.get("db_file_path", "")
                             self.machine_trail_maps_folder = user_settings.get("trail_maps_folder", "")
                             self.machine_backup_folder = user_settings.get("backup_folder", "")
+                            self.machine_pdf_folder = user_settings.get("pdf_folder", "")
                     else:
                         # Legacy format
                         default_user = getuser()
@@ -412,6 +415,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                         self.machine_db_path = bootstrap.get("db_file_path", "")
                         self.machine_trail_maps_folder = bootstrap.get("trail_maps_folder", "")
                         self.machine_backup_folder = bootstrap.get("backup_folder", "")
+                        self.machine_pdf_folder = bootstrap.get("pdf_folder", "")
             except Exception as e:
                 # print(f"Error loading bootstrap: {e}")
                 pass  # Will use defaults
@@ -438,7 +442,8 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                         bootstrap["users"][default_user] = {
                             "db_file_path": existing.get("db_file_path", ""),
                             "trail_maps_folder": existing.get("trail_maps_folder", ""),
-                            "backup_folder": existing.get("backup_folder", "")
+                            "backup_folder": existing.get("backup_folder", ""),
+                            "pdf_folder": existing.get("pdf_folder", "")
                         }
             except:
                 pass
@@ -451,7 +456,8 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         bootstrap["users"][self.machine_current_user] = {
             "db_file_path": self.machine_db_path,
             "trail_maps_folder": self.machine_trail_maps_folder,
-            "backup_folder": self.machine_backup_folder
+            "backup_folder": self.machine_backup_folder,
+            "pdf_folder": self.machine_pdf_folder
         }
         
         self.machine_user_list = list(bootstrap["users"].keys())

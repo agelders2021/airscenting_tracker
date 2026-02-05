@@ -184,18 +184,33 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
         # Get selected session numbers
         selected_sessions = [session_numbers[i] for i in selected_indices]
         
-        # Get file save location
-        default_filename = f"AirScenting_Log_{current_dog}_{datetime.now().strftime('%Y%m%d')}.pdf"
-        filepath = filedialog.asksaveasfilename(
-            parent=dialog,
-            title="Save PDF As",
-            defaultextension=".pdf",
-            initialfile=default_filename,
-            filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
-        )
+        # Import sv to get pdf_folder setting
+        import sv as sv_module
+        pdf_folder = sv_module.pdf_folder.get().strip() if sv_module.sv else ""
         
-        if not filepath:
-            return
+        # Build filepath using pdf_folder if set, otherwise ask user
+        default_filename = f"AirScenting_Log_{current_dog}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        
+        if pdf_folder and os.path.isdir(pdf_folder):
+            # Use the configured PDF folder
+            filepath = os.path.join(pdf_folder, default_filename)
+            # Check if file exists and ask to overwrite
+            if os.path.exists(filepath):
+                if not messagebox.askyesno("File Exists", 
+                    f"File already exists:\n{filepath}\n\nOverwrite?"):
+                    return
+        else:
+            # No PDF folder configured, ask user for location
+            filepath = filedialog.asksaveasfilename(
+                parent=dialog,
+                title="Save PDF As",
+                defaultextension=".pdf",
+                initialfile=default_filename,
+                filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
+            )
+            
+            if not filepath:
+                return
         
         # Perform export with selected sessions (keep dialog open until complete)
         success = export_sessions_to_pdf(

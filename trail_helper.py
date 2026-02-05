@@ -623,18 +623,33 @@ class TrailingHelper:
             selected_sessions = [session_data_list[i] for i in selected_indices]
             selected_nums = [s.get('t_session_number') for s in selected_sessions]
             
-            # Get file save location
-            default_filename = f"Trailing_Log_{dog_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
-            filepath = filedialog.asksaveasfilename(
-                parent=dialog,
-                title="Save PDF As",
-                defaultextension=".pdf",
-                initialfile=default_filename,
-                filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
-            )
+            # Get pdf_folder from sv
+            import os
+            pdf_folder = sv.pdf_folder.get().strip()
             
-            if not filepath:
-                return
+            # Build filepath using pdf_folder if set, otherwise ask user
+            default_filename = f"Trailing_Log_{dog_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+            
+            if pdf_folder and os.path.isdir(pdf_folder):
+                # Use the configured PDF folder
+                filepath = os.path.join(pdf_folder, default_filename)
+                # Check if file exists and ask to overwrite
+                if os.path.exists(filepath):
+                    if not messagebox.askyesno("File Exists", 
+                        f"File already exists:\n{filepath}\n\nOverwrite?"):
+                        return
+            else:
+                # No PDF folder configured, ask user for location
+                filepath = filedialog.asksaveasfilename(
+                    parent=dialog,
+                    title="Save PDF As",
+                    defaultextension=".pdf",
+                    initialfile=default_filename,
+                    filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")]
+                )
+                
+                if not filepath:
+                    return
             
             dialog.destroy()
             
@@ -944,7 +959,17 @@ class TrailingHelper:
             doc.build(elements)
             
             self.show_status_message(f"PDF exported: {filepath}", "info")
-            messagebox.showinfo("Export Complete", f"PDF exported successfully:\n{filepath}")
+            
+            # Ask to open the PDF
+            if messagebox.askyesno("Open File?", "Would you like to open the exported PDF?"):
+                import subprocess
+                import platform
+                if platform.system() == 'Windows':
+                    os.startfile(filepath)
+                elif platform.system() == 'Darwin':
+                    subprocess.run(['open', filepath])
+                else:
+                    subprocess.run(['xdg-open', filepath])
             
         except Exception as e:
             import traceback

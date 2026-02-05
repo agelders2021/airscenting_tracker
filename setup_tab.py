@@ -180,6 +180,20 @@ class SetupTab:
         tk.Button(backup_frame, text="Restore from Secondary Backup", 
                  command=self.ui.misc_data_ops.restore_settings_from_json).pack(side="left", padx=5)
         
+        # PDF Storage Folder
+        pdf_frame = tk.LabelFrame(frame, text="PDF Storage Folder", padx=10, pady=5)
+        pdf_frame.pack(fill="x", pady=5)
+        
+        pdf_entry = tk.Entry(pdf_frame, textvariable=sv.pdf_folder, width=70)
+        pdf_entry.pack(side="left", padx=5)
+        ToolTip(pdf_entry, 
+                "Default folder where exported PDFs will be saved.\n"
+                "Both Air Scent and Trailing session exports will use this location.")
+        # Add FocusOut handler to validate typed paths
+        pdf_entry.bind('<FocusOut>', lambda e: self._validate_typed_path('pdf'))
+        
+        tk.Button(pdf_frame, text="Browse", command=self._select_pdf_folder).pack(side="left", padx=5)
+        
         # Default values
         defaults_frame = tk.LabelFrame(frame, text="Default Values (Optional)", padx=10, pady=5)
         defaults_frame.pack(fill="x", pady=5)
@@ -448,7 +462,7 @@ class SetupTab:
         """Validate a path that was typed (not browsed) and update bootstrap if needed.
         
         Args:
-            path_type: 'primary', 'secondary', or 'trail_maps'
+            path_type: 'primary', 'secondary', 'trail_maps', or 'pdf'
         """
         if path_type == 'primary':
             path_var = sv.db_path
@@ -465,6 +479,11 @@ class SetupTab:
             old_path = getattr(self.ui, 'machine_trail_maps_folder', '') or ''
             attr_name = 'machine_trail_maps_folder'
             label = "Trail Maps Folder"
+        elif path_type == 'pdf':
+            path_var = sv.pdf_folder
+            old_path = getattr(self.ui, 'machine_pdf_folder', '') or ''
+            attr_name = 'machine_pdf_folder'
+            label = "PDF Storage Folder"
         else:
             return
         
@@ -514,6 +533,16 @@ class SetupTab:
         else:
             # Revert to old path
             path_var.set(old_path)
+    
+    def _select_pdf_folder(self):
+        """Select PDF storage folder"""
+        folder = filedialog.askdirectory(title="Select PDF Storage Folder")
+        if folder:
+            sv.pdf_folder.set(folder)
+            self.ui.machine_pdf_folder = folder
+            # Save bootstrap file
+            self.ui.save_bootstrap()
+            self.ui.show_status_message("PDF Storage Folder updated", "info")
 
     def update_create_db_button_state(self, *args):
         """Enable/disable Initialize Data Structures button based on folder selection"""
@@ -2489,7 +2518,8 @@ class SetupTab:
                         bootstrap["users"][default_user] = {
                             "db_file_path": existing.get("db_file_path", ""),
                             "trail_maps_folder": existing.get("trail_maps_folder", ""),
-                            "backup_folder": existing.get("backup_folder", "")
+                            "backup_folder": existing.get("backup_folder", ""),
+                            "pdf_folder": existing.get("pdf_folder", "")
                         }
             except:
                 pass
@@ -2503,7 +2533,8 @@ class SetupTab:
             bootstrap["users"][username] = {
                 "db_file_path": "",
                 "trail_maps_folder": "",
-                "backup_folder": ""
+                "backup_folder": "",
+                "pdf_folder": ""
             }
         
         # Set as current user (will take effect on restart)
@@ -2542,7 +2573,8 @@ class SetupTab:
                         bootstrap["users"][default_user] = {
                             "db_file_path": existing.get("db_file_path", ""),
                             "trail_maps_folder": existing.get("trail_maps_folder", ""),
-                            "backup_folder": existing.get("backup_folder", "")
+                            "backup_folder": existing.get("backup_folder", ""),
+                            "pdf_folder": existing.get("pdf_folder", "")
                         }
             except:
                 pass

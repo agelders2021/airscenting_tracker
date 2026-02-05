@@ -591,10 +591,10 @@ class Navigation:
         
         # Populate listbox
         for session in sessions:
-            session_num, date, handler, dog = session
+            session_num, date, handler, location = session
             handler = handler or ""
-            dog = dog or ""
-            text = f"Session #{session_num:3d}  |  {date}  |  {handler:20s}  |  {dog}"
+            location = location or ""
+            text = f"Session #{session_num:3d}  |  {date}  |  {handler:20s}  |  {location}"
             listbox.insert("end", text)
         
         # Store session numbers for reference
@@ -617,10 +617,10 @@ class Navigation:
             session_numbers.clear()
             
             for session in new_sessions:
-                session_num, date, handler, dog = session
+                session_num, date, handler, location = session
                 handler = handler or ""
-                dog = dog or ""
-                text = f"Session #{session_num:3d}  |  {date}  |  {handler:20s}  |  {dog}"
+                location = location or ""
+                text = f"Session #{session_num:3d}  |  {date}  |  {handler:20s}  |  {location}"
                 listbox.insert("end", text)
                 session_numbers.append(session_num)
             
