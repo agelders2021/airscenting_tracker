@@ -70,9 +70,9 @@ from trail_helper import TrailingHelper
 import sv
 
 # App constants
-APP_TITLE = "SAR Dog Training Log"
+APP_TITLE = "SAR K9 Training Record"
 APP_VERSION = "1.0.11-alpha"
-GITHUB_URL = "github.com/agelders2021/sar_dog_training_log"
+GITHUB_URL = "github.com/agelders2021/sar-k9-training-record"
 
 
 class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
