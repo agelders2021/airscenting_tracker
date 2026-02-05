@@ -379,5 +379,9 @@ class Misc2Operations:
         
         # Reset session frame title for new entry
         nav.update_session_frame_title(None)
+        
+        # Call new_session to properly reset form state (skip change check since we just saved)
+        # This ensures the form is in a clean "new session" state with proper snapshot
+        self.ui.form_mgmt.new_session(skip_change_check=True)
 
 

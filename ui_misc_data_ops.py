@@ -47,6 +47,7 @@ class MiscDataOperations:
         """
         Check if database exists and is valid at startup.
         If database is missing or corrupted, offer to rebuild from JSON backups.
+        Also check if backup is newer than database and offer to restore.
         
         Returns:
             bool: True if database is valid or was successfully rebuilt, False otherwise
@@ -109,6 +110,9 @@ class MiscDataOperations:
             import database
             reload(database)
             
+            # Check if backup is newer than database
+            self._check_backup_newer_than_db(db_path, json_path)
+            
             return True
             
         except Exception as e:
@@ -119,9 +123,94 @@ class MiscDataOperations:
             # Database exists but is corrupted or inaccessible
             return self._offer_rebuild_from_json(db_path, json_path, f"Database error: {error_msg}")
     
+    def _check_backup_newer_than_db(self, db_path, json_path):
+        """
+        Check if the latest full backup file is newer than the last exit time.
+        If so, offer to restore from the backup.
+        
+        Args:
+            db_path: Path to database file
+            json_path: Path to JSON backup folder
+        """
+        if not json_path.exists():
+            return
+        
+        try:
+            # Get last exit time from config (more reliable than DB mtime)
+            last_exit_time = None
+            if hasattr(self.ui, 'config') and self.ui.config:
+                exit_time_str = self.ui.config.get("last_exit_time")
+                if exit_time_str:
+                    try:
+                        last_exit_time = datetime.fromisoformat(exit_time_str)
+                    except:
+                        pass
+            
+            # If no exit time in config, fall back to database modification time
+            if last_exit_time is None:
+                last_exit_time = datetime.fromtimestamp(db_path.stat().st_mtime)
+            
+            # Find newest full backup file
+            backup_files = list(json_path.glob("full_backup_*.json"))
+            
+            if not backup_files:
+                return
+            
+            # Sort by modification time to find newest
+            backup_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+            newest_backup = backup_files[0]
+            newest_mtime = datetime.fromtimestamp(newest_backup.stat().st_mtime)
+            
+            if newest_mtime > last_exit_time:
+                # Backup is newer than last exit
+                time_diff = newest_mtime - last_exit_time
+                
+                # Only alert if difference is more than a minute (to avoid false positives)
+                if time_diff.total_seconds() > 60:
+                    result = messagebox.askyesno(
+                        "Newer Backup Found",
+                        f"A backup file is newer than the last program exit:\n\n"
+                        f"Last exit: {last_exit_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        f"Backup created: {newest_mtime.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        f"Backup file: {newest_backup.name}\n\n"
+                        f"This may indicate data was restored from another source.\n\n"
+                        f"Would you like to restore from this backup?",
+                        icon='warning'
+                    )
+                    
+                    if result:
+                        self._restore_from_full_backup(newest_backup)
+        except Exception as e:
+            # Don't block startup on check errors
+            pass
+    
+    def _restore_from_full_backup(self, backup_file):
+        """Restore entire database from a full backup JSON file."""
+        try:
+            with open(backup_file, 'r', encoding='utf-8') as f:
+                backup_data = json.load(f)
+            
+            # Verify it's a full backup file
+            if backup_data.get("backup_version") != "2.0":
+                messagebox.showerror("Invalid Backup", "This does not appear to be a valid full backup file.")
+                return False
+            
+            result = self._perform_full_restore(backup_data)
+            
+            if result:
+                messagebox.showinfo("Restore Complete", 
+                    f"Database restored from backup:\n{backup_file.name}")
+            
+            return result
+            
+        except Exception as e:
+            messagebox.showerror("Restore Error", f"Failed to restore from backup:\n{e}")
+            return False
+    
     def _offer_rebuild_from_json(self, db_path, json_path, reason):
         """
         Offer to rebuild database from JSON backup files.
+        Shows a selection dialog for full backup files.
         
         Args:
             db_path: Path to database file
@@ -131,7 +220,7 @@ class MiscDataOperations:
         Returns:
             bool: True if database was rebuilt successfully, False otherwise
         """
-        # Check if JSON backup folder exists and has files
+        # Check if JSON backup folder exists
         if not json_path.exists():
             messagebox.showwarning(
                 "No Database",
@@ -141,11 +230,18 @@ class MiscDataOperations:
             )
             return False
         
-        json_files = list(json_path.glob("*session_*.json"))
+        # Look for full backup files first (new format)
+        full_backup_files = list(json_path.glob("full_backup_*.json"))
+        
+        # Also check for legacy individual session files
+        legacy_session_files = list(json_path.glob("*session_*.json"))
+        legacy_session_files += list(json_path.glob("a_*.json"))
+        legacy_session_files += list(json_path.glob("t_*.json"))
+        
         config_file = json_path / ".training_log_config.json"
         has_config = config_file.exists()
         
-        if not json_files and not has_config:
+        if not full_backup_files and not legacy_session_files and not has_config:
             messagebox.showwarning(
                 "No Database",
                 f"{reason}\n\n"
@@ -154,18 +250,37 @@ class MiscDataOperations:
             )
             return False
         
-        # Build message about what can be restored
+        # If we have full backup files, show selection dialog
+        if full_backup_files:
+            result = messagebox.askyesno(
+                "Rebuild Database?",
+                f"{reason}\n\n"
+                f"Found {len(full_backup_files)} full backup file(s) in:\n{json_path}\n\n"
+                "Would you like to select a backup to restore from?",
+                icon='question'
+            )
+            
+            if not result:
+                return False
+            
+            # Create database first, then show selection dialog
+            if not self._create_empty_database(db_path):
+                return False
+            
+            # Show backup selection dialog
+            return self._show_startup_backup_selection(full_backup_files, db_path)
+        
+        # Fall back to legacy restore if no full backups
         restore_items = []
-        if json_files:
-            restore_items.append(f"{len(json_files)} session backup file(s)")
+        if legacy_session_files:
+            restore_items.append(f"{len(legacy_session_files)} session backup file(s)")
         if has_config:
             restore_items.append("configuration data (dogs, terrains, locations)")
         
-        # Offer to rebuild
         result = messagebox.askyesno(
             "Rebuild Database?",
             f"{reason}\n\n"
-            f"Found in {json_path}:\n" + "\n".join(f"  Ã¢â‚¬Â¢ {item}" for item in restore_items) + "\n\n"
+            f"Found in {json_path}:\n" + "\n".join(f"  • {item}" for item in restore_items) + "\n\n"
             "Would you like to rebuild the database from these backups?",
             icon='question'
         )
@@ -173,7 +288,16 @@ class MiscDataOperations:
         if not result:
             return False
         
-        # Rebuild the database
+        # Create database and restore from legacy files
+        if not self._create_empty_database(db_path):
+            return False
+        
+        sv.show_status_message("Database recreated, restoring from backups...", "info")
+        self._restore_sessions_from_json(json_path)
+        return True
+    
+    def _create_empty_database(self, db_path):
+        """Create a new empty database with schema. Returns True on success."""
         try:
             # Delete corrupted database if it exists
             if db_path.exists():
@@ -217,18 +341,124 @@ class MiscDataOperations:
             from schema import create_tables
             create_tables()
             
-            sv.show_status_message("Database recreated, restoring from backups...", "info")
-            
-            # Now restore from JSON backups (reuse existing logic but without asking)
-            self._restore_sessions_from_json(json_path)
-            
             return True
             
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to rebuild database:\n{e}")
+            messagebox.showerror("Error", f"Failed to create database:\n{e}")
             import traceback
             traceback.print_exc()
             return False
+    
+    def _show_startup_backup_selection(self, backup_files, db_path):
+        """Show backup selection dialog at startup when database is missing."""
+        import tkinter as tk
+        
+        # Create a temporary root if needed (during startup)
+        temp_root = None
+        if not hasattr(self.ui, 'root') or self.ui.root is None:
+            temp_root = tk.Tk()
+            temp_root.withdraw()
+            parent = temp_root
+        else:
+            parent = self.ui.root
+        
+        dialog = tk.Toplevel(parent)
+        dialog.title("Select Backup to Restore")
+        dialog.geometry("600x400")
+        dialog.resizable(True, True)
+        dialog.transient(parent)
+        dialog.grab_set()
+        
+        # Center dialog
+        dialog.update_idletasks()
+        screen_width = dialog.winfo_screenwidth()
+        screen_height = dialog.winfo_screenheight()
+        x = (screen_width // 2) - (dialog.winfo_width() // 2)
+        y = (screen_height // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
+        
+        # Result variable
+        selected_file = [None]
+        
+        # Header
+        header = tk.Label(dialog, text="Database needs to be restored.\nSelect a backup file:", 
+                         font=("Helvetica", 11, "bold"), justify="center")
+        header.pack(pady=10)
+        
+        # Listbox with backup files
+        list_frame = tk.Frame(dialog)
+        list_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        scrollbar = tk.Scrollbar(list_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        listbox = tk.Listbox(list_frame, selectmode="single", yscrollcommand=scrollbar.set,
+                            font=("Courier", 10), height=12)
+        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=listbox.yview)
+        
+        # Sort files by modification time (newest first) and collect info
+        file_info = []
+        for f in backup_files:
+            try:
+                mtime = datetime.fromtimestamp(f.stat().st_mtime)
+                size_kb = f.stat().st_size / 1024
+                
+                # Try to read session counts from file
+                try:
+                    with open(f, 'r', encoding='utf-8') as fp:
+                        data = json.load(fp)
+                    air_count = len(data.get("airscenting_sessions", []))
+                    trail_count = len(data.get("trailing_sessions", []))
+                    info_str = f"  ({air_count} air, {trail_count} trail)"
+                except:
+                    info_str = ""
+                
+                file_info.append((f, mtime, size_kb, info_str))
+            except:
+                file_info.append((f, datetime.min, 0, ""))
+        
+        file_info.sort(key=lambda x: x[1], reverse=True)
+        
+        for f, mtime, size_kb, info_str in file_info:
+            display = f"{mtime.strftime('%Y-%m-%d %H:%M')}  {size_kb:8.1f} KB{info_str}"
+            listbox.insert(tk.END, display)
+        
+        # Select newest by default
+        if file_info:
+            listbox.select_set(0)
+        
+        # Buttons
+        button_frame = tk.Frame(dialog)
+        button_frame.pack(pady=10)
+        
+        def do_restore():
+            selection = listbox.curselection()
+            if not selection:
+                messagebox.showwarning("No Selection", "Please select a backup file to restore")
+                return
+            selected_file[0] = file_info[selection[0]][0]
+            dialog.destroy()
+        
+        def do_cancel():
+            dialog.destroy()
+        
+        tk.Button(button_frame, text="Restore Selected", command=do_restore, 
+                 bg="#4CAF50", fg="white", width=15).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="Cancel", command=do_cancel, width=10).pack(side=tk.LEFT, padx=5)
+        
+        # Wait for dialog to close
+        dialog.wait_window()
+        
+        # Clean up temp root if created
+        if temp_root:
+            temp_root.destroy()
+        
+        # Perform restore if file was selected
+        if selected_file[0]:
+            return self._restore_from_full_backup(selected_file[0])
+        
+        return False
     
     def _restore_sessions_from_json(self, json_path):
         """
@@ -996,7 +1226,7 @@ class MiscDataOperations:
             pass
     
     def restore_settings_from_json(self):
-        """Restore settings from JSON config file in secondary backup folder"""
+        """Restore from secondary backup folder - show selection dialog for full backup files."""
         # Block if sync is in progress
         if sv.sync_in_progress:
             messagebox.showinfo(
@@ -1016,188 +1246,262 @@ class MiscDataOperations:
             messagebox.showwarning("Invalid Folder", f"Secondary backup folder does not exist:\n{backup_folder}")
             return
         
-        # Look for config file in JSON subfolder
+        # Look for JSON subfolder
         json_subfolder = backup_path / "JSON"
-        settings_path = None
-        
-        if json_subfolder.exists():
-            # Try new config file name first
-            candidate = json_subfolder / ".training_log_config.json"
-            if candidate.exists():
-                settings_path = candidate
-            else:
-                # Fallback to old settings file for backward compatibility
-                candidate = json_subfolder / "airscenting_settings.json"
-                if candidate.exists():
-                    settings_path = candidate
-        
-        if not settings_path:
-            messagebox.showinfo("No Settings Backup", 
-                               f"No settings backup file found in:\n{backup_folder}/JSON/\n\n"
-                               f"Looking for: .training_log_config.json")
+        if not json_subfolder.exists():
+            messagebox.showinfo("No Backups", f"No JSON backup folder found in:\n{backup_folder}")
             return
         
+        # Find full backup files
+        backup_files = list(json_subfolder.glob("full_backup_*.json"))
+        
+        if not backup_files:
+            messagebox.showinfo("No Backups", f"No full backup files found in:\n{json_subfolder}\n\nLooking for: full_backup_*.json")
+            return
+        
+        # Show selection dialog
+        self._show_backup_selection_dialog(backup_files)
+    
+    def _show_backup_selection_dialog(self, backup_files):
+        """Show dialog for selecting which backup file to restore."""
+        import tkinter as tk
+        from tkinter import ttk
+        
+        dialog = tk.Toplevel(self.ui.root)
+        dialog.title("Restore from Backup")
+        dialog.geometry("600x400")
+        dialog.resizable(True, True)
+        dialog.transient(self.ui.root)
+        dialog.grab_set()
+        
+        # Center dialog
+        dialog.update_idletasks()
+        x = self.ui.root.winfo_x() + (self.ui.root.winfo_width() // 2) - (dialog.winfo_width() // 2)
+        y = self.ui.root.winfo_y() + (self.ui.root.winfo_height() // 2) - (dialog.winfo_height() // 2)
+        dialog.geometry(f"+{x}+{y}")
+        
+        # Header
+        header = tk.Label(dialog, text="Select a backup file to restore:", font=("Helvetica", 11, "bold"))
+        header.pack(pady=10)
+        
+        # Warning
+        warning = tk.Label(dialog, 
+            text="⚠️ Warning: Restoring will add missing data from the backup.\nExisting data will not be overwritten.",
+            fg="orange", justify="center")
+        warning.pack(pady=5)
+        
+        # Listbox with backup files
+        list_frame = tk.Frame(dialog)
+        list_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        scrollbar = tk.Scrollbar(list_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        listbox = tk.Listbox(list_frame, selectmode="single", yscrollcommand=scrollbar.set,
+                            font=("Courier", 10), height=12)
+        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=listbox.yview)
+        
+        # Sort files by modification time (newest first) and collect info
+        file_info = []
+        for f in backup_files:
+            try:
+                mtime = datetime.fromtimestamp(f.stat().st_mtime)
+                size_kb = f.stat().st_size / 1024
+                
+                # Try to read session counts from file
+                try:
+                    with open(f, 'r', encoding='utf-8') as fp:
+                        data = json.load(fp)
+                    air_count = len(data.get("airscenting_sessions", []))
+                    trail_count = len(data.get("trailing_sessions", []))
+                    info_str = f"  ({air_count} air, {trail_count} trail)"
+                except:
+                    info_str = ""
+                
+                file_info.append((f, mtime, size_kb, info_str))
+            except:
+                file_info.append((f, datetime.min, 0, ""))
+        
+        file_info.sort(key=lambda x: x[1], reverse=True)
+        
+        for f, mtime, size_kb, info_str in file_info:
+            display = f"{mtime.strftime('%Y-%m-%d %H:%M')}  {size_kb:8.1f} KB{info_str}"
+            listbox.insert(tk.END, display)
+        
+        # Select newest by default
+        if file_info:
+            listbox.select_set(0)
+        
+        # Buttons
+        button_frame = tk.Frame(dialog)
+        button_frame.pack(pady=10)
+        
+        def do_restore():
+            selection = listbox.curselection()
+            if not selection:
+                messagebox.showwarning("No Selection", "Please select a backup file to restore")
+                return
+            
+            selected_file = file_info[selection[0]][0]
+            dialog.destroy()
+            
+            # Confirm restore
+            result = messagebox.askyesno(
+                "Confirm Restore",
+                f"Are you sure you want to restore from:\n\n{selected_file.name}\n\n"
+                "This will add any missing data to the current database.",
+                icon='question'
+            )
+            
+            if result:
+                self._restore_from_full_backup(selected_file)
+        
+        tk.Button(button_frame, text="Restore Selected", command=do_restore, 
+                 bg="#4CAF50", fg="white", width=15).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="Cancel", command=dialog.destroy, width=10).pack(side=tk.LEFT, padx=5)
+    
+    def _perform_full_restore(self, backup_data):
+        """Perform a full restore from backup data dictionary."""
+        import database
+        from importlib import reload
+        
+        db_type = sv.db_type.get()
+        
+        # Set up database connection
+        import config
+        old_db_type = config.DB_TYPE
+        config.DB_TYPE = db_type
+        
+        from database import engine
+        engine.dispose()
+        reload(database)
+        
+        stats = {
+            "dogs_added": 0,
+            "locations_added": 0,
+            "terrain_added": 0,
+            "distraction_added": 0,
+            "air_sessions_added": 0,
+            "trail_sessions_added": 0
+        }
+        
         try:
-            # Load settings
-            with open(settings_path, 'r') as f:
-                settings = json.load(f)
+            # Restore dogs
+            for dog in backup_data.get("dogs", []):
+                try:
+                    with database.get_connection() as conn:
+                        check = conn.execute(text("SELECT id FROM dogs WHERE name = :name"),
+                                           {"name": dog.get("name")}).fetchone()
+                        if not check:
+                            conn.execute(text("INSERT INTO dogs (name, user_name) VALUES (:name, :user_name)"),
+                                       {"name": dog.get("name"), "user_name": dog.get("user_name", get_username())})
+                            conn.commit()
+                            stats["dogs_added"] += 1
+                except:
+                    pass
             
-            # print(f"Restore: Loaded settings from {settings_path}")
-            pass
+            # Restore locations
+            for loc in backup_data.get("locations", []):
+                try:
+                    with database.get_connection() as conn:
+                        check = conn.execute(text("SELECT id FROM training_locations WHERE name = :name"),
+                                           {"name": loc.get("name")}).fetchone()
+                        if not check:
+                            conn.execute(text("INSERT INTO training_locations (name, user_name) VALUES (:name, :user_name)"),
+                                       {"name": loc.get("name"), "user_name": loc.get("user_name", get_username())})
+                            conn.commit()
+                            stats["locations_added"] += 1
+                except:
+                    pass
             
-            # Handle both old and new config formats
-            # New format uses 'dog_names', old uses 'dogs'
-            dogs = settings.get("dog_names", settings.get("dogs", []))
-            locations = settings.get("training_locations", [])
-            terrain_types = settings.get("terrain_types", [])
-            distraction_types = settings.get("distraction_types", [])
+            # Restore terrain types
+            for terrain in backup_data.get("terrain_types", []):
+                try:
+                    with database.get_connection() as conn:
+                        check = conn.execute(text("SELECT id FROM terrain_types WHERE name = :name"),
+                                           {"name": terrain.get("name")}).fetchone()
+                        if not check:
+                            conn.execute(text("INSERT INTO terrain_types (name, user_name, sort_order) VALUES (:name, :user_name, :sort_order)"),
+                                       {"name": terrain.get("name"), "user_name": terrain.get("user_name", get_username()),
+                                        "sort_order": terrain.get("sort_order", 0)})
+                            conn.commit()
+                            stats["terrain_added"] += 1
+                except:
+                    pass
             
-            # Get handler from nested config (new) or flat (old)
-            airscenting_config = settings.get("airscenting", {})
-            handler_name = airscenting_config.get("default_handler", settings.get("handler_name", ""))
+            # Restore distraction types
+            for distraction in backup_data.get("distraction_types", []):
+                try:
+                    with database.get_connection() as conn:
+                        check = conn.execute(text("SELECT id FROM distraction_types WHERE name = :name"),
+                                           {"name": distraction.get("name")}).fetchone()
+                        if not check:
+                            conn.execute(text("INSERT INTO distraction_types (name, user_name, sort_order) VALUES (:name, :user_name, :sort_order)"),
+                                       {"name": distraction.get("name"), "user_name": distraction.get("user_name", get_username()),
+                                        "sort_order": distraction.get("sort_order", 0)})
+                            conn.commit()
+                            stats["distraction_added"] += 1
+                except:
+                    pass
             
-            # print(f"Restore: Found dogs: {dogs}")
-            # print(f"Restore: Found locations: {locations}")
-            pass
-            
-            db_type = sv.db_type.get()
-            
-            # Set up database connection once
-            import config
-            old_db_type = config.DB_TYPE
-            config.DB_TYPE = db_type
-            
-            from database import engine
-            engine.dispose()
-            from importlib import reload
-            import database
-            reload(database)
-            
-            dogs_added = 0
-            locations_added = 0
-            terrain_added = 0
-            distraction_added = 0
-            
-            # Insert dogs to database
-            if dogs:
-                # print(f"Restore: Attempting to restore {len(dogs)} dogs...")
-                for dog_name in dogs:
-                    try:
-                        with database.get_connection() as conn:
-                            # Check if dog already exists
-                            check = conn.execute(
-                                text("SELECT name FROM dogs WHERE name = :name"),
-                                {"name": dog_name}
-                            ).fetchone()
+            # Restore airscenting sessions
+            for session in backup_data.get("airscenting_sessions", []):
+                try:
+                    with database.get_connection() as conn:
+                        # Check if session exists
+                        check = conn.execute(
+                            text("SELECT id FROM training_sessions WHERE session_number = :num AND dog_name = :dog"),
+                            {"num": session.get("session_number"), "dog": session.get("dog_name")}
+                        ).fetchone()
+                        
+                        if not check:
+                            # Build insert - use column names from backup
+                            columns = [k for k in session.keys() if k != 'id']
+                            placeholders = [f":{k}" for k in columns]
                             
-                            if not check:
-                                conn.execute(
-                                    text("INSERT INTO dogs (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": dog_name, "user_name": get_username()}
-                                )
-                                conn.commit()
-                                dogs_added += 1
-                                # print(f"Restore: Added dog '{dog_name}'")
-                                pass
-                            else:
-                                # print(f"Restore: Dog '{dog_name}' already exists")
-                                pass
-                    except Exception as e:
-                        # print(f"Restore: Failed to add dog '{dog_name}': {e}")
-                        pass
-            
-            # Insert locations to database
-            if locations:
-                # print(f"Restore: Attempting to restore {len(locations)} locations...")
-                for location in locations:
-                    try:
-                        with database.get_connection() as conn:
-                            # Check if location already exists
-                            check = conn.execute(
-                                text("SELECT name FROM training_locations WHERE name = :name"),
-                                {"name": location}
-                            ).fetchone()
+                            sql = f"INSERT INTO training_sessions ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+                            params = {k: session.get(k) for k in columns}
                             
-                            if not check:
-                                conn.execute(
-                                    text("INSERT INTO training_locations (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": location, "user_name": get_username()}
-                                )
-                                conn.commit()
-                                locations_added += 1
-                                # print(f"Restore: Added location '{location}'")
-                                pass
-                            else:
-                                # print(f"Restore: Location '{location}' already exists")
-                                pass
-                    except Exception as e:
-                        # print(f"Restore: Failed to add location '{location}': {e}")
-                        pass
+                            conn.execute(text(sql), params)
+                            conn.commit()
+                            stats["air_sessions_added"] += 1
+                except:
+                    pass
             
-            # Insert terrain types to database
-            if terrain_types:
-                # print(f"Restore: Attempting to restore {len(terrain_types)} terrain types...")
-                for terrain in terrain_types:
-                    try:
-                        with database.get_connection() as conn:
-                            check = conn.execute(
-                                text("SELECT name FROM terrain_types WHERE name = :name"),
-                                {"name": terrain}
-                            ).fetchone()
+            # Restore trailing sessions
+            for session in backup_data.get("trailing_sessions", []):
+                try:
+                    with database.get_connection() as conn:
+                        # Check if session exists
+                        check = conn.execute(
+                            text("SELECT id FROM t_training_sessions WHERE t_session_number = :num AND t_dog_name = :dog"),
+                            {"num": session.get("t_session_number"), "dog": session.get("t_dog_name")}
+                        ).fetchone()
+                        
+                        if not check:
+                            # Build insert - use column names from backup
+                            columns = [k for k in session.keys() if k != 'id']
+                            placeholders = [f":{k}" for k in columns]
                             
-                            if not check:
-                                conn.execute(
-                                    text("INSERT INTO terrain_types (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": terrain, "user_name": get_username()}
-                                )
-                                conn.commit()
-                                terrain_added += 1
-                                # print(f"Restore: Added terrain type '{terrain}'")
-                                pass
-                    except Exception as e:
-                        # print(f"Restore: Failed to add terrain type '{terrain}': {e}")
-                        pass
+                            sql = f"INSERT INTO t_training_sessions ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+                            params = {k: session.get(k) for k in columns}
+                            
+                            conn.execute(text(sql), params)
+                            conn.commit()
+                            stats["trail_sessions_added"] += 1
+                except:
+                    pass
             
-            # Insert distraction types to database
-            if distraction_types:
-                # print(f"Restore: Attempting to restore {len(distraction_types)} distraction types...")
-                for distraction in distraction_types:
-                    try:
-                        with database.get_connection() as conn:
-                            check = conn.execute(
-                                text("SELECT name FROM distraction_types WHERE name = :name"),
-                                {"name": distraction}
-                            ).fetchone()
-                            
-                            if not check:
-                                conn.execute(
-                                    text("INSERT INTO distraction_types (name, user_name) VALUES (:name, :user_name)"),
-                                    {"name": distraction, "user_name": get_username()}
-                                )
-                                conn.commit()
-                                distraction_added += 1
-                                # print(f"Restore: Added distraction type '{distraction}'")
-                                pass
-                    except Exception as e:
-                        # print(f"Restore: Failed to add distraction type '{distraction}': {e}")
-                        pass
+            # Restore related tables if present
+            self._restore_related_tables(backup_data, database)
             
             # Restore original DB_TYPE
             config.DB_TYPE = old_db_type
             database.engine.dispose()
             reload(database)
             
-            # Save handler name to nested airscenting config
-            if handler_name:
-                if "airscenting" not in self.ui.config:
-                    self.ui.config["airscenting"] = {}
-                self.ui.config["airscenting"]["default_handler"] = handler_name
-                sv.default_handler.set(handler_name)
-            
-            self.ui.save_config()
-            
             # Refresh UI
-            # print("Restore: Refreshing UI...")
             self.ui.load_dogs_from_database()
             if hasattr(self.ui, 'a_dog_combo'):
                 self.ui.refresh_dog_list()
@@ -1206,52 +1510,66 @@ class MiscDataOperations:
             if hasattr(self.ui, 'a_location_combo'):
                 self.ui.refresh_location_list()
             
-            # Reload terrain and distraction lists from database
             self.ui.load_terrain_from_database()
             self.ui.load_distraction_from_database()
-            # Also refresh Entry tab terrain combobox
             if hasattr(self.ui, 'a_terrain_combo'):
                 self.ui.refresh_terrain_list()
             
-            # print(f"Restore: Complete - {dogs_added} dogs, {locations_added} locations, {terrain_added} terrains, {distraction_added} distractions added")
-            pass
-            
-            # Now restore sessions from JSON files in secondary backup
-            sessions_restored = 0
-            session_files = list(json_subfolder.glob("*session_*.json")) if json_subfolder.exists() else []
-            
-            if session_files:
-                result = messagebox.askyesno(
-                    "Restore Sessions?",
-                    f"Found {len(session_files)} session backup file(s).\n\n"
-                    "Do you also want to restore these sessions?",
-                    icon='question'
-                )
-                
-                if result:
-                    sessions_restored = self._restore_sessions_from_backup_folder(json_subfolder, db_type)
-            
             # Show summary
-            msg = "Settings restored successfully!\n\n"
-            if dogs_added > 0:
-                msg += f"Added {dogs_added} dog(s)\n"
-            if locations_added > 0:
-                msg += f"Added {locations_added} location(s)\n"
-            if terrain_added > 0:
-                msg += f"Added {terrain_added} terrain type(s)\n"
-            if distraction_added > 0:
-                msg += f"Added {distraction_added} distraction type(s)\n"
-            if handler_name:
-                msg += f"Restored handler name: {handler_name}\n"
-            if sessions_restored > 0:
-                msg += f"Restored {sessions_restored} session(s)\n"
+            total = sum(stats.values())
+            if total > 0:
+                msg = "Restore complete!\n\n"
+                if stats["dogs_added"] > 0:
+                    msg += f"Added {stats['dogs_added']} dog(s)\n"
+                if stats["locations_added"] > 0:
+                    msg += f"Added {stats['locations_added']} location(s)\n"
+                if stats["terrain_added"] > 0:
+                    msg += f"Added {stats['terrain_added']} terrain type(s)\n"
+                if stats["distraction_added"] > 0:
+                    msg += f"Added {stats['distraction_added']} distraction type(s)\n"
+                if stats["air_sessions_added"] > 0:
+                    msg += f"Added {stats['air_sessions_added']} airscenting session(s)\n"
+                if stats["trail_sessions_added"] > 0:
+                    msg += f"Added {stats['trail_sessions_added']} trailing session(s)\n"
+                messagebox.showinfo("Restore Complete", msg)
+            else:
+                messagebox.showinfo("Restore Complete", 
+                    "No new data was added.\nAll items in the backup already exist in the database.")
             
-            messagebox.showinfo("Restore Complete", msg)
+            return True
             
         except Exception as e:
-            messagebox.showerror("Restore Error", f"Failed to restore settings:\n{e}")
-            # print(f"Error restoring settings: {e}")
-            pass
+            # Restore original DB_TYPE on error
+            try:
+                config.DB_TYPE = old_db_type
+                database.engine.dispose()
+                reload(database)
+            except:
+                pass
+            
+            messagebox.showerror("Restore Error", f"Failed to restore:\n{e}")
+            return False
+    
+    def _restore_related_tables(self, backup_data, database):
+        """Restore related tables like session_terrains, session_purposes, etc."""
+        related_tables = [
+            "session_terrains", "session_purposes", "subject_responses",
+            "t_session_terrains", "t_session_purposes", "t_session_distractions"
+        ]
+        
+        for table_name in related_tables:
+            if table_name in backup_data:
+                for row in backup_data[table_name]:
+                    try:
+                        with database.get_connection() as conn:
+                            columns = [k for k in row.keys() if k != 'id']
+                            placeholders = [f":{k}" for k in columns]
+                            sql = f"INSERT OR IGNORE INTO {table_name} ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+                            params = {k: row.get(k) for k in columns}
+                            conn.execute(text(sql), params)
+                            conn.commit()
+                    except:
+                        pass
     
     def _restore_sessions_from_backup_folder(self, json_folder, db_type):
         """

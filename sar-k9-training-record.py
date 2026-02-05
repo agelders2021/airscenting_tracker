@@ -729,7 +729,201 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                 elif result:  # Yes - save
                     self.trailing_entry._save_session()
         
+        # Perform exit backup sync to ensure all database changes are saved to JSON
+        self._perform_exit_backup()
+        
+        # Save exit time to config for backup comparison on next startup
+        self._save_exit_time()
+        
         self.root.destroy()
+    
+    def _save_exit_time(self):
+        """Save the current time as exit time in config for backup comparison."""
+        try:
+            self.config["last_exit_time"] = datetime.now().isoformat()
+            self.save_config()
+        except:
+            pass  # Don't block exit on config save errors
+    
+    def _perform_exit_backup(self):
+        """Perform a full database backup on exit - dumps entire DB to a single JSON file."""
+        try:
+            # Get backup folders
+            primary_folder = sv.db_path.get().strip()
+            secondary_folder = sv.backup_folder.get().strip()
+            
+            if not primary_folder:
+                return  # No primary folder configured
+            
+            primary_json = Path(primary_folder) / "JSON"
+            if not primary_json.exists():
+                return  # JSON folder doesn't exist
+            
+            # Show status message
+            sv.show_status_message("Saving backup...", "info")
+            self.root.update()
+            
+            # Export entire database to JSON
+            backup_data = self._export_full_database()
+            
+            if not backup_data:
+                return  # No data to backup
+            
+            # Create timestamped backup filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_filename = f"full_backup_{timestamp}.json"
+            
+            # Write to primary JSON folder
+            primary_backup_path = primary_json / backup_filename
+            with open(primary_backup_path, 'w', encoding='utf-8') as f:
+                json.dump(backup_data, f, indent=2, default=str, ensure_ascii=False)
+            
+            # Also write to secondary backup folder if configured
+            if secondary_folder:
+                secondary_json = Path(secondary_folder) / "JSON"
+                if secondary_json.exists():
+                    secondary_backup_path = secondary_json / backup_filename
+                    try:
+                        with open(secondary_backup_path, 'w', encoding='utf-8') as f:
+                            json.dump(backup_data, f, indent=2, default=str, ensure_ascii=False)
+                    except:
+                        pass  # Don't fail if secondary backup fails
+            
+            # Clean up old backups (keep last 10)
+            self._cleanup_old_backups(primary_json)
+            if secondary_folder:
+                secondary_json = Path(secondary_folder) / "JSON"
+                if secondary_json.exists():
+                    self._cleanup_old_backups(secondary_json)
+            
+        except Exception as e:
+            # Don't block exit on backup errors
+            pass
+    
+    def _export_full_database(self):
+        """Export entire database to a dictionary for JSON backup."""
+        try:
+            from sqlalchemy import text
+            from database import get_connection
+            
+            backup_data = {
+                "backup_version": "2.0",
+                "backup_time": datetime.now().isoformat(),
+                "airscenting_sessions": [],
+                "trailing_sessions": [],
+                "dogs": [],
+                "locations": [],
+                "terrain_types": [],
+                "distraction_types": [],
+                "config": self.config.copy() if hasattr(self, 'config') else {}
+            }
+            
+            with get_connection() as conn:
+                # Export airscenting sessions
+                result = conn.execute(text("SELECT * FROM training_sessions"))
+                columns = result.keys()
+                for row in result:
+                    session = dict(zip(columns, row))
+                    backup_data["airscenting_sessions"].append(session)
+                
+                # Export trailing sessions
+                result = conn.execute(text("SELECT * FROM t_training_sessions"))
+                columns = result.keys()
+                for row in result:
+                    session = dict(zip(columns, row))
+                    backup_data["trailing_sessions"].append(session)
+                
+                # Export dogs
+                result = conn.execute(text("SELECT * FROM dogs"))
+                columns = result.keys()
+                for row in result:
+                    backup_data["dogs"].append(dict(zip(columns, row)))
+                
+                # Export locations
+                result = conn.execute(text("SELECT * FROM training_locations"))
+                columns = result.keys()
+                for row in result:
+                    backup_data["locations"].append(dict(zip(columns, row)))
+                
+                # Export terrain types
+                result = conn.execute(text("SELECT * FROM terrain_types"))
+                columns = result.keys()
+                for row in result:
+                    backup_data["terrain_types"].append(dict(zip(columns, row)))
+                
+                # Export distraction types
+                result = conn.execute(text("SELECT * FROM distraction_types"))
+                columns = result.keys()
+                for row in result:
+                    backup_data["distraction_types"].append(dict(zip(columns, row)))
+                
+                # Try to export related tables (terrains, purposes, distractions for trailing)
+                try:
+                    result = conn.execute(text("SELECT * FROM session_terrains"))
+                    columns = result.keys()
+                    backup_data["session_terrains"] = [dict(zip(columns, row)) for row in result]
+                except:
+                    pass
+                
+                try:
+                    result = conn.execute(text("SELECT * FROM session_purposes"))
+                    columns = result.keys()
+                    backup_data["session_purposes"] = [dict(zip(columns, row)) for row in result]
+                except:
+                    pass
+                
+                try:
+                    result = conn.execute(text("SELECT * FROM t_session_terrains"))
+                    columns = result.keys()
+                    backup_data["t_session_terrains"] = [dict(zip(columns, row)) for row in result]
+                except:
+                    pass
+                
+                try:
+                    result = conn.execute(text("SELECT * FROM t_session_purposes"))
+                    columns = result.keys()
+                    backup_data["t_session_purposes"] = [dict(zip(columns, row)) for row in result]
+                except:
+                    pass
+                
+                try:
+                    result = conn.execute(text("SELECT * FROM t_session_distractions"))
+                    columns = result.keys()
+                    backup_data["t_session_distractions"] = [dict(zip(columns, row)) for row in result]
+                except:
+                    pass
+                
+                try:
+                    result = conn.execute(text("SELECT * FROM subject_responses"))
+                    columns = result.keys()
+                    backup_data["subject_responses"] = [dict(zip(columns, row)) for row in result]
+                except:
+                    pass
+            
+            return backup_data
+            
+        except Exception as e:
+            return None
+    
+    def _cleanup_old_backups(self, json_folder, keep_count=10):
+        """Remove old backup files, keeping only the most recent ones."""
+        try:
+            backup_files = list(json_folder.glob("full_backup_*.json"))
+            if len(backup_files) <= keep_count:
+                return
+            
+            # Sort by modification time (oldest first)
+            backup_files.sort(key=lambda f: f.stat().st_mtime)
+            
+            # Remove oldest files
+            files_to_remove = backup_files[:-keep_count]
+            for f in files_to_remove:
+                try:
+                    f.unlink()
+                except:
+                    pass
+        except:
+            pass
     
     # =========================================================================
     # AIRSCENTING METHODS (delegated from air_ui.py)

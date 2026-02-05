@@ -964,6 +964,7 @@ class TrailingHelper:
             if messagebox.askyesno("Open File?", "Would you like to open the exported PDF?"):
                 import subprocess
                 import platform
+                import os
                 if platform.system() == 'Windows':
                     os.startfile(filepath)
                 elif platform.system() == 'Darwin':

@@ -350,8 +350,21 @@ class TrailingEntryTab:
         tk.Label(trail_frame, text="Trail Age (hours):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         tk.Entry(trail_frame, textvariable=sv.t_trail_age, width=entry_location_width).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
-        tk.Label(trail_frame, text="Trail Length (miles):").grid(row=1, column=2, sticky="w", padx=5, pady=2)
-        tk.Entry(trail_frame, textvariable=sv.t_trail_length, width=entry_terrain_width).grid(row=1, column=3, sticky="w", padx=5, pady=2)
+        tk.Label(trail_frame, text="Trail Length:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
+        #tk.Entry(trail_frame, textvariable=sv.t_trail_length, width=entry_terrain_width).grid(row=1, column=3, sticky="w", padx=5, pady=2)
+        ttk.Combobox(trail_frame, textvariable=sv.t_trail_length,
+                    values=[
+                        "\N{Vulgar Fraction One Quarter} mile",
+                        "\N{Vulgar Fraction One Half} mile",
+                        "\N{Vulgar Fraction Three Quarters} mile",
+                        "1 mile",
+                        "1 \N{Vulgar Fraction One Quarter} miles",
+                        "1 \N{Vulgar Fraction One Half} miles",
+                        "1 \N{Vulgar Fraction Three Quarters} miles",
+                        "2 miles.",
+                        "2 \N{Vulgar Fraction One Half} miles",
+                        "3 miles","4 miles","5 miles","6 miles",],
+                     width=entry_terrain_width-3).grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(trail_frame, text="Trail Difficulty:").grid(row=1, column=6, sticky="w", padx=5, pady=2)
         difficulty_combo = ttk.Combobox(trail_frame, textvariable=sv.t_difficulty, width=9, state="readonly",
