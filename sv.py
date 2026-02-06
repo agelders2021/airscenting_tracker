@@ -117,7 +117,8 @@ class Stringvars:
         self.t_trail_length = tk.StringVar(master=master)
         self.t_difficulty = tk.StringVar(master=master)
         self.t_trail_layer = tk.StringVar(master=master)
-        self.t_cross_track_layer = tk.StringVar(master=master, value="None")
+        #self.t_cross_track_layer = tk.StringVar(master=master, value="None") ahg
+        self.t_cross_track_layer = tk.StringVar(master=master)
         self.t_cross_track_age = tk.StringVar(master=master)
         
         # ===== TRAILING WEATHER WHEN LAYING =====

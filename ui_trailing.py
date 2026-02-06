@@ -348,22 +348,32 @@ class TrailingEntryTab:
         
         # Row 1: Trail Age, Trail Length, Trail Difficulty
         tk.Label(trail_frame, text="Trail Age (hours):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        tk.Entry(trail_frame, textvariable=sv.t_trail_age, width=entry_location_width).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        # tk.Entry(trail_frame, textvariable=sv.t_trail_age, width=entry_location_width).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        ttk.Combobox(trail_frame, textvariable=sv.t_trail_age, width=location_width,
+                    values=[
+                        "Hot Trail",
+                        "15 Minutes",
+                        "\N{Vulgar Fraction One Half} Hour",
+                        "\N{Vulgar Fraction Three Quarters} Hour",
+                        "1 Hour",
+                        "1 \N{Vulgar Fraction One Quarter} Hours",
+                        "1 \N{Vulgar Fraction One Half} Hours",
+                        "2 Hours","3 Hours","4 Hours","6 Hours","8 Hours", "12 Hours", "18 Hours", "24 Hours","36 Hours", "48 Hours"]).grid(row=1,column=1,sticky="w",padx=5,pady=2)
         
         tk.Label(trail_frame, text="Trail Length:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
         #tk.Entry(trail_frame, textvariable=sv.t_trail_length, width=entry_terrain_width).grid(row=1, column=3, sticky="w", padx=5, pady=2)
         ttk.Combobox(trail_frame, textvariable=sv.t_trail_length,
                     values=[
-                        "\N{Vulgar Fraction One Quarter} mile",
-                        "\N{Vulgar Fraction One Half} mile",
-                        "\N{Vulgar Fraction Three Quarters} mile",
-                        "1 mile",
-                        "1 \N{Vulgar Fraction One Quarter} miles",
-                        "1 \N{Vulgar Fraction One Half} miles",
-                        "1 \N{Vulgar Fraction Three Quarters} miles",
-                        "2 miles.",
-                        "2 \N{Vulgar Fraction One Half} miles",
-                        "3 miles","4 miles","5 miles","6 miles",],
+                        "\N{Vulgar Fraction One Quarter} Mile",
+                        "\N{Vulgar Fraction One Half} Mile",
+                        "\N{Vulgar Fraction Three Quarters} Mile",
+                        "1 Mile",
+                        "1 \N{Vulgar Fraction One Quarter} Miles",
+                        "1 \N{Vulgar Fraction One Half} Miles",
+                        "1 \N{Vulgar Fraction Three Quarters} Miles",
+                        "2 Miles.",
+                        "2 \N{Vulgar Fraction One Half} Miles",
+                        "3 Miles","4 Miles","5 Miles","6 Miles",],
                      width=entry_terrain_width-3).grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(trail_frame, text="Trail Difficulty:").grid(row=1, column=6, sticky="w", padx=5, pady=2)
@@ -379,7 +389,16 @@ class TrailingEntryTab:
         tk.Entry(trail_frame,textvariable=sv.t_cross_track_layer,width=entry_terrain_width).grid(row=2,column=3,sticky="w",padx=4,pady=2)
 
         tk.Label(trail_frame,text="Cross Track Age:").grid(row=2,column=4,sticky="e",padx=5,pady=2)
-        tk.Entry(trail_frame,textvariable=sv.t_cross_track_age,width=entry_terrain_width).grid(row=2,column=5,sticky="w",padx=5,pady=(5,2))
+        # tk.Entry(trail_frame,textvariable=sv.t_cross_track_age,width=entry_terrain_width).grid(row=2,column=5,sticky="w",padx=5,pady=(5,2))
+        ttk.Combobox(trail_frame, textvariable=sv.t_cross_track_age, width=location_width,
+                    values=[
+                        "15 Minutes or Less",
+                        "\N{Vulgar Fraction One Half} Hour",
+                        "\N{Vulgar Fraction Three Quarters} Hour",
+                        "1 Hour",
+                        "1 \N{Vulgar Fraction One Quarter} Hours",
+                        "1 \N{Vulgar Fraction One Half} Hours",
+                        "2 Hours","3 Hours","4 Hours","6 Hours","8 Hours"]).grid(row=2,column=5,sticky="w",padx=5,pady=2)
 
 
 
@@ -1520,7 +1539,7 @@ class TrailingEntryTab:
         self._update_terrain_scrollbar()
         sv.t_difficulty.set("")
         sv.t_trail_layer.set("")
-        sv.t_cross_track_layer.set("None")
+        # sv.t_cross_track_layer.set("None") ahg
         sv.t_cross_track_age.set("")
         # Weather when laying trail
         sv.t_weather_laying.set("")
