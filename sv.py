@@ -86,6 +86,7 @@ class Stringvars:
         # ===== SEARCH RESULTS =====
         self.drive_level = tk.StringVar(master=master)
         self.subjects_found = tk.StringVar(master=master)
+        self.a_percent_searched = tk.StringVar(master=master)
         self.start_time = tk.StringVar(master=master)
         self.finish_time = tk.StringVar(master=master)
         
@@ -241,6 +242,7 @@ class Stringvars:
         # Results
         self.drive_level.set("")
         self.subjects_found.set("")
+        self.a_percent_searched.set("")
         self.start_time.set("")
         self.finish_time.set("")
         
@@ -366,6 +368,7 @@ class Stringvars:
             # Results
             'drive_level': self.drive_level.get(),
             'subjects_found': self.subjects_found.get(),
+            'a_percent_searched': self.a_percent_searched.get(),
             'start_time': self.start_time.get(),
             'finish_time': self.finish_time.get(),
             
@@ -411,6 +414,7 @@ class Stringvars:
         # Results
         self.drive_level.set(data.get('drive_level', ''))
         self.subjects_found.set(data.get('subjects_found', ''))
+        self.a_percent_searched.set(data.get('a_percent_searched', ''))
         self.start_time.set(data.get('start_time', ''))
         self.finish_time.set(data.get('finish_time', ''))
         
@@ -819,7 +823,7 @@ if __name__ == "__main__":
     # Example 5: Change detection
     print("\nExample 5: Change detection")
     snapshot = sv.get_state_string()
-    sv.temperature.set("72ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°F")
+    sv.temperature.set("72ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°F")
     has_changes = sv.has_changes_from(snapshot)
     print(f"Has changes: {has_changes}")
     

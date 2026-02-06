@@ -210,6 +210,9 @@ class DatabaseManager:
                                 search_type = :search_type,
                                 drive_level = :drive_level,
                                 subjects_found = :subjects_found,
+                                a_percent_searched = :a_percent_searched,
+                                start_time = :start_time,
+                                finish_time = :finish_time,
                                 comments = :comments,
                                 image_files = :image_files,
                                 user_name = :user_name,
@@ -239,11 +242,13 @@ class DatabaseManager:
                             INSERT INTO training_sessions 
                             (date, session_number, handler, session_purpose, field_support, dog_name, location,
                              search_area_size, num_subjects, handler_knowledge, weather, temperature, 
-                             wind_direction, wind_speed, search_type, drive_level, subjects_found, comments, 
+                             wind_direction, wind_speed, search_type, drive_level, subjects_found, a_percent_searched, 
+                             start_time, finish_time, comments, 
                              image_files, user_name, entry_type, update_time, uuid)
                             VALUES (:date, :session_number, :handler, :session_purpose, :field_support, :dog_name, :location,
                                     :search_area_size, :num_subjects, :handler_knowledge, :weather, :temperature, 
-                                    :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, :comments, 
+                                    :wind_direction, :wind_speed, :search_type, :drive_level, :subjects_found, :a_percent_searched, 
+                                    :start_time, :finish_time, :comments, 
                                     :image_files, :user_name, :entry_type, :update_time, :uuid)
                         """),
                         {
@@ -297,6 +302,7 @@ class DatabaseManager:
                         SELECT id, date, handler, session_purpose, field_support, dog_name, location,
                                search_area_size, num_subjects, handler_knowledge, weather, temperature,
                                wind_direction, wind_speed, search_type, drive_level, subjects_found, 
+                               a_percent_searched, start_time, finish_time,
                                comments, image_files, entry_type, update_time, uuid
                         FROM training_sessions 
                         WHERE session_number = :session_number AND dog_name = :dog_name
@@ -326,11 +332,14 @@ class DatabaseManager:
                     "search_type": row[14] or "",
                     "drive_level": row[15] or "",
                     "subjects_found": row[16] or "",
-                    "comments": row[17] or "",
-                    "image_files": row[18] or "",
-                    "entry_type": row[19] or "",
-                    "update_time": str(row[20]) if row[20] else "",
-                    "uuid": row[21] or ""
+                    "a_percent_searched": row[17] or "",
+                    "start_time": row[18] or "",
+                    "finish_time": row[19] or "",
+                    "comments": row[20] or "",
+                    "image_files": row[21] or "",
+                    "entry_type": row[22] or "",
+                    "update_time": str(row[23]) if row[23] else "",
+                    "uuid": row[24] or ""
                 }
             
             return None
@@ -1253,7 +1262,7 @@ class DatabaseOperations:
             session_dict["drive_level"],    # row[14]
             session_dict["subjects_found"], # row[15]
             session_dict["image_files"],    # row[16]
-            session_dict["comments"]        # row[17] ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â Ãƒâ€šÃ‚Â ADDED!
+            session_dict["comments"]        # row[17] ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ADDED!
         )
     
     def get_session_with_related_data(self, session_number, dog_name):

@@ -328,7 +328,8 @@ def fetch_sessions_by_numbers(dog_name, session_numbers, get_connection_func):
                 SELECT id, date, session_number, handler, session_purpose, field_support,
                        location, search_area_size, num_subjects, handler_knowledge,
                        weather, temperature, wind_direction, wind_speed, search_type,
-                       drive_level, subjects_found, comments, image_files
+                       drive_level, subjects_found, a_percent_searched, start_time, finish_time, 
+                       comments, image_files
                 FROM training_sessions
                 WHERE dog_name = :dog_name AND session_number = :session_num
             """)
@@ -358,9 +359,9 @@ def fetch_sessions_by_numbers(dog_name, session_numbers, get_connection_func):
                 
                 # Parse image files JSON
                 image_files = []
-                if row[18]:  # image_files column
+                if row[21]:  # image_files column (now at index 21)
                     try:
-                        image_files = json.loads(row[18])
+                        image_files = json.loads(row[21])
                     except:
                         pass
                 
@@ -382,7 +383,10 @@ def fetch_sessions_by_numbers(dog_name, session_numbers, get_connection_func):
                     'search_type': row[14],
                     'drive_level': row[15],
                     'subjects_found': row[16],
-                    'comments': row[17],
+                    'a_percent_searched': row[17],
+                    'start_time': row[18],
+                    'finish_time': row[19],
+                    'comments': row[20],
                     'image_files': image_files,
                     'terrains': terrains,
                     'subject_responses': subject_responses
@@ -454,7 +458,8 @@ def fetch_sessions_for_export(dog_name, range_type, start_value, end_value, sort
                 SELECT id, date, session_number, handler, session_purpose, field_support,
                        location, search_area_size, num_subjects, handler_knowledge,
                        weather, temperature, wind_direction, wind_speed, search_type,
-                       drive_level, subjects_found, comments, image_files
+                       drive_level, subjects_found, a_percent_searched, start_time, finish_time,
+                       comments, image_files
                 FROM training_sessions
                 WHERE dog_name = :dog_name
                   AND date >= :start_value
@@ -471,7 +476,8 @@ def fetch_sessions_for_export(dog_name, range_type, start_value, end_value, sort
                 SELECT id, date, session_number, handler, session_purpose, field_support,
                        location, search_area_size, num_subjects, handler_knowledge,
                        weather, temperature, wind_direction, wind_speed, search_type,
-                       drive_level, subjects_found, comments, image_files
+                       drive_level, subjects_found, a_percent_searched, start_time, finish_time,
+                       comments, image_files
                 FROM training_sessions
                 WHERE dog_name = :dog_name
                   AND session_number >= :start_value
@@ -503,9 +509,9 @@ def fetch_sessions_for_export(dog_name, range_type, start_value, end_value, sort
             
             # Parse image files JSON
             image_files = []
-            if row[18]:  # image_files column
+            if row[21]:  # image_files column (now at index 21)
                 try:
-                    image_files = json.loads(row[18])
+                    image_files = json.loads(row[21])
                 except:
                     pass
             
@@ -527,7 +533,10 @@ def fetch_sessions_for_export(dog_name, range_type, start_value, end_value, sort
                 'search_type': row[14],
                 'drive_level': row[15],
                 'subjects_found': row[16],
-                'comments': row[17],
+                'a_percent_searched': row[17],
+                'start_time': row[18],
+                'finish_time': row[19],
+                'comments': row[20],
                 'image_files': image_files,
                 'terrains': terrains,
                 'subject_responses': subject_responses
@@ -690,6 +699,9 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
         for label, key in [
             ("Drive Level", 'drive_level'),
             ("Subjects Found", 'subjects_found'),
+            ("Percent Searched Prior to Last Find", 'a_percent_searched'),
+            ("Start Time", 'start_time'),
+            ("Finish Time", 'finish_time'),
         ]:
             row = make_field(label, session.get(key))
             if row:

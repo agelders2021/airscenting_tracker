@@ -313,6 +313,7 @@ class Navigation:
             sv.search_type.set(session_dict["search_type"])
             sv.drive_level.set(session_dict["drive_level"])
             sv.subjects_found.set(session_dict["subjects_found"])
+            sv.a_percent_searched.set(session_dict.get("a_percent_searched", ""))
             sv.start_time.set(session_dict.get("start_time", ""))
             sv.finish_time.set(session_dict.get("finish_time", ""))
             
@@ -392,7 +393,7 @@ class Navigation:
             
             # Update subjects found dropdown based on loaded num_subjects
             form_mgmt = FormManagement(self.ui)
-            form_mgmt.update_subjects_found()
+            form_mgmt.update_subjects_found(preserve_value=True)
             
             # Enable delete/undelete buttons (editing existing session)
             self.enable_delete_undelete_buttons()

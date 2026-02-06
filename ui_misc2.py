@@ -142,6 +142,7 @@ class Misc2Operations:
         # Search results
         drive_level = sv.drive_level.get()
         subjects_found = sv.subjects_found.get()
+        a_percent_searched = sv.a_percent_searched.get()
         start_time = sv.start_time.get()
         finish_time = sv.finish_time.get()
         comments = self.ui.a_comments_text.get("1.0", tk.END).strip()
@@ -222,6 +223,7 @@ class Misc2Operations:
             "search_type": search_type,
             "drive_level": drive_level,
             "subjects_found": subjects_found,
+            "a_percent_searched": a_percent_searched,
             "start_time": start_time,
             "finish_time": finish_time,
             "comments": comments,
@@ -349,6 +351,7 @@ class Misc2Operations:
         sv.search_type.set("")
         sv.drive_level.set("")
         sv.subjects_found.set("")
+        sv.a_percent_searched.set("")
         sv.start_time.set("")
         sv.finish_time.set("")
         self.ui.a_comments_text.delete("1.0", tk.END)

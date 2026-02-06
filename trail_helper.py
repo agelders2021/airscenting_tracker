@@ -820,6 +820,47 @@ class TrailingHelper:
                     elements.append(table)
                 elements.append(Spacer(1, 0.1*inch))
                 
+                # Weather - Laying
+                weather_laying_data = []
+                fields = [
+                    ('Weather (Laying)', session_data.get('t_weather_laying')),
+                    ('Temperature (Laying)', session_data.get('t_temp_laying')),
+                    ('Wind Speed (Laying)', session_data.get('t_wind_laying')),
+                    ('Wind Direction (Laying)', session_data.get('t_wind_direction_laying')),
+                    ('Humidity (Laying)', session_data.get('t_humidity_laying')),
+                ]
+                for label, value in fields:
+                    row = add_field(label, value)
+                    if row:
+                        weather_laying_data.append(row)
+                
+                # Weather - Running
+                weather_running_data = []
+                fields = [
+                    ('Weather (Running)', session_data.get('t_weather_running')),
+                    ('Temperature (Running)', session_data.get('t_temp_running')),
+                    ('Wind Speed (Running)', session_data.get('t_wind_running')),
+                    ('Wind Direction (Running)', session_data.get('t_wind_direction_running')),
+                    ('Humidity (Running)', session_data.get('t_humidity_running')),
+                ]
+                for label, value in fields:
+                    row = add_field(label, value)
+                    if row:
+                        weather_running_data.append(row)
+                
+                # Add weather section if we have any weather data
+                if weather_laying_data or weather_running_data:
+                    elements.append(Paragraph("<b>Weather Conditions</b>", heading_style))
+                    all_weather_data = weather_laying_data + weather_running_data
+                    table = Table(all_weather_data, colWidths=[1.5*inch, 5.5*inch])
+                    table.setStyle(TableStyle([
+                        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                        ('TOPPADDING', (0,0), (-1,-1), 2),
+                        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                    ]))
+                    elements.append(table)
+                    elements.append(Spacer(1, 0.1*inch))
+                
                 # Dog Behavior
                 elements.append(Paragraph("<b>Dog Behavior</b>", heading_style))
                 behavior_data = []
@@ -827,9 +868,11 @@ class TrailingHelper:
                 fields = [
                     ('Start Behavior', session_data.get('t_start_behavior')),
                     ('Consistency', session_data.get('t_consistency')),
+                    ('Head Position', session_data.get('t_head_pos')),
                     ('Pace', session_data.get('t_pace')),
                     ('Indication', session_data.get('t_indication')),
                     ('Time to Complete', session_data.get('t_time')),
+                    ('Success Rate', session_data.get('t_success')),
                 ]
                 for label, value in fields:
                     row = add_field(label, value)
@@ -949,8 +992,8 @@ class TrailingHelper:
                                     elements.append(Paragraph(error_text, value_style))
                                     elements.append(Spacer(1, 0.1*inch))
                 
-                # Notes
-                notes = session_data.get('t_notes')
+                # Notes/Impression
+                notes = session_data.get('t_impression')
                 if notes and str(notes).strip():
                     elements.append(Paragraph("<b>Notes</b>", heading_style))
                     elements.append(Paragraph(str(notes), value_style))

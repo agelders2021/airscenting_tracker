@@ -142,6 +142,7 @@ class FormManagement:
         current_search_type = sv.search_type.get()
         current_drive_level = sv.drive_level.get()
         current_subjects_found = sv.subjects_found.get()
+        current_a_percent_searched = sv.a_percent_searched.get()
         current_start_time = sv.start_time.get()
         current_finish_time = sv.finish_time.get()
         
@@ -200,6 +201,7 @@ class FormManagement:
             current_search_type or
             current_drive_level or
             current_subjects_found or
+            current_a_percent_searched or
             current_start_time or
             current_finish_time or
             current_comments or
@@ -290,6 +292,7 @@ class FormManagement:
                     safe_str(current_search_type) != safe_str(session_dict.get("search_type")) or
                     safe_str(current_drive_level) != safe_str(session_dict.get("drive_level")) or
                     safe_str(current_subjects_found) != safe_str(session_dict.get("subjects_found")) or
+                    safe_str(current_a_percent_searched) != safe_str(session_dict.get("a_percent_searched")) or
                     safe_str(current_start_time) != safe_str(session_dict.get("start_time")) or
                     safe_str(current_finish_time) != safe_str(session_dict.get("finish_time")) or
                     safe_str(current_comments) != safe_str(session_dict.get("comments"))):
@@ -448,6 +451,7 @@ class FormManagement:
             sv.search_type.set("")
             sv.drive_level.set("")
             sv.subjects_found.set("")
+            sv.a_percent_searched.set("")
             sv.start_time.set("")
             sv.finish_time.set("")
             
@@ -565,6 +569,7 @@ class FormManagement:
         sv.search_type.set("")
         sv.drive_level.set("")
         sv.subjects_found.set("")
+        sv.a_percent_searched.set("")
         sv.start_time.set("")
         sv.finish_time.set("")
         
@@ -628,8 +633,13 @@ class FormManagement:
     # FORM FIELD UPDATES
     # ========================================
     
-    def update_subjects_found(self, event=None):
-        """Update Subjects Found combobox values based on Number of Subjects"""
+    def update_subjects_found(self, event=None, preserve_value=False):
+        """Update Subjects Found combobox values based on Number of Subjects
+        
+        Args:
+            event: Optional event trigger
+            preserve_value: If True, don't clear the current value (used when loading sessions)
+        """
         from sv import sv
         
         num_subjects = sv.num_subjects.get()
@@ -640,10 +650,12 @@ class FormManagement:
             values = [f"{i} out of {n}" for i in range(n + 1)]
             self.ui.a_subjects_found_combo['values'] = values
             self.ui.a_subjects_found_combo['state'] = 'readonly'
-            # Clear current selection when choices change
-            sv.subjects_found.set("")
+            # Clear current selection when choices change (unless preserving for session load)
+            if not preserve_value:
+                sv.subjects_found.set("")
         else:
             # No number selected, disable and clear the subjects_found combobox
             self.ui.a_subjects_found_combo['values'] = []
             self.ui.a_subjects_found_combo['state'] = 'disabled'
-            sv.subjects_found.set("")
+            if not preserve_value:
+                sv.subjects_found.set("")

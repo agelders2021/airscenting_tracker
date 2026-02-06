@@ -280,7 +280,7 @@ class MiscDataOperations:
         result = messagebox.askyesno(
             "Rebuild Database?",
             f"{reason}\n\n"
-            f"Found in {json_path}:\n" + "\n".join(f"  • {item}" for item in restore_items) + "\n\n"
+            f"Found in {json_path}:\n" + "\n".join(f"  â€¢ {item}" for item in restore_items) + "\n\n"
             "Would you like to rebuild the database from these backups?",
             icon='question'
         )
@@ -1286,7 +1286,7 @@ class MiscDataOperations:
         
         # Warning
         warning = tk.Label(dialog, 
-            text="⚠️ Warning: Restoring will add missing data from the backup.\nExisting data will not be overwritten.",
+            text="âš ï¸ Warning: Restoring will add missing data from the backup.\nExisting data will not be overwritten.",
             fg="orange", justify="center")
         warning.pack(pady=5)
         
@@ -2127,3 +2127,12 @@ class MiscDataOperations:
             # Set password in database config
             if password:
                 self.ui.set_db_password()
+        
+        # Run database migrations to add any new columns
+        # This is safe to run multiple times - migrations check if columns exist first
+        try:
+            from schema import migrate_add_a_percent_searched_column
+            migrate_add_a_percent_searched_column()
+        except Exception as e:
+            # Silently continue - migrations might fail if DB not initialized yet
+            pass

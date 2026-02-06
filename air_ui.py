@@ -299,15 +299,18 @@ def setup_airscent_tab(ui):
     ui.a_comments_text.pack(fill=tk.BOTH, expand=True)
     ToolTip(ui.a_comments_text, "Enter overall impression of the search here")
     
-    # Row 2: Start Time, Finish Time
-    tk.Label(results_frame, text="Start Time:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
+    # Row 2: Percent Searched, Start Time, Finish Time
+    tk.Label(results_frame, text="Percent of Area Searched Prior to Last Find:").grid(row=2,column=0,columnspan=2, sticky="e", padx=5, pady=2)
+    ui.a_percent_searched_combo = ttk.Combobox(results_frame, textvariable=sv.a_percent_searched, values = ["10%","20%","30%","40%","50%","60%","70%","80%","90%","100%"],width=5)
+    ui.a_percent_searched_combo.grid(row=2,column=2,sticky="w")
+    tk.Label(results_frame, text="Start Time:").grid(row=2, column=4, sticky="w", padx=5, pady=2)
     ui.a_start_time_entry = tk.Entry(results_frame, textvariable=sv.start_time, width=15)
-    ui.a_start_time_entry.grid(row=2, column=1, sticky="w", padx=5, pady=2)
+    ui.a_start_time_entry.grid(row=2, column=5, sticky="w", padx=5, pady=2)
     ToolTip(ui.a_start_time_entry, "Enter search start time (e.g., 09:30 AM)")
     
-    tk.Label(results_frame, text="Finish Time:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
+    tk.Label(results_frame, text="Finish Time:").grid(row=2, column=6, sticky="w", padx=5, pady=2)
     ui.a_finish_time_entry = tk.Entry(results_frame, textvariable=sv.finish_time, width=15)
-    ui.a_finish_time_entry.grid(row=2, column=3, sticky="w", padx=5, pady=2)
+    ui.a_finish_time_entry.grid(row=2, column=7, sticky="w", padx=5, pady=2)
     ToolTip(ui.a_finish_time_entry, "Enter search finish time (e.g., 11:45 AM)")
     
     # =========================================================================

@@ -21,12 +21,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
 SAR Dog Training Log - Combined Application
-Main entry point that integrates Air Scenting and Trailing training session entry.
+Main entry point that integrates Area Search and Trailing training session entry.
 
 Structure:
 - sar-dog-training-log.py: Main class and startup (this file)
-- air_ui.py: Air Scenting tab widget construction
-- air_helper.py: Air Scenting helper methods (mixin)
+- air_ui.py: Area Search tab widget construction
+- air_helper.py: Area Search helper methods (mixin)
 - trail_ui.py: Trailing tab widget construction  
 - trail_helper.py: Trailing helper methods (mixin)
 """
@@ -80,7 +80,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
     Main UI class for Combined SAR Dog Training Logger.
     
     Inherits from:
-    - AirScentingHelper: Methods for Air Scenting tab
+    - AirScentingHelper: Methods for Area Search tab
     - TrailingHelper: Methods for Trailing tab
     """
     
@@ -236,7 +236,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         self.trailing_tab = ttk.Frame(self.notebook)
         
         self.notebook.add(self.setup_tab, text="Setup")
-        self.notebook.add(self.airscent_tab, text="Air Scent Training Session")
+        self.notebook.add(self.airscent_tab, text="Area Search Training Session")
         self.notebook.add(self.trailing_tab, text="Trailing Training Session")
         
         # Alias for backward compatibility with modules expecting entry_tab
@@ -349,6 +349,12 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
     def _load_last_dog_for_air_session(self):
         """Load the last selected dog for air scenting session from database"""
         try:
+            # Load default handler from config
+            airscenting_config = self.config.get("airscenting", {})
+            default_handler = airscenting_config.get("default_handler", "")
+            if default_handler:
+                sv.handler.set(default_handler)
+            
             db_ops = DatabaseOperations(self)
             last_dog = db_ops.load_db_setting("last_dog_name", "")
             # print(f"DEBUG _load_last_dog_for_air_session: last_dog from db = '{last_dog}'")
