@@ -32,6 +32,7 @@ existing database schema.
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkcalendar import DateEntry
+from tktimepicker import SpinTimePickerModern, constants
 from datetime import datetime
 from pathlib import Path
 import os
@@ -166,23 +167,23 @@ class TrailingEntryTab:
     def _create_widgets(self):
         """Create all UI widgets for the entry tab"""
         # Create scrollable frame
-        canvas = tk.Canvas(self.parent)
-        scrollbar = ttk.Scrollbar(self.parent, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
+        self.canvas = tk.Canvas(self.parent)
+        scrollbar = ttk.Scrollbar(self.parent, orient="vertical", command=self.canvas.yview)
+        scrollable_frame = ttk.Frame(self.canvas)
         
         scrollable_frame.bind(
             "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         )
         
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
+        self.canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        self.canvas.configure(yscrollcommand=scrollbar.set)
         
-        canvas.pack(side="left", fill="both", expand=True)
+        self.canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
         # Enable mouse wheel scrolling anywhere on the tab
-        enable_mousewheel_scroll(canvas, self.parent)
+        enable_mousewheel_scroll(self.canvas, self.parent)
         
         frame = tk.Frame(scrollable_frame, padx=20, pady=20)
         frame.pack(fill="both", expand=True)
@@ -344,7 +345,34 @@ class TrailingEntryTab:
         # Start time
         time_location_width = 12
         tk.Label(trail_frame, text="Start Time:").grid(row=0, column=6, sticky="w", padx=5, pady=2)
-        tk.Entry(trail_frame, textvariable=sv.t_start_time, width=time_location_width).grid(row=0, column=7, sticky="w", padx=5, pady=2)
+        
+        # Create a frame with border to wrap the time picker
+        # Use minimal padding to reduce overall height
+        # Use sunken relief to better match Entry widgets
+        time_picker_frame = tk.Frame(trail_frame, relief="sunken", borderwidth=1, bg="#ffffff", pady=0)
+        time_picker_frame.grid(row=0, column=7, sticky="w", padx=5, pady=2)
+        
+        # Create time picker widget inside the frame
+        self.start_time_picker = SpinTimePickerModern(time_picker_frame)
+        self.start_time_picker.addHours24()  # Add 24-hour format hours
+        self.start_time_picker.addMinutes()  # Add minutes
+        
+        # Configure to match other entry widgets (default font, white background, reduced width)
+        # Width of 6 to roughly match the original entry widget width
+        self.start_time_picker.configureAll(bg="#ffffff", fg="#000000", width=4)
+        self.start_time_picker.configure_separator(bg="#ffffff", fg="#000000")
+        
+        # Pack with minimal padding to reduce overall height
+        self.start_time_picker.pack(padx=1, pady=0, ipady=0)
+        
+        # Bind time picker changes to update the StringVar
+        self.start_time_picker.bind("<<HoursChanged>>", lambda e: self._on_start_time_changed())
+        self.start_time_picker.bind("<<MinChanged>>", lambda e: self._on_start_time_changed())
+        
+        # Setup mouse wheel handling for time picker
+        # When hovering over hours/minutes, wheel adjusts that value
+        # When not over the picker, wheel scrolls the window
+        self._setup_timepicker_wheel(self.start_time_picker, time_picker_frame)
         
         # Row 1: Trail Age, Trail Length, Trail Difficulty
         tk.Label(trail_frame, text="Trail Age (hours):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
@@ -377,7 +405,7 @@ class TrailingEntryTab:
                      width=entry_terrain_width-3).grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(trail_frame, text="Trail Difficulty:").grid(row=1, column=6, sticky="w", padx=5, pady=2)
-        difficulty_combo = ttk.Combobox(trail_frame, textvariable=sv.t_difficulty, width=9, state="readonly",
+        difficulty_combo = ttk.Combobox(trail_frame, textvariable=sv.t_difficulty, width=8, state="readonly",
                                         values=['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
         difficulty_combo.grid(row=1, column=7, sticky="w", padx=5, pady=2)
 
@@ -742,6 +770,101 @@ class TrailingEntryTab:
         """Handle date picker change - update the date_var StringVar"""
         selected_date = self.date_picker.get_date()
         sv.t_date.set(selected_date.strftime("%Y-%m-%d"))
+    
+    def _on_start_time_changed(self):
+        """Handle start time picker change - update the start_time StringVar in HH:MM format"""
+        # Get time from picker as tuple (hours, minutes, period)
+        hours = self.start_time_picker.hours24()
+        minutes = self.start_time_picker.minutes()
+        # Format as HH:MM (e.g., 14:36 for 2:36 PM)
+        time_str = f"{hours:02d}:{minutes:02d}"
+        sv.t_start_time.set(time_str)
+    
+    def _setup_timepicker_wheel(self, time_picker, frame):
+        """
+        Setup mouse wheel handling for the time picker.
+        
+        When hovering over hours, wheel adjusts hours.
+        When hovering over minutes, wheel adjusts minutes.
+        When not over the picker widgets, wheel scrolls the window.
+        
+        Args:
+            time_picker: The SpinTimePickerModern instance
+            frame: The frame containing the time picker
+        """
+        import platform
+        
+        # Get references to the hour and minute SpinLabel widgets
+        hours_widget = time_picker._24HrsTime  # Using 24hr format
+        minutes_widget = time_picker._minutes
+        
+        def adjust_spinlabel(widget, delta):
+            """Adjust a SpinLabel value by delta (positive = increment, negative = decrement)"""
+            # Access the internal attributes of SpinLabel
+            number_lst = widget.number_lst
+            current_index = widget._current_index
+            
+            if delta > 0:
+                # Scroll up - increment
+                if current_index < len(number_lst) - 1:
+                    widget._current_index += 1
+                else:
+                    widget._current_index = 0
+            else:
+                # Scroll down - decrement
+                if current_index > 0:
+                    widget._current_index -= 1
+                else:
+                    widget._current_index = len(number_lst) - 1
+            
+            widget.current_val = number_lst[widget._current_index]
+            widget.updateLabel()
+        
+        def on_hours_wheel(event):
+            """Handle wheel events on hours widget"""
+            if platform.system() == 'Linux':
+                delta = 1 if event.num == 4 else -1
+            else:
+                delta = 1 if event.delta > 0 else -1
+            adjust_spinlabel(hours_widget, delta)
+            self._on_start_time_changed()
+            return "break"
+        
+        def on_minutes_wheel(event):
+            """Handle wheel events on minutes widget"""
+            if platform.system() == 'Linux':
+                delta = 1 if event.num == 4 else -1
+            else:
+                delta = 1 if event.delta > 0 else -1
+            adjust_spinlabel(minutes_widget, delta)
+            self._on_start_time_changed()
+            return "break"
+        
+        def on_frame_wheel(event):
+            """Handle wheel events on the frame (not on hours/minutes) - block propagation"""
+            # Just block propagation, don't do anything
+            return "break"
+        
+        # Bind wheel events to hours widget
+        if platform.system() == 'Linux':
+            hours_widget.bind("<Button-4>", on_hours_wheel)
+            hours_widget.bind("<Button-5>", on_hours_wheel)
+            minutes_widget.bind("<Button-4>", on_minutes_wheel)
+            minutes_widget.bind("<Button-5>", on_minutes_wheel)
+            # Block wheel on the frame and separator to prevent window scroll
+            frame.bind("<Button-4>", on_frame_wheel)
+            frame.bind("<Button-5>", on_frame_wheel)
+            time_picker.bind("<Button-4>", on_frame_wheel)
+            time_picker.bind("<Button-5>", on_frame_wheel)
+            time_picker._separator.bind("<Button-4>", on_frame_wheel)
+            time_picker._separator.bind("<Button-5>", on_frame_wheel)
+        else:
+            hours_widget.bind("<MouseWheel>", on_hours_wheel)
+            minutes_widget.bind("<MouseWheel>", on_minutes_wheel)
+            # Block wheel on the frame and separator to prevent window scroll
+            frame.bind("<MouseWheel>", on_frame_wheel)
+            time_picker.bind("<MouseWheel>", on_frame_wheel)
+            time_picker._separator.bind("<MouseWheel>", on_frame_wheel)
     
     def _load_prior_session(self):
         """Load a prior session for editing"""
@@ -1373,6 +1496,32 @@ class TrailingEntryTab:
         sv.t_dog.set(data.get('t_dog_name', ''))
         sv.t_location.set(data.get('t_location', ''))
         sv.t_start_time.set(data.get('t_start_time', ''))
+        
+        # Also update the time picker widget
+        start_time_str = data.get('t_start_time', '')
+        if start_time_str:
+            try:
+                # Parse time - support both military format (HHMM) and HH:MM format
+                if ':' in start_time_str:
+                    # Legacy HH:MM format
+                    hours, minutes = start_time_str.split(':')
+                    self.start_time_picker.set24Hrs(int(hours))
+                    self.start_time_picker.setMins(int(minutes))
+                elif len(start_time_str) == 4 and start_time_str.isdigit():
+                    # Military format HHMM (e.g., "1436")
+                    hours = int(start_time_str[:2])
+                    minutes = int(start_time_str[2:])
+                    self.start_time_picker.set24Hrs(hours)
+                    self.start_time_picker.setMins(minutes)
+                elif len(start_time_str) == 3 and start_time_str.isdigit():
+                    # Military format HMM (e.g., "936" for 9:36)
+                    hours = int(start_time_str[0])
+                    minutes = int(start_time_str[1:])
+                    self.start_time_picker.set24Hrs(hours)
+                    self.start_time_picker.setMins(minutes)
+            except (ValueError, AttributeError):
+                pass
+        
         sv.t_finish_time.set(data.get('t_finish_time', ''))
         sv.t_trail_age.set(data.get('t_trail_age', ''))
         sv.t_trail_length.set(data.get('t_trail_length', ''))
@@ -1563,6 +1712,13 @@ class TrailingEntryTab:
         sv.t_accumulated_distractions.set("")
         sv.t_start_time.set("")
         sv.t_finish_time.set("")
+        
+        # Reset time picker to midnight (00:00)
+        try:
+            self.start_time_picker.set24Hrs(0)
+            self.start_time_picker.setMins(0)
+        except AttributeError:
+            pass
         
         # Clear distraction table
         for item in self.distraction_tree.get_children():

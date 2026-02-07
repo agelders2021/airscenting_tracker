@@ -737,6 +737,12 @@ class TrailingHelper:
                             Paragraph(str(value), value_style)]
                 return None
             
+            def format_time_for_pdf(time_value):
+                """Format time value with ' hours' suffix for clarity in PDF"""
+                if time_value and str(time_value).strip():
+                    return f"{time_value} hours"
+                return None
+            
             for i, session_data in enumerate(sessions):
                 if i > 0:
                     if i % 2 == 0:
@@ -761,8 +767,8 @@ class TrailingHelper:
                     ('Handler', session_data.get('t_handler')),
                     ('Field Support', session_data.get('t_field_support')),
                     ('Location', session_data.get('t_location')),
-                    ('Start Time', session_data.get('t_start_time')),
-                    ('Finish Time', session_data.get('t_finish_time')),
+                    ('Start Time', format_time_for_pdf(session_data.get('t_start_time'))),
+                    ('Finish Time', format_time_for_pdf(session_data.get('t_finish_time'))),
                 ]
                 for label, value in fields:
                     row = add_field(label, value)
