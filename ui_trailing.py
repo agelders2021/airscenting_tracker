@@ -349,6 +349,7 @@ class TrailingEntryTab:
         # Create a frame with border to wrap the time picker components
         time_picker_frame = tk.Frame(trail_frame, relief="sunken", borderwidth=1, bg="#ffffff", pady=0)
         time_picker_frame.grid(row=0, column=7, sticky="w", padx=5, pady=2)
+        ToolTip(time_picker_frame,"Use Mouse Wheel to change time.\nHover over 'hour' to adjust hour,\nhover over 'minute' to adjust minutes",delay=200)
         
         # Create hours picker
         self.start_time_hours = SpinTimePickerModern(time_picker_frame)

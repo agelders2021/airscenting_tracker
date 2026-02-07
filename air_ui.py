@@ -310,6 +310,7 @@ def setup_airscent_tab(ui):
     # Create a frame with border to wrap the time picker components
     start_time_picker_frame = tk.Frame(results_frame, relief="sunken", borderwidth=1, bg="#ffffff", pady=0)
     start_time_picker_frame.grid(row=2, column=5, sticky="w", padx=5, pady=2)
+    ToolTip(start_time_picker_frame,"Use Mouse Wheel to change time.\nHover over 'hour' to adjust hour,\nhover over 'minute' to adjust minutes",delay=200)
     
     # Import time picker
     from tktimepicker import SpinTimePickerModern
@@ -367,6 +368,7 @@ def setup_airscent_tab(ui):
     # Create a frame with border to wrap the time picker components
     finish_time_picker_frame = tk.Frame(results_frame, relief="sunken", borderwidth=1, bg="#ffffff", pady=0)
     finish_time_picker_frame.grid(row=2, column=7, sticky="w", padx=5, pady=2)
+    ToolTip(finish_time_picker_frame,"Use Mouse Wheel to change time.\nHover over 'hour' to adjust hour,\nhover over 'minute' to adjust minutes",delay=200)
     
     # Create hours picker
     ui.a_finish_time_hours = SpinTimePickerModern(finish_time_picker_frame)
