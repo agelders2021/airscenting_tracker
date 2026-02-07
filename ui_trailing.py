@@ -360,10 +360,14 @@ class TrailingEntryTab:
         # Configure to match other entry widgets (default font, white background, reduced width)
         # Width of 6 to roughly match the original entry widget width
         self.start_time_picker.configureAll(bg="#ffffff", fg="#000000", width=4)
-        self.start_time_picker.configure_separator(bg="#ffffff", fg="#000000")
+        self.start_time_picker.configure_separator(bg="#ffffff", fg="#000000", text=":")
         
         # Pack with minimal padding to reduce overall height
         self.start_time_picker.pack(padx=1, pady=0, ipady=0)
+        
+        # Initialize to 00:00
+        self.start_time_picker.set24Hrs(0)
+        self.start_time_picker.setMins(0)
         
         # Bind time picker changes to update the StringVar
         self.start_time_picker.bind("<<HoursChanged>>", lambda e: self._on_start_time_changed())

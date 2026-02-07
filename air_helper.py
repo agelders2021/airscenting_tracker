@@ -410,3 +410,118 @@ class AirScentingHelper:
             if self.a_subject_responses_tree.exists(first_item):
                 self.a_subject_responses_tree.selection_set(first_item)
                 self.a_subject_responses_tree.see(first_item)
+    
+    # =========================================================================
+    # TIME PICKER METHODS
+    # =========================================================================
+    
+    def _on_start_time_changed(self):
+        """Handle start time picker change - update the start_time StringVar in HH:MM format"""
+        # Get time from picker as tuple (hours, minutes)
+        hours = self.a_start_time_picker.hours24()
+        minutes = self.a_start_time_picker.minutes()
+        # Format as HH:MM (e.g., 14:36 for 2:36 PM)
+        time_str = f"{hours:02d}:{minutes:02d}"
+        sv.start_time.set(time_str)
+    
+    def _on_finish_time_changed(self):
+        """Handle finish time picker change - update the finish_time StringVar in HH:MM format"""
+        # Get time from picker as tuple (hours, minutes)
+        hours = self.a_finish_time_picker.hours24()
+        minutes = self.a_finish_time_picker.minutes()
+        # Format as HH:MM (e.g., 14:36 for 2:36 PM)
+        time_str = f"{hours:02d}:{minutes:02d}"
+        sv.finish_time.set(time_str)
+    
+    def _setup_timepicker_wheel(self, time_picker, frame, picker_type):
+        """
+        Setup mouse wheel handling for the time picker.
+        
+        When hovering over hours, wheel adjusts hours.
+        When hovering over minutes, wheel adjusts minutes.
+        When not over the picker widgets, wheel scrolls the window.
+        
+        Args:
+            time_picker: The SpinTimePickerModern instance
+            frame: The frame containing the time picker
+            picker_type: 'start' or 'finish' to identify which picker
+        """
+        import platform
+        
+        # Get references to the hour and minute SpinLabel widgets
+        hours_widget = time_picker._24HrsTime  # Using 24hr format
+        minutes_widget = time_picker._minutes
+        
+        def adjust_spinlabel(widget, delta):
+            """Adjust a SpinLabel value by delta (positive = increment, negative = decrement)"""
+            # Access the internal attributes of SpinLabel
+            number_lst = widget.number_lst
+            current_index = widget._current_index
+            
+            if delta > 0:
+                # Scroll up - increment
+                if current_index < len(number_lst) - 1:
+                    widget._current_index += 1
+                else:
+                    widget._current_index = 0
+            else:
+                # Scroll down - decrement
+                if current_index > 0:
+                    widget._current_index -= 1
+                else:
+                    widget._current_index = len(number_lst) - 1
+            
+            widget.current_val = number_lst[widget._current_index]
+            widget.updateLabel()
+        
+        def on_hours_wheel(event):
+            """Handle wheel events on hours widget"""
+            if platform.system() == 'Linux':
+                delta = 1 if event.num == 4 else -1
+            else:
+                delta = 1 if event.delta > 0 else -1
+            adjust_spinlabel(hours_widget, delta)
+            if picker_type == 'start':
+                self._on_start_time_changed()
+            else:
+                self._on_finish_time_changed()
+            return "break"
+        
+        def on_minutes_wheel(event):
+            """Handle wheel events on minutes widget"""
+            if platform.system() == 'Linux':
+                delta = 1 if event.num == 4 else -1
+            else:
+                delta = 1 if event.delta > 0 else -1
+            adjust_spinlabel(minutes_widget, delta)
+            if picker_type == 'start':
+                self._on_start_time_changed()
+            else:
+                self._on_finish_time_changed()
+            return "break"
+        
+        def on_frame_wheel(event):
+            """Handle wheel events on the frame (not on hours/minutes) - block propagation"""
+            # Just block propagation, don't do anything
+            return "break"
+        
+        # Bind wheel events to hours widget
+        if platform.system() == 'Linux':
+            hours_widget.bind("<Button-4>", on_hours_wheel)
+            hours_widget.bind("<Button-5>", on_hours_wheel)
+            minutes_widget.bind("<Button-4>", on_minutes_wheel)
+            minutes_widget.bind("<Button-5>", on_minutes_wheel)
+            # Block wheel on the frame and separator to prevent window scroll
+            frame.bind("<Button-4>", on_frame_wheel)
+            frame.bind("<Button-5>", on_frame_wheel)
+            time_picker.bind("<Button-4>", on_frame_wheel)
+            time_picker.bind("<Button-5>", on_frame_wheel)
+            time_picker._separator.bind("<Button-4>", on_frame_wheel)
+            time_picker._separator.bind("<Button-5>", on_frame_wheel)
+        else:
+            hours_widget.bind("<MouseWheel>", on_hours_wheel)
+            minutes_widget.bind("<MouseWheel>", on_minutes_wheel)
+            # Block wheel on the frame and separator to prevent window scroll
+            frame.bind("<MouseWheel>", on_frame_wheel)
+            time_picker.bind("<MouseWheel>", on_frame_wheel)
+            time_picker._separator.bind("<MouseWheel>", on_frame_wheel)

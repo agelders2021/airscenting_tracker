@@ -317,6 +317,55 @@ class Navigation:
             sv.start_time.set(session_dict.get("start_time", ""))
             sv.finish_time.set(session_dict.get("finish_time", ""))
             
+            # Also update the time picker widgets
+            start_time_str = session_dict.get("start_time", "")
+            if start_time_str and hasattr(self.ui, 'a_start_time_picker'):
+                try:
+                    # Parse time - support both HH:MM format and military format (HHMM)
+                    if ':' in start_time_str:
+                        # HH:MM format (e.g., "14:36")
+                        hours, minutes = start_time_str.split(':')
+                        self.ui.a_start_time_picker.set24Hrs(int(hours))
+                        self.ui.a_start_time_picker.setMins(int(minutes))
+                    elif len(start_time_str) == 4 and start_time_str.isdigit():
+                        # Military format HHMM (e.g., "1436")
+                        hours = int(start_time_str[:2])
+                        minutes = int(start_time_str[2:])
+                        self.ui.a_start_time_picker.set24Hrs(hours)
+                        self.ui.a_start_time_picker.setMins(minutes)
+                    elif len(start_time_str) == 3 and start_time_str.isdigit():
+                        # Military format HMM (e.g., "936" for 9:36)
+                        hours = int(start_time_str[0])
+                        minutes = int(start_time_str[1:])
+                        self.ui.a_start_time_picker.set24Hrs(hours)
+                        self.ui.a_start_time_picker.setMins(minutes)
+                except (ValueError, AttributeError):
+                    pass
+            
+            finish_time_str = session_dict.get("finish_time", "")
+            if finish_time_str and hasattr(self.ui, 'a_finish_time_picker'):
+                try:
+                    # Parse time - support both HH:MM format and military format (HHMM)
+                    if ':' in finish_time_str:
+                        # HH:MM format (e.g., "14:36")
+                        hours, minutes = finish_time_str.split(':')
+                        self.ui.a_finish_time_picker.set24Hrs(int(hours))
+                        self.ui.a_finish_time_picker.setMins(int(minutes))
+                    elif len(finish_time_str) == 4 and finish_time_str.isdigit():
+                        # Military format HHMM (e.g., "1436")
+                        hours = int(finish_time_str[:2])
+                        minutes = int(finish_time_str[2:])
+                        self.ui.a_finish_time_picker.set24Hrs(hours)
+                        self.ui.a_finish_time_picker.setMins(minutes)
+                    elif len(finish_time_str) == 3 and finish_time_str.isdigit():
+                        # Military format HMM (e.g., "936" for 9:36)
+                        hours = int(finish_time_str[0])
+                        minutes = int(finish_time_str[1:])
+                        self.ui.a_finish_time_picker.set24Hrs(hours)
+                        self.ui.a_finish_time_picker.setMins(minutes)
+                except (ValueError, AttributeError):
+                    pass
+            
             # Load comments into text widget
             comments = session_dict.get("comments", "")
             self.ui.a_comments_text.delete("1.0", tk.END)

@@ -767,8 +767,8 @@ class TrailingHelper:
                     ('Handler', session_data.get('t_handler')),
                     ('Field Support', session_data.get('t_field_support')),
                     ('Location', session_data.get('t_location')),
-                    ('Start Time', format_time_for_pdf(session_data.get('t_start_time'))),
-                    ('Finish Time', format_time_for_pdf(session_data.get('t_finish_time'))),
+                    ('Start Time', session_data.get('t_start_time')),
+                    ('Finish Time', session_data.get('t_finish_time')),
                 ]
                 for label, value in fields:
                     row = add_field(label, value)
