@@ -455,6 +455,21 @@ class FormManagement:
             sv.start_time.set("")
             sv.finish_time.set("")
             
+            # Reset time pickers to midnight (00:00)
+            if hasattr(self.ui, 'a_start_time_picker'):
+                try:
+                    self.ui.a_start_time_picker.set24Hrs(0)
+                    self.ui.a_start_time_picker.setMins(0)
+                except AttributeError:
+                    pass
+            
+            if hasattr(self.ui, 'a_finish_time_picker'):
+                try:
+                    self.ui.a_finish_time_picker.set24Hrs(0)
+                    self.ui.a_finish_time_picker.setMins(0)
+                except AttributeError:
+                    pass
+            
             # Clear comments textbox
             self.ui.a_comments_text.delete("1.0", tk.END)
             
@@ -572,6 +587,21 @@ class FormManagement:
         sv.a_percent_searched.set("")
         sv.start_time.set("")
         sv.finish_time.set("")
+        
+        # Reset time pickers to midnight (00:00)
+        if hasattr(self.ui, 'a_start_time_picker'):
+            try:
+                self.ui.a_start_time_picker.set24Hrs(0)
+                self.ui.a_start_time_picker.setMins(0)
+            except AttributeError:
+                pass
+        
+        if hasattr(self.ui, 'a_finish_time_picker'):
+            try:
+                self.ui.a_finish_time_picker.set24Hrs(0)
+                self.ui.a_finish_time_picker.setMins(0)
+            except AttributeError:
+                pass
         
         # Clear map files list
         self.ui.map_files_list = []

@@ -342,41 +342,60 @@ class TrailingEntryTab:
         self.terrain_scrollbar = tk.Scrollbar(trail_frame, orient="vertical", command=self.terrain_listbox.yview)
         self.terrain_listbox.config(yscrollcommand=self.terrain_scrollbar.set)
         
-        # Start time
+        # Start time with manual colon separator
         time_location_width = 12
         tk.Label(trail_frame, text="Start Time:").grid(row=0, column=6, sticky="w", padx=5, pady=2)
         
-        # Create a frame with border to wrap the time picker
-        # Use minimal padding to reduce overall height
-        # Use sunken relief to better match Entry widgets
+        # Create a frame with border to wrap the time picker components
         time_picker_frame = tk.Frame(trail_frame, relief="sunken", borderwidth=1, bg="#ffffff", pady=0)
         time_picker_frame.grid(row=0, column=7, sticky="w", padx=5, pady=2)
         
-        # Create time picker widget inside the frame
-        self.start_time_picker = SpinTimePickerModern(time_picker_frame)
-        self.start_time_picker.addHours24()  # Add 24-hour format hours
-        self.start_time_picker.addMinutes()  # Add minutes
+        # Create hours picker
+        self.start_time_hours = SpinTimePickerModern(time_picker_frame)
+        self.start_time_hours.addHours24()
+        self.start_time_hours.configureAll(bg="#ffffff", fg="#000000", width=3)
+        self.start_time_hours.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
+        self.start_time_hours.set24Hrs(0)  # Initialize to 00
         
-        # Configure to match other entry widgets (default font, white background, reduced width)
-        # Width of 6 to roughly match the original entry widget width
-        self.start_time_picker.configureAll(bg="#ffffff", fg="#000000", width=4)
-        self.start_time_picker.configure_separator(bg="#ffffff", fg="#000000", text=":")
+        # Add manual colon separator
+        self.start_time_separator = tk.Label(time_picker_frame, text=":", bg="#ffffff", fg="#000000")
+        self.start_time_separator.pack(pady=0, side=tk.LEFT)
         
-        # Pack with minimal padding to reduce overall height
-        self.start_time_picker.pack(padx=1, pady=0, ipady=0)
+        # Create minutes picker
+        self.start_time_minutes = SpinTimePickerModern(time_picker_frame)
+        self.start_time_minutes.addMinutes()
+        self.start_time_minutes.configureAll(bg="#ffffff", fg="#000000", width=3)
+        self.start_time_minutes.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
+        self.start_time_minutes.setMins(0)  # Initialize to 00
         
-        # Initialize to 00:00
-        self.start_time_picker.set24Hrs(0)
-        self.start_time_picker.setMins(0)
+        # Store references for easy access (for compatibility with existing code)
+        # Create a simple proxy object to maintain API compatibility
+        class TimePickerProxy:
+            def __init__(proxy_self, hours_picker, minutes_picker):
+                proxy_self._hours = hours_picker
+                proxy_self._minutes = minutes_picker
+            
+            def hours24(proxy_self):
+                return proxy_self._hours.hours24()
+            
+            def minutes(proxy_self):
+                return proxy_self._minutes.minutes()
+            
+            def set24Hrs(proxy_self, h):
+                proxy_self._hours.set24Hrs(h)
+            
+            def setMins(proxy_self, m):
+                proxy_self._minutes.setMins(m)
+        
+        self.start_time_picker = TimePickerProxy(self.start_time_hours, self.start_time_minutes)
         
         # Bind time picker changes to update the StringVar
-        self.start_time_picker.bind("<<HoursChanged>>", lambda e: self._on_start_time_changed())
-        self.start_time_picker.bind("<<MinChanged>>", lambda e: self._on_start_time_changed())
+        self.start_time_hours.bind("<<HoursChanged>>", lambda e: self._on_start_time_changed())
+        self.start_time_minutes.bind("<<MinChanged>>", lambda e: self._on_start_time_changed())
         
-        # Setup mouse wheel handling for time picker
-        # When hovering over hours/minutes, wheel adjusts that value
-        # When not over the picker, wheel scrolls the window
-        self._setup_timepicker_wheel(self.start_time_picker, time_picker_frame)
+        # Setup mouse wheel handling for time picker components
+        self._setup_timepicker_wheel(self.start_time_hours, time_picker_frame, 'hours')
+        self._setup_timepicker_wheel(self.start_time_minutes, time_picker_frame, 'minutes')
         
         # Row 1: Trail Age, Trail Length, Trail Difficulty
         tk.Label(trail_frame, text="Trail Age (hours):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
@@ -784,23 +803,25 @@ class TrailingEntryTab:
         time_str = f"{hours:02d}:{minutes:02d}"
         sv.t_start_time.set(time_str)
     
-    def _setup_timepicker_wheel(self, time_picker, frame):
+    def _setup_timepicker_wheel(self, time_picker, frame, component_type):
         """
-        Setup mouse wheel handling for the time picker.
+        Setup mouse wheel handling for the time picker component.
         
-        When hovering over hours, wheel adjusts hours.
-        When hovering over minutes, wheel adjusts minutes.
-        When not over the picker widgets, wheel scrolls the window.
+        When hovering over the widget, wheel adjusts its value.
+        When not over the picker widget, wheel scrolls the window.
         
         Args:
-            time_picker: The SpinTimePickerModern instance
+            time_picker: The SpinTimePickerModern instance (hours or minutes component)
             frame: The frame containing the time picker
+            component_type: 'hours' or 'minutes' to identify which component
         """
         import platform
         
-        # Get references to the hour and minute SpinLabel widgets
-        hours_widget = time_picker._24HrsTime  # Using 24hr format
-        minutes_widget = time_picker._minutes
+        # Get reference to the appropriate widget
+        if component_type == 'hours':
+            widget = time_picker._24HrsTime
+        else:  # minutes
+            widget = time_picker._minutes
         
         def adjust_spinlabel(widget, delta):
             """Adjust a SpinLabel value by delta (positive = increment, negative = decrement)"""
@@ -824,23 +845,13 @@ class TrailingEntryTab:
             widget.current_val = number_lst[widget._current_index]
             widget.updateLabel()
         
-        def on_hours_wheel(event):
-            """Handle wheel events on hours widget"""
+        def on_wheel(event):
+            """Handle wheel events on widget"""
             if platform.system() == 'Linux':
                 delta = 1 if event.num == 4 else -1
             else:
                 delta = 1 if event.delta > 0 else -1
-            adjust_spinlabel(hours_widget, delta)
-            self._on_start_time_changed()
-            return "break"
-        
-        def on_minutes_wheel(event):
-            """Handle wheel events on minutes widget"""
-            if platform.system() == 'Linux':
-                delta = 1 if event.num == 4 else -1
-            else:
-                delta = 1 if event.delta > 0 else -1
-            adjust_spinlabel(minutes_widget, delta)
+            adjust_spinlabel(widget, delta)
             self._on_start_time_changed()
             return "break"
         
@@ -849,26 +860,20 @@ class TrailingEntryTab:
             # Just block propagation, don't do anything
             return "break"
         
-        # Bind wheel events to hours widget
+        # Bind wheel events
         if platform.system() == 'Linux':
-            hours_widget.bind("<Button-4>", on_hours_wheel)
-            hours_widget.bind("<Button-5>", on_hours_wheel)
-            minutes_widget.bind("<Button-4>", on_minutes_wheel)
-            minutes_widget.bind("<Button-5>", on_minutes_wheel)
-            # Block wheel on the frame and separator to prevent window scroll
+            widget.bind("<Button-4>", on_wheel)
+            widget.bind("<Button-5>", on_wheel)
+            # Block wheel on the frame to prevent window scroll
             frame.bind("<Button-4>", on_frame_wheel)
             frame.bind("<Button-5>", on_frame_wheel)
             time_picker.bind("<Button-4>", on_frame_wheel)
             time_picker.bind("<Button-5>", on_frame_wheel)
-            time_picker._separator.bind("<Button-4>", on_frame_wheel)
-            time_picker._separator.bind("<Button-5>", on_frame_wheel)
         else:
-            hours_widget.bind("<MouseWheel>", on_hours_wheel)
-            minutes_widget.bind("<MouseWheel>", on_minutes_wheel)
-            # Block wheel on the frame and separator to prevent window scroll
+            widget.bind("<MouseWheel>", on_wheel)
+            # Block wheel on the frame to prevent window scroll
             frame.bind("<MouseWheel>", on_frame_wheel)
             time_picker.bind("<MouseWheel>", on_frame_wheel)
-            time_picker._separator.bind("<MouseWheel>", on_frame_wheel)
     
     def _load_prior_session(self):
         """Load a prior session for editing"""

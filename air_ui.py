@@ -304,68 +304,116 @@ def setup_airscent_tab(ui):
     ui.a_percent_searched_combo = ttk.Combobox(results_frame, textvariable=sv.a_percent_searched, values = ["10%","20%","30%","40%","50%","60%","70%","80%","90%","100%"],width=5)
     ui.a_percent_searched_combo.grid(row=2,column=2,sticky="w")
     
-    # Start Time - use time picker
-    tk.Label(results_frame, text="Start Time:").grid(row=2, column=4, sticky="w", padx=5, pady=2)
+    # Start Time - use time picker with manual separator
+    tk.Label(results_frame, text="Start Time:").grid(row=2, column=4, sticky="e", padx=5, pady=2)
     
-    # Create a frame with border to wrap the time picker
+    # Create a frame with border to wrap the time picker components
     start_time_picker_frame = tk.Frame(results_frame, relief="sunken", borderwidth=1, bg="#ffffff", pady=0)
     start_time_picker_frame.grid(row=2, column=5, sticky="w", padx=5, pady=2)
     
     # Import time picker
     from tktimepicker import SpinTimePickerModern
     
-    # Create time picker widget inside the frame
-    ui.a_start_time_picker = SpinTimePickerModern(start_time_picker_frame)
-    ui.a_start_time_picker.addHours24()  # Add 24-hour format hours
-    ui.a_start_time_picker.addMinutes()  # Add minutes
+    # Create hours picker
+    ui.a_start_time_hours = SpinTimePickerModern(start_time_picker_frame)
+    ui.a_start_time_hours.addHours24()
+    ui.a_start_time_hours.configureAll(bg="#ffffff", fg="#000000", width=3)
+    ui.a_start_time_hours.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
+    ui.a_start_time_hours.set24Hrs(0)  # Initialize to 00
     
-    # Configure to match other entry widgets
-    ui.a_start_time_picker.configureAll(bg="#ffffff", fg="#000000", width=4)
-    ui.a_start_time_picker.configure_separator(bg="#ffffff", fg="#000000", text=":")
+    # Add manual colon separator
+    ui.a_start_time_separator = tk.Label(start_time_picker_frame, text=":", bg="#ffffff", fg="#000000")
+    ui.a_start_time_separator.pack(pady=0, side=tk.LEFT)
     
-    # Pack with minimal padding
-    ui.a_start_time_picker.pack(padx=1, pady=0, ipady=0)
+    # Create minutes picker
+    ui.a_start_time_minutes = SpinTimePickerModern(start_time_picker_frame)
+    ui.a_start_time_minutes.addMinutes()
+    ui.a_start_time_minutes.configureAll(bg="#ffffff", fg="#000000", width=3)
+    ui.a_start_time_minutes.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
+    ui.a_start_time_minutes.setMins(0)  # Initialize to 00
     
-    # Initialize to 00:00
-    ui.a_start_time_picker.set24Hrs(0)
-    ui.a_start_time_picker.setMins(0)
+    # Store references for easy access (for compatibility with existing code)
+    # Create a simple proxy object to maintain API compatibility
+    class StartTimePickerProxy:
+        def __init__(proxy_self, hours_picker, minutes_picker):
+            proxy_self._hours = hours_picker
+            proxy_self._minutes = minutes_picker
+        
+        def hours24(proxy_self):
+            return proxy_self._hours.hours24()
+        
+        def minutes(proxy_self):
+            return proxy_self._minutes.minutes()
+        
+        def set24Hrs(proxy_self, h):
+            proxy_self._hours.set24Hrs(h)
+        
+        def setMins(proxy_self, m):
+            proxy_self._minutes.setMins(m)
+    
+    ui.a_start_time_picker = StartTimePickerProxy(ui.a_start_time_hours, ui.a_start_time_minutes)
     
     # Bind time picker changes to update the StringVar
-    ui.a_start_time_picker.bind("<<HoursChanged>>", lambda e: ui._on_start_time_changed())
-    ui.a_start_time_picker.bind("<<MinChanged>>", lambda e: ui._on_start_time_changed())
+    ui.a_start_time_hours.bind("<<HoursChanged>>", lambda e: ui._on_start_time_changed())
+    ui.a_start_time_minutes.bind("<<MinChanged>>", lambda e: ui._on_start_time_changed())
     
-    # Setup mouse wheel handling for time picker
-    ui._setup_timepicker_wheel(ui.a_start_time_picker, start_time_picker_frame, 'start')
+    # Setup mouse wheel handling for time picker components
+    ui._setup_timepicker_wheel(ui.a_start_time_hours, start_time_picker_frame, 'start', 'hours')
+    ui._setup_timepicker_wheel(ui.a_start_time_minutes, start_time_picker_frame, 'start', 'minutes')
     
-    # Finish Time - use time picker
-    tk.Label(results_frame, text="Finish Time:").grid(row=2, column=6, sticky="w", padx=5, pady=2)
+    # Finish Time - use time picker with manual separator
+    tk.Label(results_frame, text="Finish Time:").grid(row=2, column=6, sticky="e", padx=5, pady=2)
     
-    # Create a frame with border to wrap the time picker
+    # Create a frame with border to wrap the time picker components
     finish_time_picker_frame = tk.Frame(results_frame, relief="sunken", borderwidth=1, bg="#ffffff", pady=0)
     finish_time_picker_frame.grid(row=2, column=7, sticky="w", padx=5, pady=2)
     
-    # Create time picker widget inside the frame
-    ui.a_finish_time_picker = SpinTimePickerModern(finish_time_picker_frame)
-    ui.a_finish_time_picker.addHours24()  # Add 24-hour format hours
-    ui.a_finish_time_picker.addMinutes()  # Add minutes
+    # Create hours picker
+    ui.a_finish_time_hours = SpinTimePickerModern(finish_time_picker_frame)
+    ui.a_finish_time_hours.addHours24()
+    ui.a_finish_time_hours.configureAll(bg="#ffffff", fg="#000000", width=3)
+    ui.a_finish_time_hours.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
+    ui.a_finish_time_hours.set24Hrs(0)  # Initialize to 00
     
-    # Configure to match other entry widgets
-    ui.a_finish_time_picker.configureAll(bg="#ffffff", fg="#000000", width=4)
-    ui.a_finish_time_picker.configure_separator(bg="#ffffff", fg="#000000", text=":")
+    # Add manual colon separator
+    ui.a_finish_time_separator = tk.Label(finish_time_picker_frame, text=":", bg="#ffffff", fg="#000000")
+    ui.a_finish_time_separator.pack(pady=0, side=tk.LEFT)
     
-    # Pack with minimal padding
-    ui.a_finish_time_picker.pack(padx=1, pady=0, ipady=0)
+    # Create minutes picker
+    ui.a_finish_time_minutes = SpinTimePickerModern(finish_time_picker_frame)
+    ui.a_finish_time_minutes.addMinutes()
+    ui.a_finish_time_minutes.configureAll(bg="#ffffff", fg="#000000", width=3)
+    ui.a_finish_time_minutes.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
+    ui.a_finish_time_minutes.setMins(0)  # Initialize to 00
     
-    # Initialize to 00:00
-    ui.a_finish_time_picker.set24Hrs(0)
-    ui.a_finish_time_picker.setMins(0)
+    # Store references for easy access (for compatibility with existing code)
+    # Create a simple proxy object to maintain API compatibility
+    class FinishTimePickerProxy:
+        def __init__(proxy_self, hours_picker, minutes_picker):
+            proxy_self._hours = hours_picker
+            proxy_self._minutes = minutes_picker
+        
+        def hours24(proxy_self):
+            return proxy_self._hours.hours24()
+        
+        def minutes(proxy_self):
+            return proxy_self._minutes.minutes()
+        
+        def set24Hrs(proxy_self, h):
+            proxy_self._hours.set24Hrs(h)
+        
+        def setMins(proxy_self, m):
+            proxy_self._minutes.setMins(m)
+    
+    ui.a_finish_time_picker = FinishTimePickerProxy(ui.a_finish_time_hours, ui.a_finish_time_minutes)
     
     # Bind time picker changes to update the StringVar
-    ui.a_finish_time_picker.bind("<<HoursChanged>>", lambda e: ui._on_finish_time_changed())
-    ui.a_finish_time_picker.bind("<<MinChanged>>", lambda e: ui._on_finish_time_changed())
+    ui.a_finish_time_hours.bind("<<HoursChanged>>", lambda e: ui._on_finish_time_changed())
+    ui.a_finish_time_minutes.bind("<<MinChanged>>", lambda e: ui._on_finish_time_changed())
     
-    # Setup mouse wheel handling for time picker
-    ui._setup_timepicker_wheel(ui.a_finish_time_picker, finish_time_picker_frame, 'finish')
+    # Setup mouse wheel handling for time picker components
+    ui._setup_timepicker_wheel(ui.a_finish_time_hours, finish_time_picker_frame, 'finish', 'hours')
+    ui._setup_timepicker_wheel(ui.a_finish_time_minutes, finish_time_picker_frame, 'finish', 'minutes')
     
     # =========================================================================
     # MAPS AND IMAGES FRAME (Row 3) - LabelFrame with drag-drop target

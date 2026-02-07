@@ -433,7 +433,7 @@ class AirScentingHelper:
         time_str = f"{hours:02d}:{minutes:02d}"
         sv.finish_time.set(time_str)
     
-    def _setup_timepicker_wheel(self, time_picker, frame, picker_type):
+    def _setup_timepicker_wheel(self, time_picker, frame, picker_type, component_type=None):
         """
         Setup mouse wheel handling for the time picker.
         
@@ -442,15 +442,25 @@ class AirScentingHelper:
         When not over the picker widgets, wheel scrolls the window.
         
         Args:
-            time_picker: The SpinTimePickerModern instance
+            time_picker: The SpinTimePickerModern instance (hours or minutes component)
             frame: The frame containing the time picker
             picker_type: 'start' or 'finish' to identify which picker
+            component_type: 'hours' or 'minutes' to identify which component (if using split pickers)
         """
         import platform
         
-        # Get references to the hour and minute SpinLabel widgets
-        hours_widget = time_picker._24HrsTime  # Using 24hr format
-        minutes_widget = time_picker._minutes
+        # For split pickers, determine which widget to get
+        if component_type == 'hours':
+            widget = time_picker._24HrsTime
+        elif component_type == 'minutes':
+            widget = time_picker._minutes
+        else:
+            # Legacy support - try to get both
+            try:
+                hours_widget = time_picker._24HrsTime
+                minutes_widget = time_picker._minutes
+            except AttributeError:
+                return  # Can't set up wheel if widgets don't exist
         
         def adjust_spinlabel(widget, delta):
             """Adjust a SpinLabel value by delta (positive = increment, negative = decrement)"""
@@ -474,26 +484,22 @@ class AirScentingHelper:
             widget.current_val = number_lst[widget._current_index]
             widget.updateLabel()
         
-        def on_hours_wheel(event):
-            """Handle wheel events on hours widget"""
+        def on_wheel(event):
+            """Handle wheel events on the widget"""
             if platform.system() == 'Linux':
                 delta = 1 if event.num == 4 else -1
             else:
                 delta = 1 if event.delta > 0 else -1
-            adjust_spinlabel(hours_widget, delta)
-            if picker_type == 'start':
-                self._on_start_time_changed()
+            
+            if component_type:
+                # Split component - adjust the specific widget
+                adjust_spinlabel(widget, delta)
             else:
-                self._on_finish_time_changed()
-            return "break"
-        
-        def on_minutes_wheel(event):
-            """Handle wheel events on minutes widget"""
-            if platform.system() == 'Linux':
-                delta = 1 if event.num == 4 else -1
-            else:
-                delta = 1 if event.delta > 0 else -1
-            adjust_spinlabel(minutes_widget, delta)
+                # Legacy combined widget - determine which widget based on event
+                # This won't be used with the new split approach
+                pass
+            
+            # Update the time StringVar
             if picker_type == 'start':
                 self._on_start_time_changed()
             else:
@@ -505,23 +511,19 @@ class AirScentingHelper:
             # Just block propagation, don't do anything
             return "break"
         
-        # Bind wheel events to hours widget
-        if platform.system() == 'Linux':
-            hours_widget.bind("<Button-4>", on_hours_wheel)
-            hours_widget.bind("<Button-5>", on_hours_wheel)
-            minutes_widget.bind("<Button-4>", on_minutes_wheel)
-            minutes_widget.bind("<Button-5>", on_minutes_wheel)
-            # Block wheel on the frame and separator to prevent window scroll
-            frame.bind("<Button-4>", on_frame_wheel)
-            frame.bind("<Button-5>", on_frame_wheel)
-            time_picker.bind("<Button-4>", on_frame_wheel)
-            time_picker.bind("<Button-5>", on_frame_wheel)
-            time_picker._separator.bind("<Button-4>", on_frame_wheel)
-            time_picker._separator.bind("<Button-5>", on_frame_wheel)
-        else:
-            hours_widget.bind("<MouseWheel>", on_hours_wheel)
-            minutes_widget.bind("<MouseWheel>", on_minutes_wheel)
-            # Block wheel on the frame and separator to prevent window scroll
-            frame.bind("<MouseWheel>", on_frame_wheel)
-            time_picker.bind("<MouseWheel>", on_frame_wheel)
-            time_picker._separator.bind("<MouseWheel>", on_frame_wheel)
+        # Bind wheel events
+        if component_type:
+            # Split component approach - bind to the specific widget
+            if platform.system() == 'Linux':
+                widget.bind("<Button-4>", on_wheel)
+                widget.bind("<Button-5>", on_wheel)
+                # Block wheel on the frame to prevent window scroll
+                frame.bind("<Button-4>", on_frame_wheel)
+                frame.bind("<Button-5>", on_frame_wheel)
+                time_picker.bind("<Button-4>", on_frame_wheel)
+                time_picker.bind("<Button-5>", on_frame_wheel)
+            else:
+                widget.bind("<MouseWheel>", on_wheel)
+                # Block wheel on the frame to prevent window scroll
+                frame.bind("<MouseWheel>", on_frame_wheel)
+                time_picker.bind("<MouseWheel>", on_frame_wheel)
