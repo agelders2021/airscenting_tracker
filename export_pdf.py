@@ -616,11 +616,57 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
             ]
         return None
     
-    def format_time_for_pdf(time_value):
-        """Format time value with ' hours' suffix for clarity in PDF"""
-        if time_value and str(time_value).strip():
-            return f"{time_value} hours"
-        return None
+    def format_temperature(value):
+        """Format temperature value - add °F suffix only if value is purely numeric"""
+        if not value or not str(value).strip():
+            return value
+        val_str = str(value).strip()
+        # Check if value is purely numeric (int or float)
+        try:
+            float(val_str)
+            return f"{val_str}°F"
+        except ValueError:
+            # Mixed content - return as-is
+            return val_str
+    
+    def format_wind_speed(value):
+        """Format wind speed value - add MPH suffix only if value is purely numeric"""
+        if not value or not str(value).strip():
+            return value
+        val_str = str(value).strip()
+        # Check if value is purely numeric (int or float)
+        try:
+            float(val_str)
+            return f"{val_str} MPH"
+        except ValueError:
+            # Mixed content - return as-is
+            return val_str
+    
+    def format_search_area(value):
+        """Format search area value - add Acres suffix only if value is purely numeric"""
+        if not value or not str(value).strip():
+            return value
+        val_str = str(value).strip()
+        # Check if value is purely numeric (int or float)
+        try:
+            float(val_str)
+            return f"{val_str} Acres"
+        except ValueError:
+            # Mixed content - return as-is
+            return val_str
+    
+    def format_humidity(value):
+        """Format humidity value - add % suffix only if value is purely numeric"""
+        if not value or not str(value).strip():
+            return value
+        val_str = str(value).strip()
+        # Check if value is purely numeric (int or float)
+        try:
+            float(val_str)
+            return f"{val_str}%"
+        except ValueError:
+            # Mixed content - return as-is
+            return val_str
     
     # Process each session
     for idx, session in enumerate(sessions):
@@ -666,20 +712,40 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
         story.append(Paragraph("<b>Search Parameters</b>", heading_style))
         search_data = []
         
+        # Location
+        row = make_field("Location", session.get('location'))
+        if row:
+            search_data.append(row)
+        
+        # Search Area Size with Acres suffix if purely numeric
+        row = make_field("Search Area Size", format_search_area(session.get('search_area_size')))
+        if row:
+            search_data.append(row)
+        
         for label, key in [
-            ("Location", 'location'),
-            ("Search Area Size", 'search_area_size'),
             ("Number of Subjects", 'num_subjects'),
             ("Handler Knowledge", 'handler_knowledge'),
             ("Search Type", 'search_type'),
             ("Weather", 'weather'),
-            ("Temperature", 'temperature'),
-            ("Wind Direction", 'wind_direction'),
-            ("Wind Speed", 'wind_speed'),
         ]:
             row = make_field(label, session.get(key))
             if row:
                 search_data.append(row)
+        
+        # Temperature with °F suffix if purely numeric
+        temp_row = make_field("Temperature", format_temperature(session.get('temperature')))
+        if temp_row:
+            search_data.append(temp_row)
+        
+        # Wind Direction
+        wind_dir_row = make_field("Wind Direction", session.get('wind_direction'))
+        if wind_dir_row:
+            search_data.append(wind_dir_row)
+        
+        # Wind Speed with MPH suffix if purely numeric
+        wind_row = make_field("Wind Speed", format_wind_speed(session.get('wind_speed')))
+        if wind_row:
+            search_data.append(wind_row)
         
         # Add terrain types
         if session.get('terrains'):
@@ -706,18 +772,12 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
             ("Drive Level", 'drive_level'),
             ("Subjects Found", 'subjects_found'),
             ("Percent Searched Prior to Last Find", 'a_percent_searched'),
+            ("Start Time", 'start_time'),
+            ("Finish Time", 'finish_time'),
         ]:
             row = make_field(label, session.get(key))
             if row:
                 results_data.append(row)
-        
-        # Add time fields with special formatting
-        row = make_field("Start Time", format_time_for_pdf(session.get('start_time')))
-        if row:
-            results_data.append(row)
-        row = make_field("Finish Time", format_time_for_pdf(session.get('finish_time')))
-        if row:
-            results_data.append(row)
         
         # Add subject responses inline
         if session.get('subject_responses'):

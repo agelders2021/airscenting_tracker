@@ -743,6 +743,58 @@ class TrailingHelper:
                     return f"{time_value} hours"
                 return None
             
+            def format_temperature(value):
+                """Format temperature value - add °F suffix only if value is purely numeric"""
+                if not value or not str(value).strip():
+                    return value
+                val_str = str(value).strip()
+                # Check if value is purely numeric (int or float)
+                try:
+                    float(val_str)
+                    return f"{val_str}°F"
+                except ValueError:
+                    # Mixed content - return as-is
+                    return val_str
+            
+            def format_wind_speed(value):
+                """Format wind speed value - add MPH suffix only if value is purely numeric"""
+                if not value or not str(value).strip():
+                    return value
+                val_str = str(value).strip()
+                # Check if value is purely numeric (int or float)
+                try:
+                    float(val_str)
+                    return f"{val_str} MPH"
+                except ValueError:
+                    # Mixed content - return as-is
+                    return val_str
+            
+            def format_humidity(value):
+                """Format humidity value - add % suffix only if value is purely numeric"""
+                if not value or not str(value).strip():
+                    return value
+                val_str = str(value).strip()
+                # Check if value is purely numeric (int or float)
+                try:
+                    float(val_str)
+                    return f"{val_str}%"
+                except ValueError:
+                    # Mixed content - return as-is
+                    return val_str
+            
+            def format_time_to_complete(value):
+                """Format time to complete value - add minutes suffix only if value is purely numeric"""
+                if not value or not str(value).strip():
+                    return value
+                val_str = str(value).strip()
+                # Check if value is purely numeric (int or float)
+                try:
+                    float(val_str)
+                    return f"{val_str} minutes"
+                except ValueError:
+                    # Mixed content - return as-is
+                    return val_str
+            
             for i, session_data in enumerate(sessions):
                 if i > 0:
                     if i % 2 == 0:
@@ -834,31 +886,49 @@ class TrailingHelper:
                 
                 # Weather - Laying
                 weather_laying_data = []
-                fields = [
-                    ('Weather (Laying)', session_data.get('t_weather_laying')),
-                    ('Temperature (Laying)', session_data.get('t_temp_laying')),
-                    ('Wind Speed (Laying)', session_data.get('t_wind_laying')),
-                    ('Wind Direction (Laying)', session_data.get('t_wind_direction_laying')),
-                    ('Humidity (Laying)', session_data.get('t_humidity_laying')),
-                ]
-                for label, value in fields:
-                    row = add_field(label, value)
-                    if row:
-                        weather_laying_data.append(row)
+                # Weather type
+                row = add_field('Weather (Laying)', session_data.get('t_weather_laying'))
+                if row:
+                    weather_laying_data.append(row)
+                # Temperature with °F suffix if purely numeric
+                row = add_field('Temperature (Laying)', format_temperature(session_data.get('t_temp_laying')))
+                if row:
+                    weather_laying_data.append(row)
+                # Wind Speed with MPH suffix if purely numeric
+                row = add_field('Wind Speed (Laying)', format_wind_speed(session_data.get('t_wind_laying')))
+                if row:
+                    weather_laying_data.append(row)
+                # Wind Direction
+                row = add_field('Wind Direction (Laying)', session_data.get('t_wind_direction_laying'))
+                if row:
+                    weather_laying_data.append(row)
+                # Humidity with % suffix if purely numeric
+                row = add_field('Humidity (Laying)', format_humidity(session_data.get('t_humidity_laying')))
+                if row:
+                    weather_laying_data.append(row)
                 
                 # Weather - Running
                 weather_running_data = []
-                fields = [
-                    ('Weather (Running)', session_data.get('t_weather_running')),
-                    ('Temperature (Running)', session_data.get('t_temp_running')),
-                    ('Wind Speed (Running)', session_data.get('t_wind_running')),
-                    ('Wind Direction (Running)', session_data.get('t_wind_direction_running')),
-                    ('Humidity (Running)', session_data.get('t_humidity_running')),
-                ]
-                for label, value in fields:
-                    row = add_field(label, value)
-                    if row:
-                        weather_running_data.append(row)
+                # Weather type
+                row = add_field('Weather (Running)', session_data.get('t_weather_running'))
+                if row:
+                    weather_running_data.append(row)
+                # Temperature with °F suffix if purely numeric
+                row = add_field('Temperature (Running)', format_temperature(session_data.get('t_temp_running')))
+                if row:
+                    weather_running_data.append(row)
+                # Wind Speed with MPH suffix if purely numeric
+                row = add_field('Wind Speed (Running)', format_wind_speed(session_data.get('t_wind_running')))
+                if row:
+                    weather_running_data.append(row)
+                # Wind Direction
+                row = add_field('Wind Direction (Running)', session_data.get('t_wind_direction_running'))
+                if row:
+                    weather_running_data.append(row)
+                # Humidity with % suffix if purely numeric
+                row = add_field('Humidity (Running)', format_humidity(session_data.get('t_humidity_running')))
+                if row:
+                    weather_running_data.append(row)
                 
                 # Add weather section if we have any weather data
                 if weather_laying_data or weather_running_data:
@@ -877,19 +947,26 @@ class TrailingHelper:
                 elements.append(Paragraph("<b>Dog Behavior</b>", heading_style))
                 behavior_data = []
                 
-                fields = [
-                    ('Start Behavior', session_data.get('t_start_behavior')),
-                    ('Consistency', session_data.get('t_consistency')),
-                    ('Head Position', session_data.get('t_head_pos')),
-                    ('Pace', session_data.get('t_pace')),
-                    ('Indication', session_data.get('t_indication')),
-                    ('Time to Complete', session_data.get('t_time')),
-                    ('Success Rate', session_data.get('t_success')),
-                ]
-                for label, value in fields:
-                    row = add_field(label, value)
+                for label, key in [
+                    ('Start Behavior', 't_start_behavior'),
+                    ('Consistency', 't_consistency'),
+                    ('Head Position', 't_head_pos'),
+                    ('Pace', 't_pace'),
+                    ('Indication', 't_indication'),
+                ]:
+                    row = add_field(label, session_data.get(key))
                     if row:
                         behavior_data.append(row)
+                
+                # Time to Complete with minutes suffix if purely numeric
+                row = add_field('Time to Complete', format_time_to_complete(session_data.get('t_time')))
+                if row:
+                    behavior_data.append(row)
+                
+                # Success Rate
+                row = add_field('Success Rate', session_data.get('t_success'))
+                if row:
+                    behavior_data.append(row)
                 
                 if behavior_data:
                     table = Table(behavior_data, colWidths=[1.5*inch, 5.5*inch])

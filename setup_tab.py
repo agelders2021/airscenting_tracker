@@ -150,13 +150,19 @@ class SetupTab:
         
         # User selection combobox
         tk.Label(db_frame, text="User:").pack(side="left", padx=(15, 2))
+        # # Create a custom style for the grey background combobox
+        # style = ttk.Style()
+        # style.theme_use('clam')
+        # style.configure('Grey.TCombobox', fieldbackground='light grey', background='black')
+        # self.s_user_combo = ttk.Combobox(db_frame, textvariable=sv.current_user, width=15, style='Grey.TCombobox')
         self.s_user_combo = ttk.Combobox(db_frame, textvariable=sv.current_user, width=15)
         self.s_user_combo['values'] = self.ui.machine_user_list if self.ui.machine_user_list else []
         self.s_user_combo.pack(side="left", padx=2)
         ToolTip(self.s_user_combo,
+                "For Developer use only!\n"
                 "Select an existing user or type a new username.\n"
                 "Each user has their own storage folder configuration.\n"
-                "Changing users requires application restart to take effect.")
+                "Changing users requires application restart to take effect.",delay=10)
         
         # Bind FocusOut to handle user selection/creation
         self.s_user_combo.bind('<FocusOut>', self._on_user_combo_focus_out)

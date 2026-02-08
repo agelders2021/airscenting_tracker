@@ -206,7 +206,7 @@ def setup_airscent_tab(ui):
     search_type_combo.grid(row=1, column=7, sticky="w", padx=5, pady=2)
     
     # Row 2: Temperature, Add Terrain Type, Selected Terrains
-    tk.Label(search_frame, text="Temperature:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
+    tk.Label(search_frame, text="Temperature (\N{Degree Sign}F):").grid(row=2, column=0, sticky="w", padx=5, pady=2)
     tk.Entry(search_frame, textvariable=sv.temperature, width=21).grid(row=2, column=1, sticky="w", padx=5, pady=2)
     
     tk.Label(search_frame, text="Add Terrain Type:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
