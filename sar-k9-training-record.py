@@ -212,7 +212,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
             # print(f"DEBUG: Using default geometry: {final_geometry}")
         
         self.root.geometry(final_geometry)
-        self.root.minsize(1100, 800)
+        self.root.minsize(1024, 600)
         
         # Show splash screen
         self.splash = SplashScreen(self.root, version=APP_VERSION,

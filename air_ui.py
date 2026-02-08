@@ -213,8 +213,12 @@ def setup_airscent_tab(ui):
     ui.a_terrain_combo = ttk.Combobox(search_frame, textvariable=sv.terrain, width=15, state="readonly", values=[])
     ui.a_terrain_combo.grid(row=2, column=3, sticky="w", padx=5, pady=2)
     ui.a_terrain_combo.bind('<<ComboboxSelected>>', ui.add_to_terrain_accumulator)
+    ToolTip(ui.a_terrain_combo,
+            "Adds a terrain type to the Accumulated Terrains accumulator.\N{BLACK UP-POINTING TRIANGLE}\n"
+            "Note that once entered, the 'Add Terrain Type:' box is cleared.")
+            
     
-    tk.Label(search_frame, text="Selected Terrains:").grid(row=2, column=4, sticky="w", padx=5, pady=2)
+    tk.Label(search_frame, text="Accumulated Terrains:").grid(row=2, column=4, sticky="w", padx=5, pady=2)
     ui.a_accumulated_terrain_combo = ttk.Combobox(search_frame, textvariable=sv.accumulated_terrain,
                                                    width=15, state="disabled", values=[])
     ui.a_accumulated_terrain_combo.grid(row=2, column=5, sticky="w", padx=5, pady=2)
