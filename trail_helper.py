@@ -73,7 +73,7 @@ class TrailingHelper:
                 db_ops.save_distractions(session_id, distractions)
                 
                 # Save to JSON backup
-                self._save_trailing_session_to_json(session_data, terrains, purposes, distractions)
+                # self._save_trailing_session_to_json(session_data, terrains, purposes, distractions)
             
             # Clear form and prepare for next session
             self.trailing_entry.clear_form()
@@ -96,38 +96,38 @@ class TrailingHelper:
             self.show_status_message(f"Error: {message}", "error")
             return False
     
-    def _save_trailing_session_to_json(self, session_data, terrains, purposes, distractions):
-        """Save trailing session to JSON backup file."""
-        try:
-            user_name = get_username()
+    # def _save_trailing_session_to_json(self, session_data, terrains, purposes, distractions):
+    #     """Save trailing session to JSON backup file."""
+    #     try:
+    #         user_name = get_username()
             
-            backup_data = {
-                **session_data,
-                "selected_terrains": terrains,
-                "selected_purposes": purposes,
-                "distractions": distractions,
-                "user_name": user_name,
-                "update_time": datetime.now().isoformat()
-            }
+    #         backup_data = {
+    #             **session_data,
+    #             "selected_terrains": terrains,
+    #             "selected_purposes": purposes,
+    #             "distractions": distractions,
+    #             "user_name": user_name,
+    #             "update_time": datetime.now().isoformat()
+    #         }
             
-            dog_name = session_data.get('t_dog_name', 'unknown')
-            session_num = session_data.get('t_session_number', '0')
+    #         dog_name = session_data.get('t_dog_name', 'unknown')
+    #         session_num = session_data.get('t_session_number', '0')
             
-            safe_user_name = re.sub(r'[^\w\-]', '_', user_name) if user_name else 'unknown'
-            safe_dog_name = re.sub(r'[^\w\-]', '_', dog_name)
+    #         safe_user_name = re.sub(r'[^\w\-]', '_', user_name) if user_name else 'unknown'
+    #         safe_dog_name = re.sub(r'[^\w\-]', '_', dog_name)
             
-            filename = f"t_{safe_user_name}_{safe_dog_name}_{session_num}.json"
+    #         filename = f"t_{safe_user_name}_{safe_dog_name}_{session_num}.json"
             
-            primary, secondary, checksum, primary_ts, secondary_ts = save_json_mirrored(filename, backup_data)
+    #         primary, secondary, checksum, primary_ts, secondary_ts = save_json_mirrored(filename, backup_data)
             
-            # if primary:
-            #     print(f"Trailing session saved to JSON: {primary}")
-            # if secondary:
-            #     print(f"Trailing session mirrored to: {secondary}")
+    #         # if primary:
+    #         #     print(f"Trailing session saved to JSON: {primary}")
+    #         # if secondary:
+    #         #     print(f"Trailing session mirrored to: {secondary}")
                 
-        except Exception as e:
-            # print(f"Warning: Failed to save trailing session to JSON: {e}")
-            self.show_status_message(f"Backup failed: {str(e)}", "error")
+    #     except Exception as e:
+    #         # print(f"Warning: Failed to save trailing session to JSON: {e}")
+    #         self.show_status_message(f"Backup failed: {str(e)}", "error")
     
     # =========================================================================
     # SESSION NUMBER

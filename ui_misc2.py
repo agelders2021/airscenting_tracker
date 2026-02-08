@@ -297,7 +297,7 @@ class Misc2Operations:
             "update_time": update_time,
             "status": session_status
         }
-        self.ui.misc_data_ops.save_session_to_json(session_backup_data)
+        # self.ui.misc_data_ops.save_session_to_json(session_backup_data)
 
         # Save current handler to config for persistence across sessions and restarts
         current_handler = sv.handler.get()
