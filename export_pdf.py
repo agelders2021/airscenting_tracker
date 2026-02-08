@@ -616,6 +616,12 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
             ]
         return None
     
+    def format_time_for_pdf(time_value):
+        """Format time value with ' hours' suffix for clarity in PDF"""
+        if time_value and str(time_value).strip():
+            return f"{time_value} hours"
+        return None
+    
     # Process each session
     for idx, session in enumerate(sessions):
         if idx > 0:
@@ -700,12 +706,18 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
             ("Drive Level", 'drive_level'),
             ("Subjects Found", 'subjects_found'),
             ("Percent Searched Prior to Last Find", 'a_percent_searched'),
-            ("Start Time", 'start_time'),
-            ("Finish Time", 'finish_time'),
         ]:
             row = make_field(label, session.get(key))
             if row:
                 results_data.append(row)
+        
+        # Add time fields with special formatting
+        row = make_field("Start Time", format_time_for_pdf(session.get('start_time')))
+        if row:
+            results_data.append(row)
+        row = make_field("Finish Time", format_time_for_pdf(session.get('finish_time')))
+        if row:
+            results_data.append(row)
         
         # Add subject responses inline
         if session.get('subject_responses'):

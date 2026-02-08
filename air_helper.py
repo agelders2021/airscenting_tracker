@@ -416,21 +416,21 @@ class AirScentingHelper:
     # =========================================================================
     
     def _on_start_time_changed(self):
-        """Handle start time picker change - update the start_time StringVar in HH:MM format"""
+        """Handle start time picker change - update the start_time StringVar in HHMM format"""
         # Get time from picker as tuple (hours, minutes)
         hours = self.a_start_time_picker.hours24()
         minutes = self.a_start_time_picker.minutes()
-        # Format as HH:MM (e.g., 14:36 for 2:36 PM)
-        time_str = f"{hours:02d}:{minutes:02d}"
+        # Format as HHMM (e.g., 1436 for 2:36 PM) - no colon
+        time_str = f"{hours:02d}{minutes:02d}"
         sv.start_time.set(time_str)
     
     def _on_finish_time_changed(self):
-        """Handle finish time picker change - update the finish_time StringVar in HH:MM format"""
+        """Handle finish time picker change - update the finish_time StringVar in HHMM format"""
         # Get time from picker as tuple (hours, minutes)
         hours = self.a_finish_time_picker.hours24()
         minutes = self.a_finish_time_picker.minutes()
-        # Format as HH:MM (e.g., 14:36 for 2:36 PM)
-        time_str = f"{hours:02d}:{minutes:02d}"
+        # Format as HHMM (e.g., 1436 for 2:36 PM) - no colon
+        time_str = f"{hours:02d}{minutes:02d}"
         sv.finish_time.set(time_str)
     
     def _setup_timepicker_wheel(self, time_picker, frame, picker_type, component_type=None):

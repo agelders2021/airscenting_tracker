@@ -796,12 +796,12 @@ class TrailingEntryTab:
         sv.t_date.set(selected_date.strftime("%Y-%m-%d"))
     
     def _on_start_time_changed(self):
-        """Handle start time picker change - update the start_time StringVar in HH:MM format"""
+        """Handle start time picker change - update the start_time StringVar in HHMM format"""
         # Get time from picker as tuple (hours, minutes, period)
         hours = self.start_time_picker.hours24()
         minutes = self.start_time_picker.minutes()
-        # Format as HH:MM (e.g., 14:36 for 2:36 PM)
-        time_str = f"{hours:02d}:{minutes:02d}"
+        # Format as HHMM (e.g., 1436 for 2:36 PM) - no colon
+        time_str = f"{hours:02d}{minutes:02d}"
         sv.t_start_time.set(time_str)
     
     def _setup_timepicker_wheel(self, time_picker, frame, component_type):
