@@ -805,7 +805,7 @@ class TrailingHelper:
                 fields = [
                     ('Trail Age', session_data.get('t_trail_age')),
                     ('Trail Length', session_data.get('t_trail_length')),
-                    ('Difficulty', session_data.get('t_difficulty')),
+                    ('Difficulty (1 to 10)', session_data.get('t_difficulty')),
                     ('Trail Layer', session_data.get('t_trail_layer')),
                     ('Cross-Track Layer', session_data.get('t_cross_track_layer')),
                     ('Cross-Track Age', session_data.get('t_cross_track_age')),
