@@ -763,12 +763,18 @@ class TrailingHelper:
                 elements.append(Paragraph("<b>Session Information</b>", heading_style))
                 session_info_data = []
                 
+                # Format time values
+                start_time_val = session_data.get('t_start_time')
+                finish_time_val = session_data.get('t_finish_time')
+                start_time_formatted = f"{start_time_val} hours" if start_time_val and str(start_time_val).strip() else None
+                finish_time_formatted = f"{finish_time_val} hours" if finish_time_val and str(finish_time_val).strip() else None
+                
                 fields = [
                     ('Handler', session_data.get('t_handler')),
                     ('Field Support', session_data.get('t_field_support')),
                     ('Location', session_data.get('t_location')),
-                    ('Start Time', session_data.get('t_start_time')),
-                    ('Finish Time', session_data.get('t_finish_time')),
+                    ('Start Time', start_time_formatted),
+                    ('Finish Time', finish_time_formatted),
                 ]
                 for label, value in fields:
                     row = add_field(label, value)
