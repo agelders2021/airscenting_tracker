@@ -78,6 +78,16 @@ class FileOperations:
             # Save bootstrap file
             self.ui.save_bootstrap()
     
+    def select_pdf_folder(self):
+        """Select PDF export folder"""
+        folder = filedialog.askdirectory(title="Select PDF Export Folder")
+        if folder:
+            from sv import sv
+            sv.pdf_folder.set(folder)
+            self.ui.machine_pdf_folder = folder
+            # Save bootstrap file
+            self.ui.save_bootstrap()
+    
     # ========================================
     # DRAG & DROP HANDLERS
     # ========================================
@@ -445,7 +455,7 @@ class FileOperations:
             else:
                 error_msg = f"Could not find file: {file_path}\n\nSearched in:\n"
                 for p in possible_paths:
-                    error_msg += f"  ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {p}\n"
+                    error_msg += f"  ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ {p}\n"
                 error_msg += "\nTip: Check your trail maps folder setting in Setup tab."
                 messagebox.showerror("File Not Found", error_msg)
                 return

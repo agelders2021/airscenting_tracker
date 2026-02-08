@@ -184,6 +184,20 @@ class SetupTab:
         tk.Button(backup_frame, text="Restore from Secondary Backup", 
                  command=self.ui.misc_data_ops.restore_settings_from_json).pack(side="left", padx=5)
         
+        # PDF Export Folder
+        pdf_frame = tk.LabelFrame(frame, text="PDF Export Folder", padx=10, pady=5)
+        pdf_frame.pack(fill="x", pady=5)
+        
+        pdf_entry = tk.Entry(pdf_frame, textvariable=sv.pdf_folder, width=70)
+        pdf_entry.pack(side="left", padx=5)
+        ToolTip(pdf_entry, 
+                "Optional folder where PDF exports will be saved by default.\n"
+                "If not set, you will be prompted for a location each time.")
+        # Add FocusOut handler to validate typed paths
+        pdf_entry.bind('<FocusOut>', lambda e: self._validate_typed_path('pdf'))
+        
+        tk.Button(pdf_frame, text="Browse", command=self.ui.file_ops.select_pdf_folder).pack(side="left", padx=5)
+        
         # Default values
         defaults_frame = tk.LabelFrame(frame, text="Default Values (Optional)", padx=10, pady=5)
         defaults_frame.pack(fill="x", pady=5)
@@ -452,7 +466,7 @@ class SetupTab:
         """Validate a path that was typed (not browsed) and update bootstrap if needed.
         
         Args:
-            path_type: 'primary', 'secondary', or 'trail_maps'
+            path_type: 'primary', 'secondary', 'trail_maps', or 'pdf'
         """
         if path_type == 'primary':
             path_var = sv.db_path
@@ -469,6 +483,11 @@ class SetupTab:
             old_path = getattr(self.ui, 'machine_trail_maps_folder', '') or ''
             attr_name = 'machine_trail_maps_folder'
             label = "Trail Maps Folder"
+        elif path_type == 'pdf':
+            path_var = sv.pdf_folder
+            old_path = getattr(self.ui, 'machine_pdf_folder', '') or ''
+            attr_name = 'machine_pdf_folder'
+            label = "PDF Export Folder"
         else:
             return
         
