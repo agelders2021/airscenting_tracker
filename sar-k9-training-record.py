@@ -525,13 +525,13 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                     # print(f"Error saving config to JSON folder: {e}")
                     pass  # Non-critical, local config may work
         
-        # Also save to local config
-        try:
-            with open(self.config_file, 'w') as f:
-                json.dump(self.config, f, indent=2)
-        except Exception as e:
-            # print(f"Error saving local config: {e}")
-            pass  # Non-critical
+        # # Also save to local config
+        # try:
+        #     with open(self.config_file, 'w') as f:
+        #         json.dump(self.config, f, indent=2)
+        # except Exception as e:
+        #     # print(f"Error saving local config: {e}")
+        #     pass  # Non-critical
     
     def get_json_config_path(self):
         """Get the path to config file in JSON folder"""
