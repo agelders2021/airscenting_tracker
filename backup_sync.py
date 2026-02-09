@@ -1104,10 +1104,11 @@ class BackupSyncManager:
         # Update primary JSON if needed
         if self.primary_folder:
             if primary_session is None or primary_session.checksum != auth_session.checksum:
-                ts = write_json_file(self.primary_folder, auth_session)
-                if ts:
-                    self.sync_results['primary_writes'] += 1
-                    primary_ts = ts
+                # ts = write_json_file(self.primary_folder, auth_session)
+                # if ts:
+                #     self.sync_results['primary_writes'] += 1
+                #     primary_ts = ts
+                pass
             elif primary_session.filepath and primary_session.filepath.name != auth_session.filename:
                 # Rename to new convention
                 new_path = rename_legacy_json_file(primary_session.filepath, auth_session)
@@ -1117,10 +1118,11 @@ class BackupSyncManager:
         # Update secondary JSON if needed
         if self.secondary_folder:
             if secondary_session is None or secondary_session.checksum != auth_session.checksum:
-                ts = write_json_file(self.secondary_folder, auth_session)
-                if ts:
-                    self.sync_results['secondary_writes'] += 1
-                    secondary_ts = ts
+                #ts = write_json_file(self.secondary_folder, auth_session)
+                # if ts:
+                #     self.sync_results['secondary_writes'] += 1
+                #     secondary_ts = ts
+                pass
             elif secondary_session.filepath and secondary_session.filepath.name != auth_session.filename:
                 # Rename to new convention
                 new_path = rename_legacy_json_file(secondary_session.filepath, auth_session)
@@ -1223,11 +1225,11 @@ class BackupSyncManager:
                 
                 # Ensure both backups have the file
                 if self.primary_folder and not primary_session:
-                    write_json_file(self.primary_folder, auth_session)
+                    #write_json_file(self.primary_folder, auth_session)
                     self.sync_results['primary_writes'] += 1
                 
                 if self.secondary_folder and not secondary_session:
-                    write_json_file(self.secondary_folder, auth_session)
+                    #write_json_file(self.secondary_folder, auth_session)
                     self.sync_results['secondary_writes'] += 1
         
         # Also sync images during rebuild
@@ -1298,17 +1300,17 @@ def save_session_with_backup(session_data: dict, session_type: str,
     secondary_ts = None
     
     # Write to primary
-    if primary_folder:
-        primary_ts = write_json_file(Path(primary_folder), session)
-        if not primary_ts:
-            return False, "Failed to write primary backup", None
+    # if primary_folder:
+    #     primary_ts = write_json_file(Path(primary_folder), session)
+    #     if not primary_ts:
+    #         return False, "Failed to write primary backup", None
     
-    # Write to secondary
-    if secondary_folder:
-        secondary_ts = write_json_file(Path(secondary_folder), session)
-        if not secondary_ts:
-            # print("Warning: Failed to write secondary backup")
-            pass
+    # # Write to secondary
+    # if secondary_folder:
+    #     secondary_ts = write_json_file(Path(secondary_folder), session)
+    #     if not secondary_ts:
+    #         # print("Warning: Failed to write secondary backup")
+    #         pass
     
     # Update timestamps in DB
     db_ops = DatabaseOps(db_type)

@@ -188,6 +188,12 @@ class TrailingEntryTab:
         frame = tk.Frame(scrollable_frame, padx=20, pady=20)
         frame.pack(fill="both", expand=True)
         
+        # F1 Help text at top
+        help_label = tk.Label(frame, text="Push F1 to view the Help window.",
+                             font=('Arial', 9),
+                             fg='red')
+        help_label.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
+        
         # Build sections
         self._create_session_info_section(frame)
         self._create_trail_details_section(frame)
@@ -205,7 +211,7 @@ class TrailingEntryTab:
     def _create_session_info_section(self, frame):
         """Create Session Information section (airscenting-style layout with purpose accumulator)"""
         self.session_frame = tk.LabelFrame(frame, text="Session Information", padx=10, pady=5)
-        self.session_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=5)
+        self.session_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=5)
         session_frame = self.session_frame  # Keep local reference for existing code
         
         # Row 0: Date, Session #, and action buttons
@@ -276,9 +282,13 @@ class TrailingEntryTab:
         self.purpose_listbox.bind('<Double-Button-1>', self._remove_purpose_from_list)
         ToolTip(self.purpose_listbox, "Session Purposes\nDouble-click an entry to remove from list", delay=750)
         
-        # Scrollbar for purpose listbox (initially hidden)
-        self.purpose_scrollbar = tk.Scrollbar(purpose_list_frame, orient="vertical", command=self.purpose_listbox.yview)
+        # Scrollbar for purpose listbox (permanent)
+        self.purpose_scrollbar = ttk.Scrollbar(purpose_list_frame, orient="vertical", command=self.purpose_listbox.yview)
         self.purpose_listbox.config(yscrollcommand=self.purpose_scrollbar.set)
+        self.purpose_scrollbar.pack(side=tk.LEFT, fill=tk.Y)
+        
+        # Setup mouse wheel handling for the purpose listbox
+        self._setup_listbox_wheel(self.purpose_listbox)
         
         # Row 2: Field Support, Dog, Resume/Hide buttons (aligned with Previous/Next)
         tk.Label(session_frame, text="Field Support:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
@@ -304,7 +314,7 @@ class TrailingEntryTab:
     def _create_trail_details_section(self, frame):
         """Create Trail Details section"""
         trail_frame = tk.LabelFrame(frame, text="Trail Details", padx=10, pady=5)
-        trail_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=5)
+        trail_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=5)
         
         # Get dynamic widths
         locations = self._get_config_list('get_training_locations', [])
@@ -333,22 +343,26 @@ class TrailingEntryTab:
         
         # Terrain listbox
         tk.Label(trail_frame, text="Terrain Types:").grid(row=0,column=4,sticky="e",padx=5,pady=2)
-        self.terrain_listbox = tk.Listbox(trail_frame, height=3, width=entry_terrain_width)
-        self.terrain_listbox.grid(row=0, column=5, sticky="wn", rowspan=3, padx=(5, 0), pady=2)
+        self.terrain_listbox = tk.Listbox(trail_frame, height=2, width=entry_terrain_width)
+        self.terrain_listbox.grid(row=0, column=5, sticky="wn", rowspan=2, padx=(5, 0), pady=2)
         self.terrain_listbox.bind('<Double-Button-1>', self._remove_terrain_from_list)
         ToolTip(self.terrain_listbox, "Terrain List Accumulator\nDouble-click an entry to remove from list", delay=750)
         
-        # Scrollbar for terrain listbox
-        self.terrain_scrollbar = tk.Scrollbar(trail_frame, orient="vertical", command=self.terrain_listbox.yview)
+        # Scrollbar for terrain listbox (permanent)
+        self.terrain_scrollbar = ttk.Scrollbar(trail_frame, orient="vertical", command=self.terrain_listbox.yview)
         self.terrain_listbox.config(yscrollcommand=self.terrain_scrollbar.set)
+        self.terrain_scrollbar.grid(row=0, column=6, sticky="nsw", rowspan=2, pady=2, padx=(0, 5))
+        
+        # Setup mouse wheel handling for the terrain listbox
+        self._setup_listbox_wheel(self.terrain_listbox)
         
         # Start time with manual colon separator
         time_location_width = 12
-        tk.Label(trail_frame, text="Start Time:").grid(row=0, column=6, sticky="w", padx=5, pady=2)
+        tk.Label(trail_frame, text="Start Time:").grid(row=0, column=8, sticky="w", padx=5, pady=2)
         
         # Create a frame with border to wrap the time picker components
         time_picker_frame = tk.Frame(trail_frame, relief="sunken", borderwidth=1, bg="#ffffff", pady=0)
-        time_picker_frame.grid(row=0, column=7, sticky="w", padx=5, pady=2)
+        time_picker_frame.grid(row=0, column=9, sticky="w", padx=5, pady=2)
         ToolTip(time_picker_frame,"Use Mouse Wheel to change time.\nHover over 'hour' to adjust hour,\nhover over 'minute' to adjust minutes",delay=200)
         
         # Create hours picker
@@ -428,10 +442,10 @@ class TrailingEntryTab:
                         "3 Miles","4 Miles","5 Miles","6 Miles",],
                      width=entry_terrain_width-3).grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
-        tk.Label(trail_frame, text="Trail Difficulty:").grid(row=1, column=6, sticky="w", padx=5, pady=2)
+        tk.Label(trail_frame, text="Trail Difficulty:").grid(row=1, column=8, sticky="w", padx=5, pady=2)
         difficulty_combo = ttk.Combobox(trail_frame, textvariable=sv.t_difficulty, width=8, state="readonly",
                                         values=['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
-        difficulty_combo.grid(row=1, column=7, sticky="w", padx=5, pady=2)
+        difficulty_combo.grid(row=1, column=9, sticky="w", padx=5, pady=2)
 
         # Row 2 Trail Layer, Cross Track Layer, Cross Track Age
         tk.Label(trail_frame,text="Trail Layer").grid(row=2,column=0,sticky="w",padx=5,pady=2)
@@ -457,9 +471,9 @@ class TrailingEntryTab:
     def _create_weather_section(self, frame):
         """Create Weather subframes"""
 
-        # Row 2 Weather frame container
+        # Row 3 Weather frame container
         weather_frame_container = tk.Frame(frame)
-        weather_frame_container.grid(row=2, column=0, columnspan=2, sticky="ew", pady=5)
+        weather_frame_container.grid(row=3, column=0, columnspan=2, sticky="ew", pady=5)
         self._create_weather_laying_section(weather_frame_container)
         self._create_weather_running_section(weather_frame_container)
     
@@ -514,7 +528,7 @@ class TrailingEntryTab:
     def _create_behavior_section(self, frame):
         """Create Dog Behavior & Performance section"""
         behavior_frame = tk.LabelFrame(frame, text="Dog Behavior & Performance", padx=10, pady=5)
-        behavior_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=5)
+        behavior_frame.grid(row=4, column=0, columnspan=2, sticky="ew", pady=5)
         
         tk.Label(behavior_frame, text="Start Behavior:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
         ttk.Combobox(behavior_frame, textvariable=sv.t_start_behavior, width=54,
@@ -549,7 +563,7 @@ class TrailingEntryTab:
     def _create_distractions_section(self, frame):
         """Create Distractions section"""
         distraction_frame = tk.LabelFrame(frame, text="Distractions", padx=10, pady=5)
-        distraction_frame.grid(row=4, column=0, columnspan=2, sticky="ew", pady=5)
+        distraction_frame.grid(row=5, column=0, columnspan=2, sticky="ew", pady=5)
         
         # Input row
         tk.Label(distraction_frame, text="Distraction:").grid(row=0, column=0, sticky="nw", padx=5, pady=2)
@@ -618,6 +632,9 @@ class TrailingEntryTab:
         # Bind selection event and trace
         self.distraction_tree.bind('<<TreeviewSelect>>', self._on_distraction_select)
         sv.t_distractions.trace_add('write', self._update_distraction_button_states)
+        
+        # Setup mouse wheel handling for the distraction tree
+        self._setup_treeview_wheel(self.distraction_tree)
     
     def _create_impression_section(self, frame):
         """Create combined Overall Impression and Trail Map section with drop zone"""
@@ -627,7 +644,7 @@ class TrailingEntryTab:
             text="Overall Impression", 
             padx=10, pady=5
         )
-        self.impression_map_frame.grid(row=5, column=0, columnspan=2, sticky="nsew", pady=5)
+        self.impression_map_frame.grid(row=6, column=0, columnspan=2, sticky="nsew", pady=5)
         
         # Container for two-column layout (not grey)
         container = tk.Frame(self.impression_map_frame)
@@ -651,6 +668,9 @@ class TrailingEntryTab:
         
         self.impression_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         impression_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Setup mouse wheel handling for the overall impression text
+        self._setup_text_wheel(self.impression_text)
         
         # RIGHT HALF: Nested LabelFrame for trail maps (with grey background)
         trail_map_labelframe = tk.LabelFrame(
@@ -711,7 +731,7 @@ class TrailingEntryTab:
     def _create_buttons_section(self, frame):
         """Create action buttons section"""
         button_frame = tk.Frame(frame)
-        button_frame.grid(row=6, column=0, columnspan=2, pady=10)
+        button_frame.grid(row=7, column=0, columnspan=2, pady=10)
         
         self.save_btn = tk.Button(button_frame, text="Save Session", command=self._save_session,
                  bg="#4CAF50", fg="white", font=("Helvetica", 12, "bold"),
@@ -876,6 +896,99 @@ class TrailingEntryTab:
             frame.bind("<MouseWheel>", on_frame_wheel)
             time_picker.bind("<MouseWheel>", on_frame_wheel)
     
+    def _setup_treeview_wheel(self, treeview):
+        """
+        Setup mouse wheel handling for treeview widgets.
+        
+        When hovering over the treeview, wheel scrolls the treeview.
+        This prevents the wheel from scrolling the entire window when over the treeview.
+        
+        Args:
+            treeview: The ttk.Treeview widget
+        """
+        import platform
+        
+        def on_wheel(event):
+            """Handle wheel events on treeview"""
+            if platform.system() == 'Linux':
+                # Linux uses Button-4 for scroll up, Button-5 for scroll down
+                delta = -1 if event.num == 4 else 1
+            else:
+                # Windows/Mac use MouseWheel with delta
+                delta = -int(event.delta / 120)
+            
+            treeview.yview_scroll(delta, "units")
+            return "break"  # Prevent event from propagating to parent
+        
+        # Bind wheel events
+        if platform.system() == 'Linux':
+            treeview.bind("<Button-4>", on_wheel)
+            treeview.bind("<Button-5>", on_wheel)
+        else:
+            treeview.bind("<MouseWheel>", on_wheel)
+    
+    def _setup_listbox_wheel(self, listbox):
+        """
+        Setup mouse wheel handling for listbox widgets.
+        
+        When hovering over the listbox, wheel scrolls the listbox.
+        This prevents the wheel from scrolling the entire window when over the listbox.
+        
+        Args:
+            listbox: The tk.Listbox widget
+        """
+        import platform
+        
+        def on_wheel(event):
+            """Handle wheel events on listbox"""
+            if platform.system() == 'Linux':
+                # Linux uses Button-4 for scroll up, Button-5 for scroll down
+                delta = -1 if event.num == 4 else 1
+            else:
+                # Windows/Mac use MouseWheel with delta
+                delta = -int(event.delta / 120)
+            
+            listbox.yview_scroll(delta, "units")
+            return "break"  # Prevent event from propagating to parent
+        
+        # Bind wheel events
+        if platform.system() == 'Linux':
+            listbox.bind("<Button-4>", on_wheel)
+            listbox.bind("<Button-5>", on_wheel)
+        else:
+            listbox.bind("<MouseWheel>", on_wheel)
+    
+    def _setup_text_wheel(self, text_widget):
+        """
+        Setup mouse wheel handling for Text widgets.
+        
+        When hovering over the text widget, wheel scrolls the text.
+        This prevents the wheel from scrolling the entire window when over the text widget.
+        
+        Args:
+            text_widget: The tk.Text widget
+        """
+        import platform
+        
+        def on_wheel(event):
+            """Handle wheel events on text widget"""
+            if platform.system() == 'Linux':
+                # Linux uses Button-4 for scroll up, Button-5 for scroll down
+                delta = -1 if event.num == 4 else 1
+            else:
+                # Windows/Mac use MouseWheel with delta
+                delta = -int(event.delta / 120)
+            
+            text_widget.yview_scroll(delta, "units")
+            return "break"  # Prevent event from propagating to parent
+        
+        # Bind wheel events
+        if platform.system() == 'Linux':
+            text_widget.bind("<Button-4>", on_wheel)
+            text_widget.bind("<Button-5>", on_wheel)
+        else:
+            text_widget.bind("<MouseWheel>", on_wheel)
+    
     def _load_prior_session(self):
         """Load a prior session for editing"""
         if 'on_load_prior_session' in self.callbacks:
@@ -1002,12 +1115,8 @@ class TrailingEntryTab:
             self._update_terrain_scrollbar()
     
     def _update_terrain_scrollbar(self):
-        """Show or hide terrain scrollbar based on number of items"""
-        item_count = self.terrain_listbox.size()
-        if item_count > 4:
-            self.terrain_scrollbar.grid(row=0, column=5, sticky="ns", rowspan=3, pady=2)
-        else:
-            self.terrain_scrollbar.grid_remove()
+        """Terrain scrollbar is now permanent - this method is kept for compatibility"""
+        pass
     
     # =========================================================================
     # Session Purpose accumulator methods
@@ -1040,12 +1149,8 @@ class TrailingEntryTab:
             self._update_purpose_scrollbar()
     
     def _update_purpose_scrollbar(self):
-        """Show or hide purpose scrollbar based on number of items"""
-        item_count = self.purpose_listbox.size()
-        if item_count > 2:
-            self.purpose_scrollbar.pack(side=tk.LEFT, fill=tk.Y)
-        else:
-            self.purpose_scrollbar.pack_forget()
+        """Purpose scrollbar is now permanent - this method is kept for compatibility"""
+        pass
     
     # =========================================================================
     # Distraction methods

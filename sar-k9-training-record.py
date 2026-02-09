@@ -49,6 +49,7 @@ from splash_screen import SplashScreen
 from setup_tab import SetupTab
 from about_dialog import show_about
 from status_bar import StatusBarManager
+from help_window import show_help_window
 
 # Helper modules from ui.py
 from ui_file_operations import FileOperations
@@ -278,6 +279,9 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         
         # Set up window close handler
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        # Bind F1 key to show help window
+        self.root.bind("<F1>", lambda e: show_help_window(self.root))
     
     # =========================================================================
     # STATUS BAR
@@ -552,6 +556,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         
         help_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="User Manual (F1)", command=lambda: show_help_window(self.root))
         help_menu.add_command(label="About", command=self.show_about_dialog)
     
     def show_about_dialog(self):

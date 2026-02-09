@@ -66,12 +66,8 @@ class AirScentingHelper:
             self._update_purpose_scrollbar()
     
     def _update_purpose_scrollbar(self):
-        """Show or hide purpose scrollbar based on number of items"""
-        item_count = self.a_purpose_listbox.size()
-        if item_count > 2:
-            self.a_purpose_scrollbar.pack(side=tk.LEFT, fill=tk.Y)
-        else:
-            self.a_purpose_scrollbar.pack_forget()
+        """Purpose scrollbar is now permanent - this method is kept for compatibility"""
+        pass
     
     def set_selected_purposes(self, purposes_list):
         """Populate purpose listbox from a list of purpose names"""
@@ -527,3 +523,97 @@ class AirScentingHelper:
                 # Block wheel on the frame to prevent window scroll
                 frame.bind("<MouseWheel>", on_frame_wheel)
                 time_picker.bind("<MouseWheel>", on_frame_wheel)
+    
+    def _setup_listbox_wheel(self, listbox):
+        """
+        Setup mouse wheel handling for listbox widgets.
+        
+        When hovering over the listbox, wheel scrolls the listbox.
+        This prevents the wheel from scrolling the entire window when over the listbox.
+        
+        Args:
+            listbox: The tk.Listbox widget
+        """
+        import platform
+        
+        def on_wheel(event):
+            """Handle wheel events on listbox"""
+            if platform.system() == 'Linux':
+                # Linux uses Button-4 for scroll up, Button-5 for scroll down
+                delta = -1 if event.num == 4 else 1
+            else:
+                # Windows/Mac use MouseWheel with delta
+                delta = -int(event.delta / 120)
+            
+            listbox.yview_scroll(delta, "units")
+            return "break"  # Prevent event from propagating to parent
+        
+        # Bind wheel events
+        if platform.system() == 'Linux':
+            listbox.bind("<Button-4>", on_wheel)
+            listbox.bind("<Button-5>", on_wheel)
+        else:
+            listbox.bind("<MouseWheel>", on_wheel)
+    
+    def _setup_treeview_wheel(self, treeview):
+        """
+        Setup mouse wheel handling for treeview widgets.
+        
+        When hovering over the treeview, wheel scrolls the treeview.
+        This prevents the wheel from scrolling the entire window when over the treeview.
+        
+        Args:
+            treeview: The ttk.Treeview widget
+        """
+        import platform
+        
+        def on_wheel(event):
+            """Handle wheel events on treeview"""
+            if platform.system() == 'Linux':
+                # Linux uses Button-4 for scroll up, Button-5 for scroll down
+                delta = -1 if event.num == 4 else 1
+            else:
+                # Windows/Mac use MouseWheel with delta
+                delta = -int(event.delta / 120)
+            
+            treeview.yview_scroll(delta, "units")
+            return "break"  # Prevent event from propagating to parent
+        
+        # Bind wheel events
+        if platform.system() == 'Linux':
+            treeview.bind("<Button-4>", on_wheel)
+            treeview.bind("<Button-5>", on_wheel)
+        else:
+            treeview.bind("<MouseWheel>", on_wheel)
+    
+    def _setup_text_wheel(self, text_widget):
+        """
+        Setup mouse wheel handling for Text widgets.
+        
+        When hovering over the text widget, wheel scrolls the text.
+        This prevents the wheel from scrolling the entire window when over the text widget.
+        
+        Args:
+            text_widget: The tk.Text widget
+        """
+        import platform
+        
+        def on_wheel(event):
+            """Handle wheel events on text widget"""
+            if platform.system() == 'Linux':
+                # Linux uses Button-4 for scroll up, Button-5 for scroll down
+                delta = -1 if event.num == 4 else 1
+            else:
+                # Windows/Mac use MouseWheel with delta
+                delta = -int(event.delta / 120)
+            
+            text_widget.yview_scroll(delta, "units")
+            return "break"  # Prevent event from propagating to parent
+        
+        # Bind wheel events
+        if platform.system() == 'Linux':
+            text_widget.bind("<Button-4>", on_wheel)
+            text_widget.bind("<Button-5>", on_wheel)
+        else:
+            text_widget.bind("<MouseWheel>", on_wheel)
+

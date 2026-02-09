@@ -66,11 +66,17 @@ def setup_airscent_tab(ui):
     frame = tk.Frame(scrollable_frame, padx=20, pady=20)
     frame.pack(fill="both", expand=True)
     
+    # F1 Help text at top
+    help_label = tk.Label(frame, text="Push F1 to view the Help window.",
+                         font=('Arial', 9),
+                         fg='red')
+    help_label.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
+    
     # =========================================================================
-    # SESSION INFORMATION FRAME (Row 0)
+    # SESSION INFORMATION FRAME (Row 1)
     # =========================================================================
     session_frame = tk.LabelFrame(frame, text="Session Information", padx=10, pady=5)
-    session_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=5)
+    session_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=5)
     ui.a_session_frame = session_frame
     
     # Row 0: Date, Session #, New, View/Edit/Hide, Previous, Next, Export PDF
@@ -130,8 +136,13 @@ def setup_airscent_tab(ui):
     ui.a_purpose_listbox.bind('<Double-Button-1>', ui._remove_purpose_from_list)
     ToolTip(ui.a_purpose_listbox, "Session Purposes\nDouble-click to remove", delay=750)
     
-    ui.a_purpose_scrollbar = tk.Scrollbar(purpose_list_frame, orient="vertical", command=ui.a_purpose_listbox.yview)
+    # Scrollbar for purpose listbox (permanent)
+    ui.a_purpose_scrollbar = ttk.Scrollbar(purpose_list_frame, orient="vertical", command=ui.a_purpose_listbox.yview)
     ui.a_purpose_listbox.config(yscrollcommand=ui.a_purpose_scrollbar.set)
+    ui.a_purpose_scrollbar.pack(side=tk.LEFT, fill=tk.Y)
+    
+    # Setup mouse wheel handling for the purpose listbox
+    ui._setup_listbox_wheel(ui.a_purpose_listbox)
     
     # Row 2: Field Support, Dog, Restore/Hide buttons
     tk.Label(session_frame, text="Field Support:").grid(row=2, column=0, sticky="e", padx=5, pady=2)
@@ -160,14 +171,14 @@ def setup_airscent_tab(ui):
         child.config(state="disabled")
     
     # =========================================================================
-    # SEARCH PARAMETERS FRAME (Row 1) - includes Terrain
+    # SEARCH PARAMETERS FRAME (Row 2) - includes Terrain
     # =========================================================================
     search_frame = tk.LabelFrame(frame, text="Search Parameters", padx=10, pady=5)
-    search_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=5)
+    search_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=5)
     
     # Row 0: Location, Search Area, Number of Subjects, Handler Knowledge
     tk.Label(search_frame, text="Location:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-    ui.a_location_combo = ttk.Combobox(search_frame, textvariable=sv.location, width=18, state="readonly")
+    ui.a_location_combo = ttk.Combobox(search_frame, textvariable=sv.location, width=18)
     ui.a_location_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
     
     tk.Label(search_frame, text="Search Area (Acres):").grid(row=0, column=2, sticky="w", padx=5, pady=2)
@@ -228,10 +239,10 @@ def setup_airscent_tab(ui):
     ui.accumulated_terrains = []
     
     # =========================================================================
-    # SEARCH RESULTS FRAME (Row 2)
+    # SEARCH RESULTS FRAME (Row 3)
     # =========================================================================
     results_frame = tk.LabelFrame(frame, text="Search Results", padx=10, pady=5)
-    results_frame.grid(row=2, column=0, columnspan=2, sticky="ew", pady=5)
+    results_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=5)
     
     # Row 0: Drive Level, Subjects Found, Subject Responses Tree (spans rows 0-1)
     tk.Label(results_frame, text="Drive Level:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
@@ -289,6 +300,9 @@ def setup_airscent_tab(ui):
     ui.a_subject_responses_tree.bind('<Button-1>', ui.on_treeview_click)
     ToolTip(ui.a_subject_responses_tree, "Click cell under desired heading to edit value", delay=750)
     
+    # Setup mouse wheel handling for the subject responses tree
+    ui._setup_treeview_wheel(ui.a_subject_responses_tree)
+    
     ui.tfr_options = ['Strong', 'Fair', 'Required cueing', 'None']
     ui.refind_options = ['Immediate', 'Required cue', 'None']
     ui.a_tree_edit_combo = None
@@ -299,9 +313,22 @@ def setup_airscent_tab(ui):
     impression_frame = tk.LabelFrame(results_frame, text="Overall Impression", padx=5, pady=5)
     impression_frame.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=5, pady=(0, 5))
     
-    ui.a_comments_text = tk.Text(impression_frame, width=56, height=4, wrap=tk.WORD)
-    ui.a_comments_text.pack(fill=tk.BOTH, expand=True)
+    # Container for text widget and scrollbar
+    impression_container = tk.Frame(impression_frame)
+    impression_container.pack(fill=tk.BOTH, expand=True)
+    
+    ui.a_comments_text = tk.Text(impression_container, width=56, height=4, wrap=tk.WORD)
+    ui.a_comments_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    
+    # Permanent scrollbar for overall impression
+    impression_scrollbar = ttk.Scrollbar(impression_container, orient=tk.VERTICAL, command=ui.a_comments_text.yview)
+    ui.a_comments_text.config(yscrollcommand=impression_scrollbar.set)
+    impression_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    
     ToolTip(ui.a_comments_text, "Enter overall impression of the search here")
+    
+    # Setup mouse wheel handling for the overall impression text
+    ui._setup_text_wheel(ui.a_comments_text)
     
     # Row 2: Percent Searched, Start Time, Finish Time
     tk.Label(results_frame, text="Percent of Area Searched Prior to Last Find:").grid(row=2,column=0,columnspan=2, sticky="e", padx=5, pady=2)
@@ -422,7 +449,7 @@ def setup_airscent_tab(ui):
     ui._setup_timepicker_wheel(ui.a_finish_time_minutes, finish_time_picker_frame, 'finish', 'minutes')
     
     # =========================================================================
-    # MAPS AND IMAGES FRAME (Row 3) - LabelFrame with drag-drop target
+    # MAPS AND IMAGES FRAME (Row 4) - LabelFrame with drag-drop target
     # =========================================================================
     from tkinterdnd2 import DND_FILES
     
@@ -432,7 +459,7 @@ def setup_airscent_tab(ui):
         text="Drop Images/Videos Here (PDF/JPG/PNG/MP4/MOV)",
         padx=10, pady=5
     )
-    ui.a_map_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=5)
+    ui.a_map_frame.grid(row=4, column=0, columnspan=2, sticky="ew", pady=5)
     
     # Container inside the map frame (for visual feedback on drag)
     ui.a_drop_container = tk.Frame(ui.a_map_frame)
@@ -453,6 +480,9 @@ def setup_airscent_tab(ui):
     map_scroll.pack(side=tk.RIGHT, fill=tk.Y)
     
     ui.a_map_listbox.bind('<Double-Button-1>', lambda e: ui.file_ops.view_selected_map())
+    
+    # Setup mouse wheel handling for the map listbox
+    ui._setup_listbox_wheel(ui.a_map_listbox)
     
     map_button_frame = tk.Frame(list_button_container)
     map_button_frame.pack(side=tk.RIGHT, padx=(5, 0))
@@ -483,10 +513,10 @@ def setup_airscent_tab(ui):
         pass
     
     # =========================================================================
-    # BUTTON FRAME (Row 4)
+    # BUTTON FRAME (Row 5)
     # =========================================================================
     button_frame = tk.Frame(frame)
-    button_frame.grid(row=4, column=0, columnspan=2, pady=20)
+    button_frame.grid(row=5, column=0, columnspan=2, pady=20)
     
     ui.a_save_session_btn = tk.Button(button_frame, text="Save Session",
                                        command=ui.save_session,

@@ -524,38 +524,38 @@ def sync_db_to_json(db_sessions, json_dict, json_folder, db_type):
                 # print(f"Sync: DB newer than JSON file for {session_uuid}")
                 pass
         
-        if should_write:
-            try:
-                # Load related data (terrains, responses) from DB
-                session_data = load_full_session_from_db(
-                    db_info["session_number"], 
-                    db_info["dog_name"], 
-                    db_type
-                )
+        # if should_write:
+        #     try:
+        #         # Load related data (terrains, responses) from DB
+        #         session_data = load_full_session_from_db(
+        #             db_info["session_number"], 
+        #             db_info["dog_name"], 
+        #             db_type
+        #         )
                 
-                if session_data:
-                    # Create filename
-                    dog_name = session_data.get("dog_name", "unknown")
-                    safe_dog_name = re.sub(r'[^\w\-]', '_', dog_name)
-                    session_num = session_data.get("session_number")
-                    date_str = session_data.get("date", "").replace("-", "")
-                    filename = f"{safe_dog_name}_session_{session_num}_{date_str}.json"
+        #         if session_data:
+        #             # Create filename
+        #             dog_name = session_data.get("dog_name", "unknown")
+        #             safe_dog_name = re.sub(r'[^\w\-]', '_', dog_name)
+        #             session_num = session_data.get("session_number")
+        #             date_str = session_data.get("date", "").replace("-", "")
+        #             filename = f"{safe_dog_name}_session_{session_num}_{date_str}.json"
                     
-                    # Add backup timestamp
-                    session_data["backup_timestamp"] = datetime.now().isoformat()
+        #             # Add backup timestamp
+        #             session_data["backup_timestamp"] = datetime.now().isoformat()
                     
-                    # Write JSON
-                    filepath = Path(json_folder) / filename
-                    with open(filepath, 'w') as f:
-                        json.dump(session_data, f, indent=2, default=str)
+        #             # Write JSON
+        #             filepath = Path(json_folder) / filename
+        #             with open(filepath, 'w') as f:
+        #                 json.dump(session_data, f, indent=2, default=str)
                     
-                    count += 1
-                    # print(f"Sync: Wrote {filepath}")
-                    pass
+        #             count += 1
+        #             # print(f"Sync: Wrote {filepath}")
+        #             pass
                     
-            except Exception as e:
-                # print(f"Sync error writing JSON for {session_uuid}: {e}")
-                pass
+        #     except Exception as e:
+        #         # print(f"Sync error writing JSON for {session_uuid}: {e}")
+        #         pass
     
     return count
 

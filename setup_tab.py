@@ -116,6 +116,12 @@ class SetupTab:
         frame = tk.Frame(scrollable_frame, padx=20, pady=20)
         frame.pack(fill="both", expand=True)
         
+        # F1 Help text at top
+        help_label = tk.Label(frame, text="Push F1 to view the Help window.",
+                             font=('Arial', 9),
+                             fg='red')
+        help_label.pack(anchor="w", pady=(0, 10))
+        
         # =====================================================================
         # DATABASE TYPE SELECTION - HIDDEN FOR NOW
         # SQLite is used by default. Multi-database support may be re-enabled
@@ -151,18 +157,19 @@ class SetupTab:
         # User selection combobox
         tk.Label(db_frame, text="User:").pack(side="left", padx=(15, 2))
         # # Create a custom style for the grey background combobox
-        # style = ttk.Style()
-        # style.theme_use('clam')
-        # style.configure('Grey.TCombobox', fieldbackground='light grey', background='black')
-        # self.s_user_combo = ttk.Combobox(db_frame, textvariable=sv.current_user, width=15, style='Grey.TCombobox')
-        self.s_user_combo = ttk.Combobox(db_frame, textvariable=sv.current_user, width=15)
+        style = ttk.Style()
+        style.theme_use('default')
+        style.configure('Grey.TCombobox', fieldbackground='light grey', background='light grey')
+        style.map('Grey.TCombobox',
+                  fieldbackgound=[('readonly','light grey')]
+                  )
+        self.s_user_combo = ttk.Combobox(db_frame, textvariable=sv.current_user, width=15, style='Grey.TCombobox')
+        # self.s_user_combo = ttk.Combobox(db_frame, textvariable=sv.current_user, width=15)
         self.s_user_combo['values'] = self.ui.machine_user_list if self.ui.machine_user_list else []
         self.s_user_combo.pack(side="left", padx=2)
         ToolTip(self.s_user_combo,
-                "For Developer use only!\n"
-                "Select an existing user or type a new username.\n"
-                "Each user has their own storage folder configuration.\n"
-                "Changing users requires application restart to take effect.",delay=10)
+                "For Developer use only!",
+                delay=10)
         
         # Bind FocusOut to handle user selection/creation
         self.s_user_combo.bind('<FocusOut>', self._on_user_combo_focus_out)
