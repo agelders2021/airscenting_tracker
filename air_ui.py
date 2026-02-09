@@ -378,9 +378,12 @@ def setup_airscent_tab(ui):
     ui.a_start_time_minutes.configureAll(bg=TIME_PICKER_NULL_BG, fg="#000000", width=3)
     ui.a_start_time_minutes.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
     ui.a_start_time_minutes.setMins(0)  # Initialize to 00
-    # Also configure the internal SpinLabel widget
+    # Also configure the internal SpinLabel widget and override hover behavior
     if hasattr(ui.a_start_time_minutes, '_minutes'):
         ui.a_start_time_minutes._minutes.config(bg=TIME_PICKER_NULL_BG)
+        # Bind Enter/Leave events to force the background color to stay grey initially
+        ui.a_start_time_minutes._minutes.bind("<Enter>", lambda e: e.widget.config(bg=TIME_PICKER_NULL_BG))
+        ui.a_start_time_minutes._minutes.bind("<Leave>", lambda e: e.widget.config(bg=TIME_PICKER_NULL_BG))
     
     # Store references for easy access (for compatibility with existing code)
     # Create a simple proxy object to maintain API compatibility
@@ -454,9 +457,12 @@ def setup_airscent_tab(ui):
     ui.a_finish_time_minutes.configureAll(bg=TIME_PICKER_NULL_BG, fg="#000000", width=3)
     ui.a_finish_time_minutes.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
     ui.a_finish_time_minutes.setMins(0)  # Initialize to 00
-    # Also configure the internal SpinLabel widget
+    # Also configure the internal SpinLabel widget and override hover behavior
     if hasattr(ui.a_finish_time_minutes, '_minutes'):
         ui.a_finish_time_minutes._minutes.config(bg=TIME_PICKER_NULL_BG)
+        # Bind Enter/Leave events to force the background color to stay grey initially
+        ui.a_finish_time_minutes._minutes.bind("<Enter>", lambda e: e.widget.config(bg=TIME_PICKER_NULL_BG))
+        ui.a_finish_time_minutes._minutes.bind("<Leave>", lambda e: e.widget.config(bg=TIME_PICKER_NULL_BG))
     
     # Store references for easy access (for compatibility with existing code)
     # Create a simple proxy object to maintain API compatibility

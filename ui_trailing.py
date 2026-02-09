@@ -393,9 +393,12 @@ class TrailingEntryTab:
         self.start_time_minutes.configureAll(bg=TIME_PICKER_NULL_BG, fg="#000000", width=3)
         self.start_time_minutes.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
         self.start_time_minutes.setMins(0)  # Initialize to 00
-        # Also configure the internal SpinLabel widget
+        # Also configure the internal SpinLabel widget and override hover behavior
         if hasattr(self.start_time_minutes, '_minutes'):
             self.start_time_minutes._minutes.config(bg=TIME_PICKER_NULL_BG)
+            # Bind Enter/Leave events to force the background color to stay grey initially
+            self.start_time_minutes._minutes.bind("<Enter>", lambda e: e.widget.config(bg=TIME_PICKER_NULL_BG))
+            self.start_time_minutes._minutes.bind("<Leave>", lambda e: e.widget.config(bg=TIME_PICKER_NULL_BG))
         
         # Store references for easy access (for compatibility with existing code)
         # Create a simple proxy object to maintain API compatibility
@@ -866,6 +869,9 @@ class TrailingEntryTab:
             self.start_time_hours._24HrsTime.config(bg=color)
         if hasattr(self.start_time_minutes, '_minutes'):
             self.start_time_minutes._minutes.config(bg=color)
+            # Bind Enter/Leave events to force the background color to stay
+            self.start_time_minutes._minutes.bind("<Enter>", lambda e, c=color: e.widget.config(bg=c))
+            self.start_time_minutes._minutes.bind("<Leave>", lambda e, c=color: e.widget.config(bg=c))
     
     def _reset_start_time_to_null(self, event=None):
         """Reset start time to null state (grey, empty value)"""

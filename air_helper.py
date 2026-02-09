@@ -438,6 +438,9 @@ class AirScentingHelper:
             self.a_start_time_hours._24HrsTime.config(bg=color)
         if hasattr(self.a_start_time_minutes, '_minutes'):
             self.a_start_time_minutes._minutes.config(bg=color)
+            # Bind Enter/Leave events to force the background color to stay
+            self.a_start_time_minutes._minutes.bind("<Enter>", lambda e, c=color: e.widget.config(bg=c))
+            self.a_start_time_minutes._minutes.bind("<Leave>", lambda e, c=color: e.widget.config(bg=c))
     
     def _set_finish_time_picker_color(self, color):
         """Set background color of all finish time picker components"""
@@ -451,6 +454,9 @@ class AirScentingHelper:
             self.a_finish_time_hours._24HrsTime.config(bg=color)
         if hasattr(self.a_finish_time_minutes, '_minutes'):
             self.a_finish_time_minutes._minutes.config(bg=color)
+            # Bind Enter/Leave events to force the background color to stay
+            self.a_finish_time_minutes._minutes.bind("<Enter>", lambda e, c=color: e.widget.config(bg=c))
+            self.a_finish_time_minutes._minutes.bind("<Leave>", lambda e, c=color: e.widget.config(bg=c))
     
     def _reset_start_time_to_null(self, event=None):
         """Reset start time to null state (grey, empty value)"""
