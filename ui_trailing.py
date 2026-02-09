@@ -468,7 +468,7 @@ class TrailingEntryTab:
                      width=entry_terrain_width-3).grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(trail_frame, text="Trail Difficulty:").grid(row=1, column=8, sticky="w", padx=5, pady=2)
-        difficulty_combo = ttk.Combobox(trail_frame, textvariable=sv.t_difficulty, width=8, state="readonly",
+        difficulty_combo = ttk.Combobox(trail_frame, textvariable=sv.t_difficulty, width=9, state="readonly",
                                         values=['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
         difficulty_combo.grid(row=1, column=9, sticky="w", padx=5, pady=2)
 
