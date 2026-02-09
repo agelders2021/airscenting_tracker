@@ -182,7 +182,7 @@ def setup_airscent_tab(ui):
     
     # Row 0: Location, Search Area, Number of Subjects, Handler Knowledge
     tk.Label(search_frame, text="Location:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
-    ui.a_location_combo = ttk.Combobox(search_frame, textvariable=sv.location, width=18)
+    ui.a_location_combo = ttk.Combobox(search_frame, textvariable=sv.location, width=19)
     ui.a_location_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
     
     tk.Label(search_frame, text="Search Area (Acres):").grid(row=0, column=2, sticky="w", padx=5, pady=2)
@@ -197,11 +197,11 @@ def setup_airscent_tab(ui):
     tk.Label(search_frame, text="Handler Knowledge:").grid(row=0, column=6, sticky="w", padx=5, pady=2)
     handler_knowledge_combo = ttk.Combobox(search_frame, textvariable=sv.handler_knowledge, width=25, state="readonly",
                                            values=['Unknown number of subjects', 'Number of subjects known'])
-    handler_knowledge_combo.grid(row=0, column=7, columnspan=2, sticky="w", padx=5, pady=2)
+    handler_knowledge_combo.grid(row=0, column=7, columnspan=2, sticky="e", padx=5, pady=2)
     
     # Row 1: Weather, Wind Direction, Add Terrain Type (under Number of Subjects), Accumulated Terrains listbox (under Handler Knowledge)
     tk.Label(search_frame, text="Weather:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-    weather_combo = ttk.Combobox(search_frame, textvariable=sv.weather, width=18, state="readonly",
+    weather_combo = ttk.Combobox(search_frame, textvariable=sv.weather, width=19, state="readonly",
                                   values=['Clear', 'Cloudy', 'Light Rain', 'Heavy Rain',
                                          'Snow Cover', 'Snowing', 'Fog'])
     weather_combo.grid(row=1, column=1, sticky="w", padx=5, pady=2)
@@ -222,15 +222,15 @@ def setup_airscent_tab(ui):
     
     # Accumulated Terrains listbox (under Handler Knowledge, spans rows 1-2)
     tk.Label(search_frame, text="Accumulated Terrains:").grid(row=1, column=6, sticky="ne", padx=5, pady=2)
-    ui.a_terrain_listbox = tk.Listbox(search_frame, height=3, width=24)
-    ui.a_terrain_listbox.grid(row=1, column=7, sticky="wn", rowspan=2, padx=(5, 0), pady=2)
+    ui.a_terrain_listbox = tk.Listbox(search_frame, height=3, width=25)
+    ui.a_terrain_listbox.grid(row=1, column=7, sticky="en", rowspan=2, padx=(5, 0), pady=2)
     ui.a_terrain_listbox.bind('<Double-Button-1>', ui.remove_terrain_from_list)
     ToolTip(ui.a_terrain_listbox, "Terrain List Accumulator\nDouble-click an entry to remove from list", delay=750)
     
     # Scrollbar for terrain listbox (permanent)
     ui.a_terrain_scrollbar = ttk.Scrollbar(search_frame, orient="vertical", command=ui.a_terrain_listbox.yview)
     ui.a_terrain_listbox.config(yscrollcommand=ui.a_terrain_scrollbar.set)
-    ui.a_terrain_scrollbar.grid(row=1, column=8, sticky="nsw", rowspan=2, pady=2, padx=(0, 5))
+    ui.a_terrain_scrollbar.grid(row=1, column=8, sticky="nse", rowspan=2, pady=2, padx=(0, 5))
     
     # Setup mouse wheel handling for the terrain listbox
     ui._setup_listbox_wheel(ui.a_terrain_listbox)

@@ -346,16 +346,16 @@ class TrailingEntryTab:
         ToolTip(self.terrain_combo,"Select terrain type to be added to 'Terrain Types' to right \N{BLACK RIGHT-POINTING TRIANGLE}\n(Selections are not shown in this entry box)",delay=250)
         
         # Terrain listbox
-        tk.Label(trail_frame, text="Terrain Types:").grid(row=0,column=4,sticky="e",padx=5,pady=2)
-        self.terrain_listbox = tk.Listbox(trail_frame, height=2, width=entry_terrain_width)
-        self.terrain_listbox.grid(row=0, column=5, sticky="wn", rowspan=2, padx=(5, 0), pady=2)
+        tk.Label(trail_frame, text="Terrain Types:").grid(row=0,column=4,sticky="w",padx=5,pady=2)
+        self.terrain_listbox = tk.Listbox(trail_frame, height=3, width=entry_terrain_width)
+        self.terrain_listbox.grid(row=0, column=5, sticky="en", rowspan=2, padx=(5, 0), pady=2)
         self.terrain_listbox.bind('<Double-Button-1>', self._remove_terrain_from_list)
         ToolTip(self.terrain_listbox, "Terrain List Accumulator\nDouble-click an entry to remove from list", delay=750)
         
         # Scrollbar for terrain listbox (permanent)
         self.terrain_scrollbar = ttk.Scrollbar(trail_frame, orient="vertical", command=self.terrain_listbox.yview)
         self.terrain_listbox.config(yscrollcommand=self.terrain_scrollbar.set)
-        self.terrain_scrollbar.grid(row=0, column=6, sticky="nsw", rowspan=2, pady=2, padx=(0, 5))
+        self.terrain_scrollbar.grid(row=0, column=6, sticky="nse", rowspan=2, pady=2, padx=(0, 5))
         
         # Setup mouse wheel handling for the terrain listbox
         self._setup_listbox_wheel(self.terrain_listbox)
@@ -473,15 +473,15 @@ class TrailingEntryTab:
         difficulty_combo.grid(row=1, column=9, sticky="w", padx=5, pady=2)
 
         # Row 2 Trail Layer, Cross Track Layer, Cross Track Age
-        tk.Label(trail_frame,text="Trail Layer").grid(row=2,column=0,sticky="w",padx=5,pady=2)
-        tk.Entry(trail_frame,textvariable=sv.t_trail_layer,width=entry_location_width).grid(row=2,column=1,padx=4,pady=2)
+        tk.Label(trail_frame,text="Trail Layer:").grid(row=2,column=0,sticky="w",padx=5,pady=2)
+        tk.Entry(trail_frame,textvariable=sv.t_trail_layer,width=location_width + 2).grid(row=2,column=1,padx=4,pady=2)
 
         tk.Label(trail_frame,text="Cross Track Layer:").grid(row=2,column=2,sticky="e",padx=5,pady=2)
-        tk.Entry(trail_frame,textvariable=sv.t_cross_track_layer,width=entry_terrain_width).grid(row=2,column=3,sticky="w",padx=4,pady=2)
+        tk.Entry(trail_frame,textvariable=sv.t_cross_track_layer,width=terrain_width + 2).grid(row=2,column=3,sticky="w",padx=4,pady=2)
 
         tk.Label(trail_frame,text="Cross Track Age:").grid(row=2,column=4,sticky="e",padx=5,pady=2)
         # tk.Entry(trail_frame,textvariable=sv.t_cross_track_age,width=entry_terrain_width).grid(row=2,column=5,sticky="w",padx=5,pady=(5,2))
-        ttk.Combobox(trail_frame, textvariable=sv.t_cross_track_age, width=location_width,
+        ttk.Combobox(trail_frame, textvariable=sv.t_cross_track_age, width=entry_terrain_width,
                     values=[
                         "15 Minutes or Less",
                         "\N{Vulgar Fraction One Half} Hour",
@@ -489,7 +489,7 @@ class TrailingEntryTab:
                         "1 Hour",
                         "1 \N{Vulgar Fraction One Quarter} Hours",
                         "1 \N{Vulgar Fraction One Half} Hours",
-                        "2 Hours","3 Hours","4 Hours","6 Hours","8 Hours"]).grid(row=2,column=5,sticky="w",padx=5,pady=2)
+                        "2 Hours","3 Hours","4 Hours","6 Hours","8 Hours"]).grid(row=2,column=5,columnspan=2,sticky="w",padx=(5,0),pady=2)
 
 
 
@@ -518,13 +518,13 @@ class TrailingEntryTab:
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Temperature (\N{Degree Sign}F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        tk.Entry(weather_frame, textvariable=sv.t_temp_laying, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        tk.Entry(weather_frame, textvariable=sv.t_temp_laying, width=14).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
-        tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="e", padx=5, pady=2)
-        tk.Entry(weather_frame, textvariable=sv.t_humidity_laying, width=15).grid(row=1, column=3, sticky="w", padx=5, pady=2)
+        tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="w", padx=5, pady=2)
+        tk.Entry(weather_frame, textvariable=sv.t_humidity_laying, width=14).grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Wind Speed:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
-        tk.Entry(weather_frame, textvariable=sv.t_wind_laying, width=15).grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        tk.Entry(weather_frame, textvariable=sv.t_wind_laying, width=14).grid(row=2, column=1, sticky="w", padx=5, pady=2)
     
     def _create_weather_running_section(self, frame):
         """Create Weather at Time of Running Trail section"""
@@ -542,13 +542,13 @@ class TrailingEntryTab:
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Temperature (\N{Degree Sign}F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        tk.Entry(weather_frame, textvariable=sv.t_temp_running, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        tk.Entry(weather_frame, textvariable=sv.t_temp_running, width=14).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
-        tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="e", padx=5, pady=2)
-        tk.Entry(weather_frame, textvariable=sv.t_humidity_running, width=15).grid(row=1, column=3, sticky="w", padx=5, pady=2)
+        tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="w", padx=5, pady=2)
+        tk.Entry(weather_frame, textvariable=sv.t_humidity_running, width=14).grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Wind Speed:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
-        tk.Entry(weather_frame, textvariable=sv.t_wind_running, width=15).grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        tk.Entry(weather_frame, textvariable=sv.t_wind_running, width=14).grid(row=2, column=1, sticky="w", padx=5, pady=2)
     
     def _create_behavior_section(self, frame):
         """Create Dog Behavior & Performance section"""
