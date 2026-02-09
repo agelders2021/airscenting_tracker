@@ -27,6 +27,10 @@ from datetime import datetime
 from tkinter import messagebox
 from setup_tab import SetupTab
 
+# Time picker color constants for null state indication
+TIME_PICKER_NULL_BG = "#d3d3d3"  # Light grey for "not set"
+TIME_PICKER_SET_BG = "#ffffff"   # White for "set"
+
 
 class FormManagement:
     """Manages form state, validation, and operations"""
@@ -455,18 +459,22 @@ class FormManagement:
             sv.start_time.set("")
             sv.finish_time.set("")
             
-            # Reset time pickers to midnight (00:00)
+            # Reset time pickers to null state (00:00 with grey background)
             if hasattr(self.ui, 'a_start_time_picker'):
                 try:
+                    self.ui.a_start_time_is_null = True
                     self.ui.a_start_time_picker.set24Hrs(0)
                     self.ui.a_start_time_picker.setMins(0)
+                    self.ui._set_start_time_picker_color(TIME_PICKER_NULL_BG)
                 except AttributeError:
                     pass
             
             if hasattr(self.ui, 'a_finish_time_picker'):
                 try:
+                    self.ui.a_finish_time_is_null = True
                     self.ui.a_finish_time_picker.set24Hrs(0)
                     self.ui.a_finish_time_picker.setMins(0)
+                    self.ui._set_finish_time_picker_color(TIME_PICKER_NULL_BG)
                 except AttributeError:
                     pass
             
@@ -588,18 +596,22 @@ class FormManagement:
         sv.start_time.set("")
         sv.finish_time.set("")
         
-        # Reset time pickers to midnight (00:00)
+        # Reset time pickers to null state (00:00 with grey background)
         if hasattr(self.ui, 'a_start_time_picker'):
             try:
+                self.ui.a_start_time_is_null = True
                 self.ui.a_start_time_picker.set24Hrs(0)
                 self.ui.a_start_time_picker.setMins(0)
+                self.ui._set_start_time_picker_color(TIME_PICKER_NULL_BG)
             except AttributeError:
                 pass
         
         if hasattr(self.ui, 'a_finish_time_picker'):
             try:
+                self.ui.a_finish_time_is_null = True
                 self.ui.a_finish_time_picker.set24Hrs(0)
                 self.ui.a_finish_time_picker.setMins(0)
+                self.ui._set_finish_time_picker_color(TIME_PICKER_NULL_BG)
             except AttributeError:
                 pass
         

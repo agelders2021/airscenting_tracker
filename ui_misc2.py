@@ -94,9 +94,8 @@ class Misc2Operations:
                 self.ui.a_comments_text.delete("1.0", tk.END)
                 # Clear terrain accumulator
                 self.ui.accumulated_terrains = []
-                self.ui.a_accumulated_terrain_combo['values'] = []
-                sv.accumulated_terrain.set("")
-                self.ui.a_accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
+                if hasattr(self.ui, 'a_terrain_listbox'):
+                    self.ui.a_terrain_listbox.delete(0, tk.END)
                 # Clear map files list
                 self.ui.map_files_list = []
                 self.ui.a_map_listbox.delete(0, tk.END)
@@ -356,9 +355,8 @@ class Misc2Operations:
         sv.finish_time.set("")
         self.ui.a_comments_text.delete("1.0", tk.END)
         self.ui.accumulated_terrains = []
-        self.ui.a_accumulated_terrain_combo['values'] = []
-        sv.accumulated_terrain.set("")
-        self.ui.a_accumulated_terrain_combo['state'] = 'disabled'  # Disable when cleared
+        if hasattr(self.ui, 'a_terrain_listbox'):
+            self.ui.a_terrain_listbox.delete(0, tk.END)
         self.ui.map_files_list = []
         self.ui.a_map_listbox.delete(0, tk.END)
         self.ui.a_view_map_button.config(state=tk.DISABLED)

@@ -28,6 +28,10 @@ import tkinter as tk
 from tkinter import messagebox
 import sv
 
+# Time picker color constants for null state indication
+TIME_PICKER_NULL_BG = "#d3d3d3"  # Light grey for "not set"
+TIME_PICKER_SET_BG = "#ffffff"   # White for "set"
+
 
 class AirScentingHelper:
     """
@@ -86,79 +90,62 @@ class AirScentingHelper:
     # =========================================================================
     
     def add_to_terrain_accumulator(self, event=None):
-        """Add selected terrain type to the accumulated terrains list"""
+        """Add selected terrain type to the accumulated terrains listbox"""
         terrain_type = sv.terrain.get()
         if terrain_type:
-            # Check for duplicates
-            if terrain_type in self.accumulated_terrains:
+            # Check for duplicates in the listbox
+            current_items = self.a_terrain_listbox.get(0, tk.END)
+            if terrain_type in current_items:
                 self.show_status_message(f"'{terrain_type}' is already in the list", "info")
                 sv.terrain.set("")
                 return
             
-            # Add to list
+            # Add to listbox
+            self.a_terrain_listbox.insert(tk.END, terrain_type)
+            
+            # Also maintain the accumulated_terrains list for compatibility
             self.accumulated_terrains.append(terrain_type)
-            
-            # Update combobox values
-            self.a_accumulated_terrain_combo['values'] = self.accumulated_terrains
-            
-            # Enable the combobox if this is the first item
-            if len(self.accumulated_terrains) == 1:
-                self.a_accumulated_terrain_combo['state'] = 'readonly'
-            
-            # Display the last (newest) entry
-            sv.accumulated_terrain.set(terrain_type)
             
             # Clear selection in add terrain combobox
             sv.terrain.set("")
     
     def remove_terrain_from_list(self, event):
-        """Remove terrain type from list when clicked/selected"""
-        terrain_type = sv.accumulated_terrain.get()
-        if not terrain_type:
+        """Remove terrain type from listbox when double-clicked"""
+        selection = self.a_terrain_listbox.curselection()
+        if not selection:
             return
+        
+        terrain_type = self.a_terrain_listbox.get(selection[0])
         
         # Confirm removal
         if messagebox.askyesno("Remove Terrain Type",
                               f"Remove '{terrain_type}' from the list?"):
-            # Find the index of the item being removed
-            removed_index = self.accumulated_terrains.index(terrain_type)
+            # Remove from listbox
+            self.a_terrain_listbox.delete(selection[0])
             
-            # Remove from list
-            self.accumulated_terrains.remove(terrain_type)
-            
-            # Update combobox values
-            self.a_accumulated_terrain_combo['values'] = self.accumulated_terrains
-            
-            # Determine what to display after removal
-            if len(self.accumulated_terrains) == 0:
-                # List is now empty - show blank and disable combobox
-                sv.accumulated_terrain.set("")
-                self.a_accumulated_terrain_combo['state'] = 'disabled'
-            elif removed_index < len(self.accumulated_terrains):
-                # Show the item that's now at the same index (the one that was below)
-                sv.accumulated_terrain.set(self.accumulated_terrains[removed_index])
-            else:
-                # The last item was removed - show the new last item
-                sv.accumulated_terrain.set(self.accumulated_terrains[-1])
+            # Also maintain the accumulated_terrains list for compatibility
+            if terrain_type in self.accumulated_terrains:
+                self.accumulated_terrains.remove(terrain_type)
     
     def set_selected_terrains(self, terrains_list):
-        """Populate terrain accumulator from a list of terrain names"""
+        """Populate terrain accumulator listbox from a list of terrain names"""
         self.accumulated_terrains = []
+        
+        # Clear the listbox first
+        if hasattr(self, 'a_terrain_listbox'):
+            self.a_terrain_listbox.delete(0, tk.END)
+        
         for terrain in terrains_list:
             if terrain and terrain.strip():
-                self.accumulated_terrains.append(terrain.strip())
-        
-        if hasattr(self, 'a_accumulated_terrain_combo'):
-            self.a_accumulated_terrain_combo['values'] = self.accumulated_terrains
-            if self.accumulated_terrains:
-                self.a_accumulated_terrain_combo['state'] = 'readonly'
-                sv.accumulated_terrain.set(self.accumulated_terrains[-1])
-            else:
-                self.a_accumulated_terrain_combo['state'] = 'disabled'
-                sv.accumulated_terrain.set("")
+                terrain_stripped = terrain.strip()
+                self.accumulated_terrains.append(terrain_stripped)
+                if hasattr(self, 'a_terrain_listbox'):
+                    self.a_terrain_listbox.insert(tk.END, terrain_stripped)
     
     def get_selected_terrains(self):
-        """Get list of terrains from the accumulator"""
+        """Get list of terrains from the accumulator listbox"""
+        if hasattr(self, 'a_terrain_listbox'):
+            return list(self.a_terrain_listbox.get(0, tk.END))
         return list(self.accumulated_terrains) if hasattr(self, 'accumulated_terrains') else []
     
     # =========================================================================
@@ -419,6 +406,11 @@ class AirScentingHelper:
         # Format as HHMM (e.g., 1436 for 2:36 PM) - no colon
         time_str = f"{hours:02d}{minutes:02d}"
         sv.start_time.set(time_str)
+        
+        # Mark as set and change to white background if currently null
+        if self.a_start_time_is_null:
+            self.a_start_time_is_null = False
+            self._set_start_time_picker_color(TIME_PICKER_SET_BG)
     
     def _on_finish_time_changed(self):
         """Handle finish time picker change - update the finish_time StringVar in HHMM format"""
@@ -428,6 +420,53 @@ class AirScentingHelper:
         # Format as HHMM (e.g., 1436 for 2:36 PM) - no colon
         time_str = f"{hours:02d}{minutes:02d}"
         sv.finish_time.set(time_str)
+        
+        # Mark as set and change to white background if currently null
+        if self.a_finish_time_is_null:
+            self.a_finish_time_is_null = False
+            self._set_finish_time_picker_color(TIME_PICKER_SET_BG)
+    
+    def _set_start_time_picker_color(self, color):
+        """Set background color of all start time picker components"""
+        self.a_start_time_frame.config(bg=color)
+        self.a_start_time_separator.config(bg=color)
+        # Configure the SpinTimePickerModern frames
+        self.a_start_time_hours.config(bg=color)
+        self.a_start_time_minutes.config(bg=color)
+        # Configure the internal SpinLabel widgets directly
+        if hasattr(self.a_start_time_hours, '_24HrsTime'):
+            self.a_start_time_hours._24HrsTime.config(bg=color)
+        if hasattr(self.a_start_time_minutes, '_minutes'):
+            self.a_start_time_minutes._minutes.config(bg=color)
+    
+    def _set_finish_time_picker_color(self, color):
+        """Set background color of all finish time picker components"""
+        self.a_finish_time_frame.config(bg=color)
+        self.a_finish_time_separator.config(bg=color)
+        # Configure the SpinTimePickerModern frames
+        self.a_finish_time_hours.config(bg=color)
+        self.a_finish_time_minutes.config(bg=color)
+        # Configure the internal SpinLabel widgets directly
+        if hasattr(self.a_finish_time_hours, '_24HrsTime'):
+            self.a_finish_time_hours._24HrsTime.config(bg=color)
+        if hasattr(self.a_finish_time_minutes, '_minutes'):
+            self.a_finish_time_minutes._minutes.config(bg=color)
+    
+    def _reset_start_time_to_null(self, event=None):
+        """Reset start time to null state (grey, empty value)"""
+        self.a_start_time_is_null = True
+        self.a_start_time_picker.set24Hrs(0)
+        self.a_start_time_picker.setMins(0)
+        sv.start_time.set("")  # Empty string = NULL in database
+        self._set_start_time_picker_color(TIME_PICKER_NULL_BG)
+    
+    def _reset_finish_time_to_null(self, event=None):
+        """Reset finish time to null state (grey, empty value)"""
+        self.a_finish_time_is_null = True
+        self.a_finish_time_picker.set24Hrs(0)
+        self.a_finish_time_picker.setMins(0)
+        sv.finish_time.set("")  # Empty string = NULL in database
+        self._set_finish_time_picker_color(TIME_PICKER_NULL_BG)
     
     def _setup_timepicker_wheel(self, time_picker, frame, picker_type, component_type=None):
         """

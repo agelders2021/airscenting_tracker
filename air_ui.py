@@ -32,6 +32,10 @@ from tips import ToolTip, ConditionalToolTip
 from ui_utils import enable_mousewheel_scroll
 import sv as sv_module
 
+# Time picker color constants for null state indication
+TIME_PICKER_NULL_BG = "#d3d3d3"  # Light grey for "not set"
+TIME_PICKER_SET_BG = "#ffffff"   # White for "set"
+
 
 def setup_airscent_tab(ui):
     """
@@ -118,7 +122,7 @@ def setup_airscent_tab(ui):
     tk.Label(session_frame, text="Add Session Purpose:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
     ui.a_purpose_combo = ttk.Combobox(session_frame, textvariable=sv.a_purpose, width=22, state="normal",
                                        values=['Area Search Training', 'Re-find Training','Building Search Training',
-                                              'Motivational Training', 'Obedience',
+                                               'Motivational Training', 'Obedience','Single Blind','Double Blind',
                                                'Mock Certification Test','Certification Testing', 'Mission'])
     ui.a_purpose_combo.grid(row=1, column=3, sticky="w", padx=5, pady=2)
     ui.a_purpose_combo.bind('<<ComboboxSelected>>', ui._add_to_purpose_accumulator)
@@ -195,7 +199,7 @@ def setup_airscent_tab(ui):
                                            values=['Unknown number of subjects', 'Number of subjects known'])
     handler_knowledge_combo.grid(row=0, column=7, columnspan=2, sticky="w", padx=5, pady=2)
     
-    # Row 1: Weather, Wind Direction, Wind Speed, Search Type
+    # Row 1: Weather, Wind Direction, Add Terrain Type (under Number of Subjects), Accumulated Terrains listbox (under Handler Knowledge)
     tk.Label(search_frame, text="Weather:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
     weather_combo = ttk.Combobox(search_frame, textvariable=sv.weather, width=18, state="readonly",
                                   values=['Clear', 'Cloudy', 'Light Rain', 'Heavy Rain',
@@ -203,40 +207,44 @@ def setup_airscent_tab(ui):
     weather_combo.grid(row=1, column=1, sticky="w", padx=5, pady=2)
     
     tk.Label(search_frame, text="Wind Direction:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
-    wind_dir_combo = ttk.Combobox(search_frame, textvariable=sv.wind_direction, width=15, state="readonly",
+    wind_dir_combo = ttk.Combobox(search_frame, textvariable=sv.wind_direction, width=16, state="readonly",
                                    values=['North', 'South', 'East', 'West',
                                           'NE', 'NW', 'SE', 'SW', 'Variable'])
     wind_dir_combo.grid(row=1, column=3, sticky="w", padx=5, pady=2)
     
-    tk.Label(search_frame, text="Wind Speed:").grid(row=1, column=4, sticky="w", padx=5, pady=2)
-    tk.Entry(search_frame, textvariable=sv.wind_speed, width=18).grid(row=1, column=5, sticky="w", padx=5, pady=2)
+    tk.Label(search_frame, text="Add Terrain Type:").grid(row=1, column=4, sticky="w", padx=5, pady=2)
+    ui.a_terrain_combo = ttk.Combobox(search_frame, textvariable=sv.terrain, width=15, state="readonly", values=[])
+    ui.a_terrain_combo.grid(row=1, column=5, sticky="w", padx=5, pady=2)
+    ui.a_terrain_combo.bind('<<ComboboxSelected>>', ui.add_to_terrain_accumulator)
+    ToolTip(ui.a_terrain_combo,
+            "Select terrain type to be added to 'Accumulated Terrains'\n"
+            "(Selections are not shown in this entry box)", delay=250)
     
-    tk.Label(search_frame, text="Search Type:").grid(row=1, column=6, sticky="w", padx=5, pady=2)
-    search_type_combo = ttk.Combobox(search_frame, textvariable=sv.search_type, width=25, state="readonly",
-                                     values=['Single blind', 'Double blind', 'Subject coordinates known'])
-    search_type_combo.grid(row=1, column=7, sticky="w", padx=5, pady=2)
+    # Accumulated Terrains listbox (under Handler Knowledge, spans rows 1-2)
+    tk.Label(search_frame, text="Accumulated Terrains:").grid(row=1, column=6, sticky="ne", padx=5, pady=2)
+    ui.a_terrain_listbox = tk.Listbox(search_frame, height=3, width=24)
+    ui.a_terrain_listbox.grid(row=1, column=7, sticky="wn", rowspan=2, padx=(5, 0), pady=2)
+    ui.a_terrain_listbox.bind('<Double-Button-1>', ui.remove_terrain_from_list)
+    ToolTip(ui.a_terrain_listbox, "Terrain List Accumulator\nDouble-click an entry to remove from list", delay=750)
     
-    # Row 2: Temperature, Add Terrain Type, Selected Terrains
+    # Scrollbar for terrain listbox (permanent)
+    ui.a_terrain_scrollbar = ttk.Scrollbar(search_frame, orient="vertical", command=ui.a_terrain_listbox.yview)
+    ui.a_terrain_listbox.config(yscrollcommand=ui.a_terrain_scrollbar.set)
+    ui.a_terrain_scrollbar.grid(row=1, column=8, sticky="nsw", rowspan=2, pady=2, padx=(0, 5))
+    
+    # Setup mouse wheel handling for the terrain listbox
+    ui._setup_listbox_wheel(ui.a_terrain_listbox)
+    
+    ui.accumulated_terrains = []
+    
+    # Row 2: Temperature, Wind Speed (under Wind Direction)
     tk.Label(search_frame, text="Temperature (\N{Degree Sign}F):").grid(row=2, column=0, sticky="w", padx=5, pady=2)
     tk.Entry(search_frame, textvariable=sv.temperature, width=21).grid(row=2, column=1, sticky="w", padx=5, pady=2)
     
-    tk.Label(search_frame, text="Add Terrain Type:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
-    ui.a_terrain_combo = ttk.Combobox(search_frame, textvariable=sv.terrain, width=15, state="readonly", values=[])
-    ui.a_terrain_combo.grid(row=2, column=3, sticky="w", padx=5, pady=2)
-    ui.a_terrain_combo.bind('<<ComboboxSelected>>', ui.add_to_terrain_accumulator)
-    ToolTip(ui.a_terrain_combo,
-            "Adds a terrain type to the Accumulated Terrains accumulator.\N{BLACK UP-POINTING TRIANGLE}\n"
-            "Note that once entered, the 'Add Terrain Type:' box is cleared.")
-            
-    
-    tk.Label(search_frame, text="Accumulated Terrains:").grid(row=2, column=4, sticky="w", padx=5, pady=2)
-    ui.a_accumulated_terrain_combo = ttk.Combobox(search_frame, textvariable=sv.accumulated_terrain,
-                                                   width=15, state="disabled", values=[])
-    ui.a_accumulated_terrain_combo.grid(row=2, column=5, sticky="w", padx=5, pady=2)
-    ui.a_accumulated_terrain_combo.bind('<<ComboboxSelected>>', ui.remove_terrain_from_list)
-    ToolTip(ui.a_accumulated_terrain_combo, "Terrain List Accumulator\nClick an entry to remove from list", delay=750)
-    
-    ui.accumulated_terrains = []
+    tk.Label(search_frame, text="Wind Speed:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
+    wind_speed_entry = tk.Entry(search_frame, textvariable=sv.wind_speed, width=18)
+    wind_speed_entry.grid(row=2, column=3, sticky="w", padx=5, pady=2)
+    ToolTip(wind_speed_entry, "Enter wind speed (e.g., '10 mph' or 'calm')", delay=500)
     
     # =========================================================================
     # SEARCH RESULTS FRAME (Row 3)
@@ -339,30 +347,40 @@ def setup_airscent_tab(ui):
     tk.Label(results_frame, text="Start Time:").grid(row=2, column=4, sticky="e", padx=5, pady=2)
     
     # Create a frame with border to wrap the time picker components
-    start_time_picker_frame = tk.Frame(results_frame, relief="sunken", borderwidth=1, bg="#ffffff", pady=0)
-    start_time_picker_frame.grid(row=2, column=5, sticky="w", padx=5, pady=2)
-    ToolTip(start_time_picker_frame,"Use Mouse Wheel to change time.\nHover over 'hour' to adjust hour,\nhover over 'minute' to adjust minutes",delay=200)
+    # Initialize with grey background to indicate "not set"
+    ui.a_start_time_frame = tk.Frame(results_frame, relief="sunken", borderwidth=1, bg=TIME_PICKER_NULL_BG, pady=0)
+    ui.a_start_time_frame.grid(row=2, column=5, sticky="w", padx=5, pady=2)
+    ToolTip(ui.a_start_time_frame,"Use Mouse Wheel to change time.\nHover over 'hour' to adjust hour,\nhover over 'minute' to adjust minutes.\nDouble-click to clear (set to null).\nGrey = not set, White = set",delay=200)
+    
+    # Track null state for time picker
+    ui.a_start_time_is_null = True
     
     # Import time picker
     from tktimepicker import SpinTimePickerModern
     
     # Create hours picker
-    ui.a_start_time_hours = SpinTimePickerModern(start_time_picker_frame)
+    ui.a_start_time_hours = SpinTimePickerModern(ui.a_start_time_frame)
     ui.a_start_time_hours.addHours24()
-    ui.a_start_time_hours.configureAll(bg="#ffffff", fg="#000000", width=3)
+    ui.a_start_time_hours.configureAll(bg=TIME_PICKER_NULL_BG, fg="#000000", width=3)
     ui.a_start_time_hours.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
     ui.a_start_time_hours.set24Hrs(0)  # Initialize to 00
+    # Also configure the internal SpinLabel widget
+    if hasattr(ui.a_start_time_hours, '_24HrsTime'):
+        ui.a_start_time_hours._24HrsTime.config(bg=TIME_PICKER_NULL_BG)
     
     # Add manual colon separator
-    ui.a_start_time_separator = tk.Label(start_time_picker_frame, text=":", bg="#ffffff", fg="#000000")
+    ui.a_start_time_separator = tk.Label(ui.a_start_time_frame, text=":", bg=TIME_PICKER_NULL_BG, fg="#000000")
     ui.a_start_time_separator.pack(pady=0, side=tk.LEFT)
     
     # Create minutes picker
-    ui.a_start_time_minutes = SpinTimePickerModern(start_time_picker_frame)
+    ui.a_start_time_minutes = SpinTimePickerModern(ui.a_start_time_frame)
     ui.a_start_time_minutes.addMinutes()
-    ui.a_start_time_minutes.configureAll(bg="#ffffff", fg="#000000", width=3)
+    ui.a_start_time_minutes.configureAll(bg=TIME_PICKER_NULL_BG, fg="#000000", width=3)
     ui.a_start_time_minutes.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
     ui.a_start_time_minutes.setMins(0)  # Initialize to 00
+    # Also configure the internal SpinLabel widget
+    if hasattr(ui.a_start_time_minutes, '_minutes'):
+        ui.a_start_time_minutes._minutes.config(bg=TIME_PICKER_NULL_BG)
     
     # Store references for easy access (for compatibility with existing code)
     # Create a simple proxy object to maintain API compatibility
@@ -389,35 +407,56 @@ def setup_airscent_tab(ui):
     ui.a_start_time_hours.bind("<<HoursChanged>>", lambda e: ui._on_start_time_changed())
     ui.a_start_time_minutes.bind("<<MinChanged>>", lambda e: ui._on_start_time_changed())
     
+    # Bind double-click to reset time picker to null state (on all components including internal widgets)
+    ui.a_start_time_frame.bind("<Double-Button-1>", ui._reset_start_time_to_null)
+    ui.a_start_time_hours.bind("<Double-Button-1>", ui._reset_start_time_to_null)
+    ui.a_start_time_minutes.bind("<Double-Button-1>", ui._reset_start_time_to_null)
+    ui.a_start_time_separator.bind("<Double-Button-1>", ui._reset_start_time_to_null)
+    # Also bind to the internal SpinLabel widgets
+    if hasattr(ui.a_start_time_hours, '_24HrsTime'):
+        ui.a_start_time_hours._24HrsTime.bind("<Double-Button-1>", ui._reset_start_time_to_null)
+    if hasattr(ui.a_start_time_minutes, '_minutes'):
+        ui.a_start_time_minutes._minutes.bind("<Double-Button-1>", ui._reset_start_time_to_null)
+    
     # Setup mouse wheel handling for time picker components
-    ui._setup_timepicker_wheel(ui.a_start_time_hours, start_time_picker_frame, 'start', 'hours')
-    ui._setup_timepicker_wheel(ui.a_start_time_minutes, start_time_picker_frame, 'start', 'minutes')
+    ui._setup_timepicker_wheel(ui.a_start_time_hours, ui.a_start_time_frame, 'start', 'hours')
+    ui._setup_timepicker_wheel(ui.a_start_time_minutes, ui.a_start_time_frame, 'start', 'minutes')
     
     # Finish Time - use time picker with manual separator
     tk.Label(results_frame, text="Finish Time:").grid(row=2, column=6, sticky="e", padx=5, pady=2)
     
     # Create a frame with border to wrap the time picker components
-    finish_time_picker_frame = tk.Frame(results_frame, relief="sunken", borderwidth=1, bg="#ffffff", pady=0)
-    finish_time_picker_frame.grid(row=2, column=7, sticky="w", padx=5, pady=2)
-    ToolTip(finish_time_picker_frame,"Use Mouse Wheel to change time.\nHover over 'hour' to adjust hour,\nhover over 'minute' to adjust minutes",delay=200)
+    # Initialize with grey background to indicate "not set"
+    ui.a_finish_time_frame = tk.Frame(results_frame, relief="sunken", borderwidth=1, bg=TIME_PICKER_NULL_BG, pady=0)
+    ui.a_finish_time_frame.grid(row=2, column=7, sticky="w", padx=5, pady=2)
+    ToolTip(ui.a_finish_time_frame,"Use Mouse Wheel to change time.\nHover over 'hour' to adjust hour,\nhover over 'minute' to adjust minutes.\nDouble-click to clear (set to null).\nGrey = not set, White = set",delay=200)
+    
+    # Track null state for time picker
+    ui.a_finish_time_is_null = True
     
     # Create hours picker
-    ui.a_finish_time_hours = SpinTimePickerModern(finish_time_picker_frame)
+    ui.a_finish_time_hours = SpinTimePickerModern(ui.a_finish_time_frame)
     ui.a_finish_time_hours.addHours24()
-    ui.a_finish_time_hours.configureAll(bg="#ffffff", fg="#000000", width=3)
+    ui.a_finish_time_hours.configureAll(bg=TIME_PICKER_NULL_BG, fg="#000000", width=3)
     ui.a_finish_time_hours.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
     ui.a_finish_time_hours.set24Hrs(0)  # Initialize to 00
+    # Also configure the internal SpinLabel widget
+    if hasattr(ui.a_finish_time_hours, '_24HrsTime'):
+        ui.a_finish_time_hours._24HrsTime.config(bg=TIME_PICKER_NULL_BG)
     
     # Add manual colon separator
-    ui.a_finish_time_separator = tk.Label(finish_time_picker_frame, text=":", bg="#ffffff", fg="#000000")
+    ui.a_finish_time_separator = tk.Label(ui.a_finish_time_frame, text=":", bg=TIME_PICKER_NULL_BG, fg="#000000")
     ui.a_finish_time_separator.pack(pady=0, side=tk.LEFT)
     
     # Create minutes picker
-    ui.a_finish_time_minutes = SpinTimePickerModern(finish_time_picker_frame)
+    ui.a_finish_time_minutes = SpinTimePickerModern(ui.a_finish_time_frame)
     ui.a_finish_time_minutes.addMinutes()
-    ui.a_finish_time_minutes.configureAll(bg="#ffffff", fg="#000000", width=3)
+    ui.a_finish_time_minutes.configureAll(bg=TIME_PICKER_NULL_BG, fg="#000000", width=3)
     ui.a_finish_time_minutes.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
     ui.a_finish_time_minutes.setMins(0)  # Initialize to 00
+    # Also configure the internal SpinLabel widget
+    if hasattr(ui.a_finish_time_minutes, '_minutes'):
+        ui.a_finish_time_minutes._minutes.config(bg=TIME_PICKER_NULL_BG)
     
     # Store references for easy access (for compatibility with existing code)
     # Create a simple proxy object to maintain API compatibility
@@ -444,9 +483,20 @@ def setup_airscent_tab(ui):
     ui.a_finish_time_hours.bind("<<HoursChanged>>", lambda e: ui._on_finish_time_changed())
     ui.a_finish_time_minutes.bind("<<MinChanged>>", lambda e: ui._on_finish_time_changed())
     
+    # Bind double-click to reset time picker to null state (on all components including internal widgets)
+    ui.a_finish_time_frame.bind("<Double-Button-1>", ui._reset_finish_time_to_null)
+    ui.a_finish_time_hours.bind("<Double-Button-1>", ui._reset_finish_time_to_null)
+    ui.a_finish_time_minutes.bind("<Double-Button-1>", ui._reset_finish_time_to_null)
+    ui.a_finish_time_separator.bind("<Double-Button-1>", ui._reset_finish_time_to_null)
+    # Also bind to the internal SpinLabel widgets
+    if hasattr(ui.a_finish_time_hours, '_24HrsTime'):
+        ui.a_finish_time_hours._24HrsTime.bind("<Double-Button-1>", ui._reset_finish_time_to_null)
+    if hasattr(ui.a_finish_time_minutes, '_minutes'):
+        ui.a_finish_time_minutes._minutes.bind("<Double-Button-1>", ui._reset_finish_time_to_null)
+    
     # Setup mouse wheel handling for time picker components
-    ui._setup_timepicker_wheel(ui.a_finish_time_hours, finish_time_picker_frame, 'finish', 'hours')
-    ui._setup_timepicker_wheel(ui.a_finish_time_minutes, finish_time_picker_frame, 'finish', 'minutes')
+    ui._setup_timepicker_wheel(ui.a_finish_time_hours, ui.a_finish_time_frame, 'finish', 'hours')
+    ui._setup_timepicker_wheel(ui.a_finish_time_minutes, ui.a_finish_time_frame, 'finish', 'minutes')
     
     # =========================================================================
     # MAPS AND IMAGES FRAME (Row 4) - LabelFrame with drag-drop target

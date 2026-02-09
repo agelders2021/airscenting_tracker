@@ -624,7 +624,7 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
         # Check if value is purely numeric (int or float)
         try:
             float(val_str)
-            return f"{val_str}°F"
+            return f"{val_str}\N{Degree Sign}F"
         except ValueError:
             # Mixed content - return as-is
             return val_str
@@ -667,6 +667,16 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
         except ValueError:
             # Mixed content - return as-is
             return val_str
+    
+    def format_time_hours(value):
+        """Format time value - append ' hours' suffix if value exists"""
+        if not value or not str(value).strip():
+            return value
+        val_str = str(value).strip()
+        # Only append if not already containing 'hour'
+        if 'hour' not in val_str.lower():
+            return f"{val_str} hours"
+        return val_str
     
     # Process each session
     for idx, session in enumerate(sessions):
@@ -772,12 +782,19 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
             ("Drive Level", 'drive_level'),
             ("Subjects Found", 'subjects_found'),
             ("Percent Searched Prior to Last Find", 'a_percent_searched'),
-            ("Start Time", 'start_time'),
-            ("Finish Time", 'finish_time'),
         ]:
             row = make_field(label, session.get(key))
             if row:
                 results_data.append(row)
+        
+        # Start Time and Finish Time with "hours" suffix
+        start_time_row = make_field("Start Time", format_time_hours(session.get('start_time')))
+        if start_time_row:
+            results_data.append(start_time_row)
+        
+        finish_time_row = make_field("Finish Time", format_time_hours(session.get('finish_time')))
+        if finish_time_row:
+            results_data.append(finish_time_row)
         
         # Add subject responses inline
         if session.get('subject_responses'):

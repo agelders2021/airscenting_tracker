@@ -40,6 +40,10 @@ import shutil
 import sv  # Import sv module for centralized StringVars
 from ui_utils import enable_mousewheel_scroll
 
+# Time picker color constants for null state indication
+TIME_PICKER_NULL_BG = "#d3d3d3"  # Light grey for "not set"
+TIME_PICKER_SET_BG = "#ffffff"   # White for "set"
+
 
 class ToolTip:
     """Create a tooltip for a widget with configurable delay"""
@@ -361,27 +365,37 @@ class TrailingEntryTab:
         tk.Label(trail_frame, text="Start Time:").grid(row=0, column=8, sticky="w", padx=5, pady=2)
         
         # Create a frame with border to wrap the time picker components
-        time_picker_frame = tk.Frame(trail_frame, relief="sunken", borderwidth=1, bg="#ffffff", pady=0)
-        time_picker_frame.grid(row=0, column=9, sticky="w", padx=5, pady=2)
-        ToolTip(time_picker_frame,"Use Mouse Wheel to change time.\nHover over 'hour' to adjust hour,\nhover over 'minute' to adjust minutes",delay=200)
+        # Initialize with grey background to indicate "not set"
+        self.start_time_frame = tk.Frame(trail_frame, relief="sunken", borderwidth=1, bg=TIME_PICKER_NULL_BG, pady=0)
+        self.start_time_frame.grid(row=0, column=9, sticky="w", padx=5, pady=2)
+        ToolTip(self.start_time_frame,"Use Mouse Wheel to change time.\nHover over 'hour' to adjust hour,\nhover over 'minute' to adjust minutes.\nDouble-click to clear (set to null).\nGrey = not set, White = set",delay=200)
+        
+        # Track null state for time picker
+        self.start_time_is_null = True
         
         # Create hours picker
-        self.start_time_hours = SpinTimePickerModern(time_picker_frame)
+        self.start_time_hours = SpinTimePickerModern(self.start_time_frame)
         self.start_time_hours.addHours24()
-        self.start_time_hours.configureAll(bg="#ffffff", fg="#000000", width=3)
+        self.start_time_hours.configureAll(bg=TIME_PICKER_NULL_BG, fg="#000000", width=3)
         self.start_time_hours.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
         self.start_time_hours.set24Hrs(0)  # Initialize to 00
+        # Also configure the internal SpinLabel widget
+        if hasattr(self.start_time_hours, '_24HrsTime'):
+            self.start_time_hours._24HrsTime.config(bg=TIME_PICKER_NULL_BG)
         
         # Add manual colon separator
-        self.start_time_separator = tk.Label(time_picker_frame, text=":", bg="#ffffff", fg="#000000")
+        self.start_time_separator = tk.Label(self.start_time_frame, text=":", bg=TIME_PICKER_NULL_BG, fg="#000000")
         self.start_time_separator.pack(pady=0, side=tk.LEFT)
         
         # Create minutes picker
-        self.start_time_minutes = SpinTimePickerModern(time_picker_frame)
+        self.start_time_minutes = SpinTimePickerModern(self.start_time_frame)
         self.start_time_minutes.addMinutes()
-        self.start_time_minutes.configureAll(bg="#ffffff", fg="#000000", width=3)
+        self.start_time_minutes.configureAll(bg=TIME_PICKER_NULL_BG, fg="#000000", width=3)
         self.start_time_minutes.pack(padx=1, pady=0, ipady=0, side=tk.LEFT)
         self.start_time_minutes.setMins(0)  # Initialize to 00
+        # Also configure the internal SpinLabel widget
+        if hasattr(self.start_time_minutes, '_minutes'):
+            self.start_time_minutes._minutes.config(bg=TIME_PICKER_NULL_BG)
         
         # Store references for easy access (for compatibility with existing code)
         # Create a simple proxy object to maintain API compatibility
@@ -408,9 +422,20 @@ class TrailingEntryTab:
         self.start_time_hours.bind("<<HoursChanged>>", lambda e: self._on_start_time_changed())
         self.start_time_minutes.bind("<<MinChanged>>", lambda e: self._on_start_time_changed())
         
+        # Bind double-click to reset time picker to null state (on all components including internal widgets)
+        self.start_time_frame.bind("<Double-Button-1>", self._reset_start_time_to_null)
+        self.start_time_hours.bind("<Double-Button-1>", self._reset_start_time_to_null)
+        self.start_time_minutes.bind("<Double-Button-1>", self._reset_start_time_to_null)
+        self.start_time_separator.bind("<Double-Button-1>", self._reset_start_time_to_null)
+        # Also bind to the internal SpinLabel widgets
+        if hasattr(self.start_time_hours, '_24HrsTime'):
+            self.start_time_hours._24HrsTime.bind("<Double-Button-1>", self._reset_start_time_to_null)
+        if hasattr(self.start_time_minutes, '_minutes'):
+            self.start_time_minutes._minutes.bind("<Double-Button-1>", self._reset_start_time_to_null)
+        
         # Setup mouse wheel handling for time picker components
-        self._setup_timepicker_wheel(self.start_time_hours, time_picker_frame, 'hours')
-        self._setup_timepicker_wheel(self.start_time_minutes, time_picker_frame, 'minutes')
+        self._setup_timepicker_wheel(self.start_time_hours, self.start_time_frame, 'hours')
+        self._setup_timepicker_wheel(self.start_time_minutes, self.start_time_frame, 'minutes')
         
         # Row 1: Trail Age, Trail Length, Trail Difficulty
         tk.Label(trail_frame, text="Trail Age (hours):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
@@ -823,6 +848,32 @@ class TrailingEntryTab:
         # Format as HHMM (e.g., 1436 for 2:36 PM) - no colon
         time_str = f"{hours:02d}{minutes:02d}"
         sv.t_start_time.set(time_str)
+        
+        # Mark as set and change to white background if currently null
+        if self.start_time_is_null:
+            self.start_time_is_null = False
+            self._set_start_time_picker_color(TIME_PICKER_SET_BG)
+    
+    def _set_start_time_picker_color(self, color):
+        """Set background color of all start time picker components"""
+        self.start_time_frame.config(bg=color)
+        self.start_time_separator.config(bg=color)
+        # Configure the SpinTimePickerModern frames
+        self.start_time_hours.config(bg=color)
+        self.start_time_minutes.config(bg=color)
+        # Configure the internal SpinLabel widgets directly
+        if hasattr(self.start_time_hours, '_24HrsTime'):
+            self.start_time_hours._24HrsTime.config(bg=color)
+        if hasattr(self.start_time_minutes, '_minutes'):
+            self.start_time_minutes._minutes.config(bg=color)
+    
+    def _reset_start_time_to_null(self, event=None):
+        """Reset start time to null state (grey, empty value)"""
+        self.start_time_is_null = True
+        self.start_time_picker.set24Hrs(0)
+        self.start_time_picker.setMins(0)
+        sv.t_start_time.set("")  # Empty string = NULL in database
+        self._set_start_time_picker_color(TIME_PICKER_NULL_BG)
     
     def _setup_timepicker_wheel(self, time_picker, frame, component_type):
         """
@@ -1634,8 +1685,17 @@ class TrailingEntryTab:
                     minutes = int(start_time_str[1:])
                     self.start_time_picker.set24Hrs(hours)
                     self.start_time_picker.setMins(minutes)
+                # Time is set - update color to white
+                self.start_time_is_null = False
+                self._set_start_time_picker_color(TIME_PICKER_SET_BG)
             except (ValueError, AttributeError):
                 pass
+        else:
+            # Time is null - reset to grey
+            self.start_time_is_null = True
+            self.start_time_picker.set24Hrs(0)
+            self.start_time_picker.setMins(0)
+            self._set_start_time_picker_color(TIME_PICKER_NULL_BG)
         
         sv.t_finish_time.set(data.get('t_finish_time', ''))
         sv.t_trail_age.set(data.get('t_trail_age', ''))
@@ -1828,10 +1888,12 @@ class TrailingEntryTab:
         sv.t_start_time.set("")
         sv.t_finish_time.set("")
         
-        # Reset time picker to midnight (00:00)
+        # Reset time picker to null state (00:00 with grey background)
         try:
+            self.start_time_is_null = True
             self.start_time_picker.set24Hrs(0)
             self.start_time_picker.setMins(0)
+            self._set_start_time_picker_color(TIME_PICKER_NULL_BG)
         except AttributeError:
             pass
         

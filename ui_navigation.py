@@ -27,6 +27,10 @@ import tkinter as tk
 from tkinter import messagebox
 from datetime import datetime
 
+# Time picker color constants for null state indication
+TIME_PICKER_NULL_BG = "#d3d3d3"  # Light grey for "not set"
+TIME_PICKER_SET_BG = "#ffffff"   # White for "set"
+
 
 class Navigation:
     """Manages session navigation and loading"""
@@ -339,6 +343,18 @@ class Navigation:
                         minutes = int(start_time_str[1:])
                         self.ui.a_start_time_picker.set24Hrs(hours)
                         self.ui.a_start_time_picker.setMins(minutes)
+                    # Time is set - update color to white
+                    self.ui.a_start_time_is_null = False
+                    self.ui._set_start_time_picker_color(TIME_PICKER_SET_BG)
+                except (ValueError, AttributeError):
+                    pass
+            elif hasattr(self.ui, 'a_start_time_picker'):
+                # Reset to null state (00:00 with grey background) when start_time is NULL or empty
+                try:
+                    self.ui.a_start_time_is_null = True
+                    self.ui.a_start_time_picker.set24Hrs(0)
+                    self.ui.a_start_time_picker.setMins(0)
+                    self.ui._set_start_time_picker_color(TIME_PICKER_NULL_BG)
                 except (ValueError, AttributeError):
                     pass
             
@@ -363,6 +379,18 @@ class Navigation:
                         minutes = int(finish_time_str[1:])
                         self.ui.a_finish_time_picker.set24Hrs(hours)
                         self.ui.a_finish_time_picker.setMins(minutes)
+                    # Time is set - update color to white
+                    self.ui.a_finish_time_is_null = False
+                    self.ui._set_finish_time_picker_color(TIME_PICKER_SET_BG)
+                except (ValueError, AttributeError):
+                    pass
+            elif hasattr(self.ui, 'a_finish_time_picker'):
+                # Reset to null state (00:00 with grey background) when finish_time is NULL or empty
+                try:
+                    self.ui.a_finish_time_is_null = True
+                    self.ui.a_finish_time_picker.set24Hrs(0)
+                    self.ui.a_finish_time_picker.setMins(0)
+                    self.ui._set_finish_time_picker_color(TIME_PICKER_NULL_BG)
                 except (ValueError, AttributeError):
                     pass
             
@@ -399,12 +427,11 @@ class Navigation:
             selected_terrains = session_dict.get("selected_terrains", [])
             self.ui.accumulated_terrains = selected_terrains.copy()
             
-            # Update accumulated terrain combo
-            if hasattr(self.ui, 'a_accumulated_terrain_combo'):
-                self.ui.a_accumulated_terrain_combo['values'] = self.ui.accumulated_terrains
-                if self.ui.accumulated_terrains:
-                    sv.accumulated_terrain.set(self.ui.accumulated_terrains[0])
-                    self.ui.a_accumulated_terrain_combo['state'] = 'readonly'
+            # Update accumulated terrain listbox
+            if hasattr(self.ui, 'a_terrain_listbox'):
+                self.ui.a_terrain_listbox.delete(0, tk.END)
+                for terrain in self.ui.accumulated_terrains:
+                    self.ui.a_terrain_listbox.insert(tk.END, terrain)
             
             # Load selected purposes
             selected_purposes = session_dict.get("selected_purposes", [])
@@ -535,9 +562,8 @@ class Navigation:
             
             # Clear selected terrains
             self.ui.accumulated_terrains = []
-            if hasattr(self.ui, 'a_accumulated_terrain_combo'):
-                self.ui.a_accumulated_terrain_combo['values'] = []
-                sv.accumulated_terrain.set("")
+            if hasattr(self.ui, 'a_terrain_listbox'):
+                self.ui.a_terrain_listbox.delete(0, tk.END)
             
             # Clear selected purposes
             sv.a_purpose.set("")
