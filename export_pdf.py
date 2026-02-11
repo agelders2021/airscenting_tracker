@@ -812,7 +812,7 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
             
             # Add subject responses table
             story.append(Paragraph("<b>Response at Subject</b>", heading_style))
-            subject_table_data = [['Subject', 'Initial Find', 'Re-find']]
+            subject_table_data = [['Subject', 'Indication on Initial Find', 'Indication on Refind']]
             for subj_num, tfr, refind in session['subject_responses']:
                 subject_table_data.append([str(subj_num), tfr or '', refind or ''])
             

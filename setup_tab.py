@@ -117,10 +117,10 @@ class SetupTab:
         frame.pack(fill="both", expand=True)
         
         # F1 Help text at top
-        help_label = tk.Label(frame, text="Push F1 to view the Help window.",
-                             font=('Arial', 9),
-                             fg='red')
-        help_label.pack(anchor="w", pady=(0, 10))
+        # help_label = tk.Label(frame, text="Push F1 to view the Help window.",
+        #                      font=('Arial', 9),
+        #                      fg='red')
+        # help_label.pack(anchor="w", pady=(0, 10))
         
         # =====================================================================
         # DATABASE TYPE SELECTION - HIDDEN FOR NOW

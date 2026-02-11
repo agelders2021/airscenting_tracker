@@ -121,7 +121,7 @@ def setup_airscent_tab(ui):
     
     tk.Label(session_frame, text="Add Session Purpose:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
     ui.a_purpose_combo = ttk.Combobox(session_frame, textvariable=sv.a_purpose, width=22, state="normal",
-                                       values=['Area Search Training', 'Re-find Training','Building Search Training',
+                                       values=['Area Search Training', 'Refind Training','Building Search Training',
                                                'Motivational Training', 'Obedience','Single Blind','Double Blind',
                                                'Mock Certification Test','Certification Testing', 'Mission'])
     ui.a_purpose_combo.grid(row=1, column=3, sticky="w", padx=5, pady=2)
@@ -287,8 +287,8 @@ def setup_airscent_tab(ui):
     tree_scrollbar.config(command=ui.a_subject_responses_tree.yview)
     
     ui.a_subject_responses_tree.heading('subject', text='Subject #')
-    ui.a_subject_responses_tree.heading('tfr', text='Initial Find')
-    ui.a_subject_responses_tree.heading('refind', text='Re-find')
+    ui.a_subject_responses_tree.heading('tfr', text='Indication on Initial Find')
+    ui.a_subject_responses_tree.heading('refind', text='Indication on Refind')
     
     ui.a_subject_responses_tree.column('subject', width=80, anchor='center')
     ui.a_subject_responses_tree.column('tfr', width=150, anchor='w')
@@ -312,8 +312,8 @@ def setup_airscent_tab(ui):
     # Setup mouse wheel handling for the subject responses tree
     ui._setup_treeview_wheel(ui.a_subject_responses_tree)
     
-    ui.tfr_options = ['Strong', 'Fair', 'Required cueing', 'None']
-    ui.refind_options = ['Immediate', 'Required cue', 'None']
+    ui.tfr_options = ['Immediate','Strong', 'Fair', 'Required cueing', 'None']
+    ui.refind_options = ['Immediate', 'Strong','Fair','Required cueing', 'None']
     ui.a_tree_edit_combo = None
     ui.tree_edit_item = None
     ui.tree_edit_column = None
