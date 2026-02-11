@@ -162,7 +162,8 @@ def create_tables():
         session_id INTEGER NOT NULL,
         terrain_name TEXT NOT NULL,
         user_name TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES training_sessions(id) ON DELETE CASCADE
     )
     """
     
@@ -175,7 +176,8 @@ def create_tables():
         tfr TEXT,
         refind TEXT,
         user_name TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES training_sessions(id) ON DELETE CASCADE
     )
     """
     
@@ -187,7 +189,7 @@ def create_tables():
         purpose_name TEXT NOT NULL,
         user_name TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (session_id) REFERENCES training_sessions(id)
+        FOREIGN KEY (session_id) REFERENCES training_sessions(id) ON DELETE CASCADE
     )
     """
     
@@ -254,7 +256,7 @@ def create_tables():
         terrain_name TEXT NOT NULL,
         user_name TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (t_session_id) REFERENCES t_training_sessions(id)
+        FOREIGN KEY (t_session_id) REFERENCES t_training_sessions(id) ON DELETE CASCADE
     )
     """
     
@@ -266,7 +268,7 @@ def create_tables():
         purpose_name TEXT NOT NULL,
         user_name TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (t_session_id) REFERENCES t_training_sessions(id)
+        FOREIGN KEY (t_session_id) REFERENCES t_training_sessions(id) ON DELETE CASCADE
     )
     """
     
@@ -278,7 +280,7 @@ def create_tables():
         distraction_data TEXT NOT NULL,
         user_name TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (t_session_id) REFERENCES t_training_sessions(id)
+        FOREIGN KEY (t_session_id) REFERENCES t_training_sessions(id) ON DELETE CASCADE
     )
     """
     
@@ -584,6 +586,157 @@ def migrate_add_a_percent_searched_column():
                 messages.append(f"Already existed: {', '.join(already_exists)}")
             
             return True, "; ".join(messages) if messages else "No changes needed"
+        
+    except Exception as e:
+        return False, f"Migration error: {e}"
+
+
+def migrate_add_cascade_delete():
+    """
+    Migration: Recreate foreign key tables with ON DELETE CASCADE.
+    
+    SQLite doesn't support ALTER TABLE to modify foreign keys, so we need to:
+    1. Create new tables with proper CASCADE constraints
+    2. Copy data from old tables
+    3. Drop old tables
+    4. Rename new tables
+    
+    This is safe to run multiple times - it checks if migration is needed.
+    
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    tables_to_migrate = [
+        # (old_table, new_table_sql, parent_table, fk_column)
+        ('selected_terrains', '''
+            CREATE TABLE selected_terrains_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                terrain_name TEXT NOT NULL,
+                user_name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES training_sessions(id) ON DELETE CASCADE
+            )
+        ''', 'training_sessions', 'session_id'),
+        ('subject_responses', '''
+            CREATE TABLE subject_responses_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                subject_number INTEGER NOT NULL,
+                tfr TEXT,
+                refind TEXT,
+                user_name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES training_sessions(id) ON DELETE CASCADE
+            )
+        ''', 'training_sessions', 'session_id'),
+        ('a_selected_purposes', '''
+            CREATE TABLE a_selected_purposes_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                purpose_name TEXT NOT NULL,
+                user_name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES training_sessions(id) ON DELETE CASCADE
+            )
+        ''', 'training_sessions', 'session_id'),
+        ('t_selected_terrains', '''
+            CREATE TABLE t_selected_terrains_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                t_session_id INTEGER NOT NULL,
+                terrain_name TEXT NOT NULL,
+                user_name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (t_session_id) REFERENCES t_training_sessions(id) ON DELETE CASCADE
+            )
+        ''', 't_training_sessions', 't_session_id'),
+        ('t_selected_purposes', '''
+            CREATE TABLE t_selected_purposes_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                t_session_id INTEGER NOT NULL,
+                purpose_name TEXT NOT NULL,
+                user_name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (t_session_id) REFERENCES t_training_sessions(id) ON DELETE CASCADE
+            )
+        ''', 't_training_sessions', 't_session_id'),
+        ('t_selected_distractions', '''
+            CREATE TABLE t_selected_distractions_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                t_session_id INTEGER NOT NULL,
+                distraction_name TEXT NOT NULL,
+                response TEXT,
+                user_name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (t_session_id) REFERENCES t_training_sessions(id) ON DELETE CASCADE
+            )
+        ''', 't_training_sessions', 't_session_id'),
+    ]
+    
+    migrated = []
+    skipped = []
+    errors = []
+    
+    try:
+        with get_connection() as conn:
+            for old_table, new_table_sql, parent_table, fk_column in tables_to_migrate:
+                try:
+                    # Check if old table exists
+                    result = conn.execute(text(
+                        f"SELECT name FROM sqlite_master WHERE type='table' AND name='{old_table}'"
+                    ))
+                    if not result.fetchone():
+                        skipped.append(f"{old_table} (not found)")
+                        continue
+                    
+                    # Check if table already has CASCADE by looking at the schema
+                    result = conn.execute(text(
+                        f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{old_table}'"
+                    ))
+                    row = result.fetchone()
+                    if row and 'ON DELETE CASCADE' in (row[0] or '').upper():
+                        skipped.append(f"{old_table} (already has CASCADE)")
+                        continue
+                    
+                    # Get columns from old table
+                    result = conn.execute(text(f"PRAGMA table_info({old_table})"))
+                    columns = [row[1] for row in result.fetchall()]
+                    columns_str = ', '.join(columns)
+                    
+                    # Create new table with CASCADE
+                    conn.execute(text(new_table_sql))
+                    
+                    # Copy data
+                    conn.execute(text(f"INSERT INTO {old_table}_new ({columns_str}) SELECT {columns_str} FROM {old_table}"))
+                    
+                    # Drop old table
+                    conn.execute(text(f"DROP TABLE {old_table}"))
+                    
+                    # Rename new table
+                    conn.execute(text(f"ALTER TABLE {old_table}_new RENAME TO {old_table}"))
+                    
+                    migrated.append(old_table)
+                    
+                except Exception as e:
+                    errors.append(f"{old_table}: {e}")
+                    # Try to clean up new table if it exists
+                    try:
+                        conn.execute(text(f"DROP TABLE IF EXISTS {old_table}_new"))
+                    except:
+                        pass
+            
+            conn.commit()
+        
+        # Build result message
+        messages = []
+        if migrated:
+            messages.append(f"Migrated: {', '.join(migrated)}")
+        if skipped:
+            messages.append(f"Skipped: {', '.join(skipped)}")
+        if errors:
+            messages.append(f"Errors: {', '.join(errors)}")
+        
+        return len(errors) == 0, "; ".join(messages) if messages else "No changes needed"
         
     except Exception as e:
         return False, f"Migration error: {e}"

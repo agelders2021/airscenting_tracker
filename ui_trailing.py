@@ -193,10 +193,10 @@ class TrailingEntryTab:
         frame.pack(fill="both", expand=True)
         
         # F1 Help text at top
-        help_label = tk.Label(frame, text="Push F1 to view the Help window.",
-                             font=('Arial', 9),
-                             fg='red')
-        help_label.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
+        # help_label = tk.Label(frame, text="Push F1 to view the Help window.",
+        #                      font=('Arial', 9),
+        #                      fg='red')
+        # help_label.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
         
         # Build sections
         self._create_session_info_section(frame)
@@ -1655,22 +1655,29 @@ class TrailingEntryTab:
         """Populate form from a dictionary of session data"""
         import json as json_module
         
-        date_str = data.get('t_date', datetime.now().strftime("%Y-%m-%d"))
+        # Helper to convert None to empty string
+        def safe_str(value, default=''):
+            """Convert None to empty string, otherwise return the value or default"""
+            if value is None:
+                return default
+            return value if value != '' else default
+        
+        date_str = safe_str(data.get('t_date'), datetime.now().strftime("%Y-%m-%d"))
         sv.t_date.set(date_str)
         # Also update the DateEntry picker
         try:
             self.date_picker.set_date(datetime.strptime(date_str, "%Y-%m-%d"))
         except (ValueError, AttributeError):
             pass
-        sv.t_session.set(str(data.get('t_session_number', '')))
-        sv.t_handler.set(data.get('t_handler', ''))
-        sv.t_field_support.set(data.get('t_field_support', ''))
-        sv.t_dog.set(data.get('t_dog_name', ''))
-        sv.t_location.set(data.get('t_location', ''))
-        sv.t_start_time.set(data.get('t_start_time', ''))
+        sv.t_session.set(str(safe_str(data.get('t_session_number'), '')))
+        sv.t_handler.set(safe_str(data.get('t_handler'), ''))
+        sv.t_field_support.set(safe_str(data.get('t_field_support'), ''))
+        sv.t_dog.set(safe_str(data.get('t_dog_name'), ''))
+        sv.t_location.set(safe_str(data.get('t_location'), ''))
+        sv.t_start_time.set(safe_str(data.get('t_start_time'), ''))
         
         # Also update the time picker widget
-        start_time_str = data.get('t_start_time', '')
+        start_time_str = safe_str(data.get('t_start_time'), '')
         if start_time_str:
             try:
                 # Parse time - support both military format (HHMM) and HH:MM format
@@ -1703,40 +1710,40 @@ class TrailingEntryTab:
             self.start_time_picker.setMins(0)
             self._set_start_time_picker_color(TIME_PICKER_NULL_BG)
         
-        sv.t_finish_time.set(data.get('t_finish_time', ''))
-        sv.t_trail_age.set(data.get('t_trail_age', ''))
-        sv.t_trail_length.set(data.get('t_trail_length', ''))
-        sv.t_difficulty.set(data.get('t_difficulty', ''))
-        sv.t_trail_layer.set(data.get('t_trail_layer', ''))
-        sv.t_cross_track_layer.set(data.get('t_cross_track_layer', 'None'))
-        sv.t_cross_track_age.set(data.get('t_cross_track_age', ''))
+        sv.t_finish_time.set(safe_str(data.get('t_finish_time'), ''))
+        sv.t_trail_age.set(safe_str(data.get('t_trail_age'), ''))
+        sv.t_trail_length.set(safe_str(data.get('t_trail_length'), ''))
+        sv.t_difficulty.set(safe_str(data.get('t_difficulty'), ''))
+        sv.t_trail_layer.set(safe_str(data.get('t_trail_layer'), ''))
+        sv.t_cross_track_layer.set(safe_str(data.get('t_cross_track_layer'), ''))
+        sv.t_cross_track_age.set(safe_str(data.get('t_cross_track_age'), ''))
         # Weather when laying trail - use column names from schema
-        sv.t_weather_laying.set(data.get('t_weather_laying', ''))
-        sv.t_temp_laying.set(data.get('t_temperature_laying', ''))
-        sv.t_wind_laying.set(data.get('t_wind_speed_laying', ''))
-        sv.t_wind_direction_laying.set(data.get('t_wind_direction_laying', ''))
-        sv.t_humidity_laying.set(data.get('t_humidity_laying', ''))
+        sv.t_weather_laying.set(safe_str(data.get('t_weather_laying'), ''))
+        sv.t_temp_laying.set(safe_str(data.get('t_temperature_laying'), ''))
+        sv.t_wind_laying.set(safe_str(data.get('t_wind_speed_laying'), ''))
+        sv.t_wind_direction_laying.set(safe_str(data.get('t_wind_direction_laying'), ''))
+        sv.t_humidity_laying.set(safe_str(data.get('t_humidity_laying'), ''))
         # Weather at time of running trail
-        sv.t_weather_running.set(data.get('t_weather_running', ''))
-        sv.t_temp_running.set(data.get('t_temperature_running', ''))
-        sv.t_wind_running.set(data.get('t_wind_speed_running', ''))
-        sv.t_wind_direction_running.set(data.get('t_wind_direction_running', ''))
-        sv.t_humidity_running.set(data.get('t_humidity_running', ''))
+        sv.t_weather_running.set(safe_str(data.get('t_weather_running'), ''))
+        sv.t_temp_running.set(safe_str(data.get('t_temperature_running'), ''))
+        sv.t_wind_running.set(safe_str(data.get('t_wind_speed_running'), ''))
+        sv.t_wind_direction_running.set(safe_str(data.get('t_wind_direction_running'), ''))
+        sv.t_humidity_running.set(safe_str(data.get('t_humidity_running'), ''))
         # Behavior - use column names from schema
-        sv.t_start_behavior.set(data.get('t_start_behavior', ''))
-        sv.t_consistency.set(data.get('t_consistency', ''))
-        sv.t_head_pos.set(data.get('t_head_position', ''))
-        sv.t_pace.set(data.get('t_pace', ''))
-        sv.t_indication.set(data.get('t_indication', ''))
-        sv.t_time.set(data.get('t_time_to_complete', ''))
-        sv.t_success.set(data.get('t_success_rate', ''))
+        sv.t_start_behavior.set(safe_str(data.get('t_start_behavior'), ''))
+        sv.t_consistency.set(safe_str(data.get('t_consistency'), ''))
+        sv.t_head_pos.set(safe_str(data.get('t_head_position'), ''))
+        sv.t_pace.set(safe_str(data.get('t_pace'), ''))
+        sv.t_indication.set(safe_str(data.get('t_indication'), ''))
+        sv.t_time.set(safe_str(data.get('t_time_to_complete'), ''))
+        sv.t_success.set(safe_str(data.get('t_success_rate'), ''))
         
         # Impression text field
         self.impression_text.delete("1.0", tk.END)
-        self.impression_text.insert("1.0", data.get('t_impression', ''))
+        self.impression_text.insert("1.0", safe_str(data.get('t_impression'), ''))
         
         # Map files - parse JSON string from database
-        map_files_data = data.get('t_map_files', '')
+        map_files_data = safe_str(data.get('t_map_files'), '')
         if isinstance(map_files_data, str) and map_files_data:
             try:
                 sv.t_map_files_list = json_module.loads(map_files_data)
@@ -1975,6 +1982,10 @@ class TrailingEntryTab:
     def take_form_snapshot(self):
         """Take a snapshot of the current form state"""
         self.form_snapshot = self.get_form_state_string()
+    
+    def capture_initial_state(self):
+        """Alias for take_form_snapshot - used after loading session for editing"""
+        self.take_form_snapshot()
     
     def has_unsaved_changes(self):
         """Check if the form has unsaved changes"""

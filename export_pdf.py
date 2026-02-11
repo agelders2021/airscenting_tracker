@@ -184,9 +184,9 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
         # Get selected session numbers
         selected_sessions = [session_numbers[i] for i in selected_indices]
         
-        # Import sv to get pdf_folder setting
-        import sv as sv_module
-        pdf_folder = sv_module.pdf_folder.get().strip() if sv_module.sv else ""
+        # Get pdf_folder from sv
+        import sv
+        pdf_folder = sv.pdf_folder.get().strip()
         
         # Build filepath using pdf_folder if set, otherwise ask user
         default_filename = f"AirScenting_Log_{current_dog}_{datetime.now().strftime('%Y%m%d')}.pdf"
@@ -617,7 +617,7 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
         return None
     
     def format_temperature(value):
-        """Format temperature value - add °F suffix only if value is purely numeric"""
+        """Format temperature value - add Â°F suffix only if value is purely numeric"""
         if not value or not str(value).strip():
             return value
         val_str = str(value).strip()
@@ -742,7 +742,7 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
             if row:
                 search_data.append(row)
         
-        # Temperature with °F suffix if purely numeric
+        # Temperature with Â°F suffix if purely numeric
         temp_row = make_field("Temperature", format_temperature(session.get('temperature')))
         if temp_row:
             search_data.append(temp_row)
@@ -796,21 +796,39 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
         if finish_time_row:
             results_data.append(finish_time_row)
         
-        # Add subject responses inline
+        # Add subject responses as a table (like distractions in trailing)
         if session.get('subject_responses'):
-            response_lines = []
+            # First close the results_data table if there's data
+            if results_data:
+                results_table = Table(results_data, colWidths=[1.5*inch, 5.5*inch])
+                results_table.setStyle(TableStyle([
+                    ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                    ('TOPPADDING', (0,0), (-1,-1), 2),
+                    ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+                ]))
+                story.append(results_table)
+                story.append(Spacer(1, 0.1*inch))
+                results_data = []  # Reset for any additional fields
+            
+            # Add subject responses table
+            story.append(Paragraph("<b>Response at Subject</b>", heading_style))
+            subject_table_data = [['Subject', 'Initial Find', 'Re-find']]
             for subj_num, tfr, refind in session['subject_responses']:
-                parts = [f"Subject {subj_num}:"]
-                if tfr:
-                    parts.append(f"TFR={tfr}")
-                if refind:
-                    parts.append(f"Re-find={refind}")
-                response_lines.append(" ".join(parts))
-            if response_lines:
-                responses_text = "; ".join(response_lines)
-                row = make_field("Subject Responses", responses_text)
-                if row:
-                    results_data.append(row)
+                subject_table_data.append([str(subj_num), tfr or '', refind or ''])
+            
+            subject_table = Table(subject_table_data, colWidths=[1*inch, 2.5*inch, 2.5*inch])
+            subject_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4682B4')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F5F5F5')),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ]))
+            story.append(subject_table)
+            story.append(Spacer(1, 0.1*inch))
         
         # Add narrative (comments)
         if session.get('comments') and str(session['comments']).strip():

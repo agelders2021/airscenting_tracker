@@ -45,6 +45,14 @@ class TrailingHelper:
     def on_trailing_session_save(self, session_data):
         """Handle trailing session save from entry tab"""
         from t_ui_database import DatabaseOperations as TDatabaseOperations
+        from tkinter import messagebox
+        
+        # Validate required fields
+        dog_name = session_data.get('t_dog_name', '').strip()
+        if not dog_name:
+            messagebox.showwarning("Missing Data", "Please select a dog")
+            return False
+        
         db_ops = TDatabaseOperations(self)
         
         is_update = hasattr(self.trailing_entry, 'editing_session') and self.trailing_entry.editing_session
@@ -347,6 +355,10 @@ class TrailingHelper:
         self.trailing_entry.editing_row = session_data.get('id')
         self.trailing_entry.update_save_button_text()
         
+        # Set session number to UI index (1-based), not database session number
+        ui_session_num = self.trailing_entry.current_session_index + 1
+        sv.t_session.set(str(ui_session_num))
+        
         session_id = session_data.get('id')
         if session_id:
             db_ops = TDatabaseOperations(self)
@@ -371,6 +383,10 @@ class TrailingHelper:
                 self.trailing_entry.hide_btn.config(state=tk.NORMAL)
             if hasattr(self.trailing_entry, 'resume_btn'):
                 self.trailing_entry.resume_btn.config(state=tk.DISABLED)
+        
+        # Capture initial state AFTER loading all data for dirty checking
+        if hasattr(self.trailing_entry, 'capture_initial_state'):
+            self.trailing_entry.capture_initial_state()
         
         self.show_status_message(f"Loaded trailing session {session_data.get('t_session_number')} for editing", "info")
     
@@ -744,14 +760,14 @@ class TrailingHelper:
                 return None
             
             def format_temperature(value):
-                """Format temperature value - add °F suffix only if value is purely numeric"""
+                """Format temperature value - add Â°F suffix only if value is purely numeric"""
                 if not value or not str(value).strip():
                     return value
                 val_str = str(value).strip()
                 # Check if value is purely numeric (int or float)
                 try:
                     float(val_str)
-                    return f"{val_str}°F"
+                    return f"{val_str}Â°F"
                 except ValueError:
                     # Mixed content - return as-is
                     return val_str
@@ -890,7 +906,7 @@ class TrailingHelper:
                 row = add_field('Weather (Laying)', session_data.get('t_weather_laying'))
                 if row:
                     weather_laying_data.append(row)
-                # Temperature with °F suffix if purely numeric
+                # Temperature with Â°F suffix if purely numeric
                 row = add_field('Temperature (Laying)', format_temperature(session_data.get('t_temp_laying')))
                 if row:
                     weather_laying_data.append(row)
@@ -913,7 +929,7 @@ class TrailingHelper:
                 row = add_field('Weather (Running)', session_data.get('t_weather_running'))
                 if row:
                     weather_running_data.append(row)
-                # Temperature with °F suffix if purely numeric
+                # Temperature with Â°F suffix if purely numeric
                 row = add_field('Temperature (Running)', format_temperature(session_data.get('t_temp_running')))
                 if row:
                     weather_running_data.append(row)

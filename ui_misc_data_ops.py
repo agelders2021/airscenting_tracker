@@ -280,7 +280,7 @@ class MiscDataOperations:
         result = messagebox.askyesno(
             "Rebuild Database?",
             f"{reason}\n\n"
-            f"Found in {json_path}:\n" + "\n".join(f"  â€¢ {item}" for item in restore_items) + "\n\n"
+            f"Found in {json_path}:\n" + "\n".join(f"  Ã¢â‚¬Â¢ {item}" for item in restore_items) + "\n\n"
             "Would you like to rebuild the database from these backups?",
             icon='question'
         )
@@ -1014,6 +1014,9 @@ class MiscDataOperations:
                         if results.get('errors'):
                             # print(f"Sync errors: {results['errors']}")
                             pass
+                        
+                        # Export sessions to Excel after sync
+                        self._export_sessions_to_excel_after_sync()
                     
                     self.ui.root.after(0, update_ui)
                     
@@ -1225,6 +1228,41 @@ class MiscDataOperations:
             # print(f"Warning: Failed to save settings backup: {e}")
             pass
     
+    def _export_sessions_to_excel_after_sync(self):
+        """
+        Export sessions to Excel files after sync completion.
+        Creates Excel files in both primary and secondary JSON folders.
+        """
+        try:
+            from backup_management import export_all_sessions_to_excel
+            from ui_utils import get_primary_json_folder, get_secondary_json_folder
+            
+            primary_folder = sv.db_path.get().strip()
+            secondary_folder = sv.backup_folder.get().strip()
+            
+            if not primary_folder:
+                return
+            
+            db_type = sv.db_type.get()
+            
+            success, msg = export_all_sessions_to_excel(
+                db_type, 
+                primary_folder, 
+                secondary_folder if secondary_folder else None
+            )
+            
+            if success:
+                # print(f"Excel export: {msg}")
+                pass
+            else:
+                # print(f"Excel export failed: {msg}")
+                pass
+                
+        except Exception as e:
+            # print(f"Error exporting sessions to Excel: {e}")
+            import traceback
+            traceback.print_exc()
+    
     def restore_settings_from_json(self):
         """Restore from secondary backup folder - show selection dialog for full backup files."""
         # Block if sync is in progress
@@ -1286,7 +1324,7 @@ class MiscDataOperations:
         
         # Warning
         warning = tk.Label(dialog, 
-            text="âš ï¸ Warning: Restoring will add missing data from the backup.\nExisting data will not be overwritten.",
+            text="Ã¢Å¡Â Ã¯Â¸Â Warning: Restoring will add missing data from the backup.\nExisting data will not be overwritten.",
             fg="orange", justify="center")
         warning.pack(pady=5)
         

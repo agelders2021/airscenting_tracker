@@ -195,10 +195,10 @@ class BackupSyncManager:
         1. Scan primary JSON folder
         2. Scan secondary JSON folder (if exists)
         3. Get DB sessions with UUID/update_time
-        4. Sync DB Ã¢â€ â€™ Primary JSON (DB newer or missing in JSON)
-        5. Sync Primary JSON Ã¢â€ â€™ DB (JSON newer)
-        6. Sync Primary Ã¢â€ â€™ Secondary (Primary newer or missing)
-        7. Sync Secondary Ã¢â€ â€™ Primary (Secondary newer, also update DB)
+        4. Sync DB ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Primary JSON (DB newer or missing in JSON)
+        5. Sync Primary JSON ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ DB (JSON newer)
+        6. Sync Primary ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Secondary (Primary newer or missing)
+        7. Sync Secondary ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Primary (Secondary newer, also update DB)
         """
         primary_path = Path(primary_folder) if primary_folder else None
         secondary_path = Path(secondary_folder) if secondary_folder else None
@@ -228,7 +228,7 @@ class BackupSyncManager:
         # print(f"Sync: Found {len(db_sessions)} sessions in database")
         pass
         
-        # Step 4: Sync DB Ã¢â€ â€™ Primary JSON
+        # Step 4: Sync DB ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Primary JSON
         if primary_path and primary_path.exists():
             if status_callback:
                 status_callback("Sync: Updating JSON from database...")
@@ -238,21 +238,21 @@ class BackupSyncManager:
                 # Re-scan primary after updates
                 primary_dict = scan_json_folder(primary_path)
         
-        # Step 5: Sync Primary JSON Ã¢â€ â€™ DB
+        # Step 5: Sync Primary JSON ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ DB
         if primary_dict:
             if status_callback:
                 status_callback("Sync: Updating database from JSON...")
             count = sync_json_to_db(primary_dict, db_sessions, db_type)
             self.sync_results["json_to_db"] = count
         
-        # Step 6: Sync Primary Ã¢â€ â€™ Secondary
+        # Step 6: Sync Primary ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Secondary
         if secondary_path and secondary_path.exists() and primary_dict:
             if status_callback:
                 status_callback("Sync: Mirroring to secondary backup...")
             count = sync_primary_to_secondary(primary_dict, secondary_dict, secondary_path)
             self.sync_results["primary_to_secondary"] = count
         
-        # Step 7: Sync Secondary Ã¢â€ â€™ Primary (and DB)
+        # Step 7: Sync Secondary ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Primary (and DB)
         if secondary_path and secondary_path.exists() and primary_path and primary_path.exists():
             if status_callback:
                 status_callback("Sync: Checking secondary for newer files...")
@@ -1422,3 +1422,721 @@ def get_sync_manager():
     if _sync_manager is None:
         _sync_manager = BackupSyncManager()
     return _sync_manager
+
+
+# ============================================================================
+# EXCEL EXPORT FUNCTIONALITY
+# ============================================================================
+
+# Area Search UI field names mapping (DB column -> UI name)
+AREA_SEARCH_FIELD_MAPPING = {
+    'session_number': 'Session #',
+    'date': 'Date',
+    'handler': 'Handler',
+    'session_purpose': 'Session Purpose',
+    'field_support': 'Field Support',
+    'dog_name': 'Dog',
+    'location': 'Location',
+    'search_area_size': 'Search Area (Acres)',
+    'num_subjects': 'Number of Subjects',
+    'handler_knowledge': 'Handler Knowledge',
+    'weather': 'Weather',
+    'temperature': 'Temperature',
+    'wind_direction': 'Wind Direction',
+    'wind_speed': 'Wind Speed',
+    'search_type': 'Search Type',
+    'drive_level': 'Drive Level',
+    'subjects_found': 'Subjects Found',
+    'a_percent_searched': 'Percent Searched',
+    'start_time': 'Start Time',
+    'finish_time': 'Finish Time',
+    'comments': 'Comments',
+    'selected_terrains': 'Terrain Types',
+    'selected_purposes': 'Session Purposes',
+    'subject_responses': 'Subject Responses',
+    'image_files': 'Image Files',
+    'uuid': 'UUID',
+    'status': 'Status',
+}
+
+# Trailing UI field names mapping (DB column -> UI name)
+TRAILING_FIELD_MAPPING = {
+    't_session_number': 'Session #',
+    't_date': 'Date',
+    't_handler': 'Handler',
+    't_field_support': 'Field Support',
+    't_dog_name': 'Dog',
+    't_location': 'Location',
+    't_start_time': 'Start Time',
+    't_finish_time': 'Finish Time',
+    't_trail_age': 'Trail Age',
+    't_trail_length': 'Trail Length',
+    't_difficulty': 'Difficulty',
+    't_trail_layer': 'Trail Layer',
+    't_cross_track_layer': 'Cross Track Layer',
+    't_cross_track_age': 'Cross Track Age',
+    't_weather_laying': 'Weather (Laying)',
+    't_temperature_laying': 'Temperature (Laying)',
+    't_wind_speed_laying': 'Wind Speed (Laying)',
+    't_wind_direction_laying': 'Wind Direction (Laying)',
+    't_humidity_laying': 'Humidity (Laying)',
+    't_weather_running': 'Weather (Running)',
+    't_temperature_running': 'Temperature (Running)',
+    't_wind_speed_running': 'Wind Speed (Running)',
+    't_wind_direction_running': 'Wind Direction (Running)',
+    't_humidity_running': 'Humidity (Running)',
+    't_start_behavior': 'Start Behavior',
+    't_consistency': 'Consistency',
+    't_head_position': 'Head Position',
+    't_pace': 'Pace',
+    't_indication': 'Indication',
+    't_time_to_complete': 'Time to Complete',
+    't_success_rate': 'Success Rate',
+    't_impression': 'Impression',
+    't_selected_terrains': 'Terrain Types',
+    't_selected_purposes': 'Session Purposes',
+    't_distractions': 'Distractions',
+    't_map_files': 'Map Files',
+    'uuid': 'UUID',
+    'status': 'Status',
+}
+
+
+def export_sessions_to_excel(db_type, json_folder, session_type='airscent'):
+    """
+    Export all sessions to Excel file with each dog on a separate sheet.
+    
+    Args:
+        db_type: Database type (sqlite, postgres, etc.)
+        json_folder: Path to the JSON folder where Excel will be saved
+        session_type: 'airscent' or 'trailing'
+        
+    Returns:
+        tuple: (success: bool, message: str, filepath: str or None)
+    """
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+    except ImportError:
+        return False, "openpyxl not installed. Run: pip install openpyxl", None
+    
+    try:
+        import config
+        from sqlalchemy import text
+        
+        old_db_type = config.DB_TYPE
+        config.DB_TYPE = db_type
+        
+        from database import engine, get_connection
+        from importlib import reload
+        import database
+        
+        if old_db_type != db_type:
+            engine.dispose()
+            reload(database)
+        
+        # Create workbook
+        wb = Workbook()
+        # Remove default sheet - we'll create dog-specific sheets
+        if wb.active:
+            wb.remove(wb.active)
+        
+        # Styling
+        header_font = Font(bold=True, color='FFFFFF')
+        header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+        header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        sessions_exported = 0
+        
+        with database.get_connection() as conn:
+            if session_type == 'trailing':
+                # Get all trailing sessions grouped by dog
+                field_mapping = TRAILING_FIELD_MAPPING
+                table_name = 't_training_sessions'
+                dog_column = 't_dog_name'
+                session_num_column = 't_session_number'
+                
+                # Get unique dogs
+                dogs_result = conn.execute(text(f"""
+                    SELECT DISTINCT {dog_column} FROM {table_name}
+                    WHERE {dog_column} IS NOT NULL AND {dog_column} != ''
+                    ORDER BY {dog_column}
+                """))
+                dogs = [row[0] for row in dogs_result]
+                
+                for dog_name in dogs:
+                    # Create sheet for this dog
+                    safe_sheet_name = dog_name[:31] if len(dog_name) > 31 else dog_name
+                    safe_sheet_name = safe_sheet_name.replace('/', '-').replace('\\', '-').replace('*', '-').replace('?', '-').replace('[', '-').replace(']', '-')
+                    ws = wb.create_sheet(title=safe_sheet_name)
+                    
+                    # Get sessions for this dog
+                    sessions_result = conn.execute(text(f"""
+                        SELECT * FROM {table_name}
+                        WHERE {dog_column} = :dog_name
+                        ORDER BY {session_num_column}
+                    """), {"dog_name": dog_name})
+                    
+                    sessions = sessions_result.fetchall()
+                    columns = list(sessions_result.keys())
+                    
+                    # Add columns for related data
+                    extra_columns = ['terrains', 'purposes', 'distractions']
+                    all_columns = columns + extra_columns
+                    
+                    # Write headers using UI names
+                    headers = []
+                    for col in all_columns:
+                        if col == 'terrains':
+                            headers.append('Terrain Types')
+                        elif col == 'purposes':
+                            headers.append('Session Purposes')
+                        elif col == 'distractions':
+                            headers.append('Distractions')
+                        else:
+                            ui_name = field_mapping.get(col, col.replace('_', ' ').title())
+                            headers.append(ui_name)
+                    
+                    for col_idx, header in enumerate(headers, 1):
+                        cell = ws.cell(row=1, column=col_idx, value=header)
+                        cell.font = header_font
+                        cell.fill = header_fill
+                        cell.alignment = header_alignment
+                        cell.border = thin_border
+                    
+                    # Write data
+                    for row_idx, session in enumerate(sessions, 2):
+                        session_id = session[0]  # id is first column
+                        
+                        # Write main session data
+                        for col_idx, value in enumerate(session, 1):
+                            cell = ws.cell(row=row_idx, column=col_idx)
+                            if value is not None:
+                                if isinstance(value, (list, dict)):
+                                    cell.value = json.dumps(value)
+                                else:
+                                    cell.value = str(value)
+                            cell.border = thin_border
+                        
+                        # Fetch and write related data
+                        base_col = len(columns) + 1
+                        
+                        # Terrains (comma separated only)
+                        try:
+                            terrains_result = conn.execute(text(
+                                "SELECT terrain_name FROM t_selected_terrains WHERE t_session_id = :sid"
+                            ), {"sid": session_id})
+                            terrains = [r[0] for r in terrains_result]
+                            cell = ws.cell(row=row_idx, column=base_col)
+                            cell.value = ','.join(terrains) if terrains else ''
+                            cell.border = thin_border
+                        except:
+                            pass
+                        
+                        # Purposes (comma separated only)
+                        try:
+                            purposes_result = conn.execute(text(
+                                "SELECT purpose_name FROM t_selected_purposes WHERE t_session_id = :sid"
+                            ), {"sid": session_id})
+                            purposes = [r[0] for r in purposes_result]
+                            cell = ws.cell(row=row_idx, column=base_col + 1)
+                            cell.value = ','.join(purposes) if purposes else ''
+                            cell.border = thin_border
+                        except:
+                            pass
+                        
+                        # Distractions (distraction1:response1,distraction2:response2 format)
+                        try:
+                            distractions_result = conn.execute(text(
+                                "SELECT distraction_data FROM t_distractions WHERE t_session_id = :sid"
+                            ), {"sid": session_id})
+                            distractions = []
+                            for r in distractions_result:
+                                try:
+                                    d = json.loads(r[0])
+                                    dtype = d.get('type', '')
+                                    dresp = d.get('response', '')
+                                    distractions.append(f"{dtype}:{dresp}")
+                                except:
+                                    pass
+                            cell = ws.cell(row=row_idx, column=base_col + 2)
+                            cell.value = ','.join(distractions) if distractions else ''
+                            cell.border = thin_border
+                        except:
+                            pass
+                        
+                        sessions_exported += 1
+                    
+                    # Adjust column widths
+                    for col_idx in range(1, len(headers) + 1):
+                        ws.column_dimensions[get_column_letter(col_idx)].width = 15
+            
+            else:  # airscent
+                field_mapping = AREA_SEARCH_FIELD_MAPPING
+                table_name = 'training_sessions'
+                dog_column = 'dog_name'
+                session_num_column = 'session_number'
+                
+                # Get unique dogs
+                dogs_result = conn.execute(text(f"""
+                    SELECT DISTINCT {dog_column} FROM {table_name}
+                    WHERE {dog_column} IS NOT NULL AND {dog_column} != ''
+                    ORDER BY {dog_column}
+                """))
+                dogs = [row[0] for row in dogs_result]
+                
+                for dog_name in dogs:
+                    # Create sheet for this dog
+                    safe_sheet_name = dog_name[:31] if len(dog_name) > 31 else dog_name
+                    safe_sheet_name = safe_sheet_name.replace('/', '-').replace('\\', '-').replace('*', '-').replace('?', '-').replace('[', '-').replace(']', '-')
+                    ws = wb.create_sheet(title=safe_sheet_name)
+                    
+                    # Get sessions for this dog
+                    sessions_result = conn.execute(text(f"""
+                        SELECT * FROM {table_name}
+                        WHERE {dog_column} = :dog_name
+                        ORDER BY {session_num_column}
+                    """), {"dog_name": dog_name})
+                    
+                    sessions = sessions_result.fetchall()
+                    columns = list(sessions_result.keys())
+                    
+                    # Add columns for related data
+                    extra_columns = ['terrains', 'purposes', 'subject_responses']
+                    all_columns = columns + extra_columns
+                    
+                    # Write headers using UI names
+                    headers = []
+                    for col in all_columns:
+                        if col == 'terrains':
+                            headers.append('Terrain Types')
+                        elif col == 'purposes':
+                            headers.append('Session Purposes')
+                        elif col == 'subject_responses':
+                            headers.append('Subject Responses')
+                        else:
+                            ui_name = field_mapping.get(col, col.replace('_', ' ').title())
+                            headers.append(ui_name)
+                    
+                    for col_idx, header in enumerate(headers, 1):
+                        cell = ws.cell(row=1, column=col_idx, value=header)
+                        cell.font = header_font
+                        cell.fill = header_fill
+                        cell.alignment = header_alignment
+                        cell.border = thin_border
+                    
+                    # Write data
+                    for row_idx, session in enumerate(sessions, 2):
+                        session_id = session[0]  # id is first column
+                        
+                        # Write main session data
+                        for col_idx, value in enumerate(session, 1):
+                            cell = ws.cell(row=row_idx, column=col_idx)
+                            if value is not None:
+                                if isinstance(value, (list, dict)):
+                                    cell.value = json.dumps(value)
+                                else:
+                                    cell.value = str(value)
+                            cell.border = thin_border
+                        
+                        # Fetch and write related data
+                        base_col = len(columns) + 1
+                        
+                        # Terrains (comma separated)
+                        try:
+                            terrains_result = conn.execute(text(
+                                "SELECT terrain_name FROM selected_terrains WHERE session_id = :sid"
+                            ), {"sid": session_id})
+                            terrains = [r[0] for r in terrains_result]
+                            cell = ws.cell(row=row_idx, column=base_col)
+                            cell.value = ','.join(terrains) if terrains else ''
+                            cell.border = thin_border
+                        except:
+                            pass
+                        
+                        # Purposes (comma separated)
+                        try:
+                            purposes_result = conn.execute(text(
+                                "SELECT purpose_name FROM a_selected_purposes WHERE session_id = :sid"
+                            ), {"sid": session_id})
+                            purposes = [r[0] for r in purposes_result]
+                            cell = ws.cell(row=row_idx, column=base_col + 1)
+                            cell.value = ','.join(purposes) if purposes else ''
+                            cell.border = thin_border
+                        except:
+                            pass
+                        
+                        # Subject responses (subject:tfr:refind format)
+                        try:
+                            responses_result = conn.execute(text(
+                                "SELECT subject_number, tfr, refind FROM subject_responses WHERE session_id = :sid ORDER BY subject_number"
+                            ), {"sid": session_id})
+                            responses = [f"{r[0]}:{r[1] or ''}:{r[2] or ''}" for r in responses_result]
+                            cell = ws.cell(row=row_idx, column=base_col + 2)
+                            cell.value = ','.join(responses) if responses else ''
+                            cell.border = thin_border
+                        except:
+                            pass
+                        
+                        sessions_exported += 1
+                    
+                    # Adjust column widths
+                    for col_idx in range(1, len(headers) + 1):
+                        ws.column_dimensions[get_column_letter(col_idx)].width = 15
+        
+        # Restore original DB type
+        if old_db_type != db_type:
+            config.DB_TYPE = old_db_type
+            database.engine.dispose()
+            reload(database)
+        
+        # Ensure at least one sheet exists
+        if not wb.sheetnames:
+            wb.create_sheet(title="No Data")
+            ws = wb.active
+            ws.cell(row=1, column=1, value="No sessions found")
+        
+        # Save Excel file
+        json_path = Path(json_folder)
+        if session_type == 'trailing':
+            filename = f"trailing_sessions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        else:
+            filename = f"area_search_sessions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        
+        filepath = json_path / filename
+        wb.save(str(filepath))
+        
+        return True, f"Exported {sessions_exported} sessions to Excel", str(filepath)
+        
+    except Exception as e:
+        # Restore original DB type on error
+        try:
+            import config
+            import database
+            from importlib import reload
+            if 'old_db_type' in dir() and old_db_type != db_type:
+                config.DB_TYPE = old_db_type
+                database.engine.dispose()
+                reload(database)
+        except:
+            pass
+        
+        import traceback
+        traceback.print_exc()
+        return False, f"Excel export error: {e}", None
+
+
+def restore_sessions_from_excel(excel_filepath, db_type, session_type='airscent'):
+    """
+    Restore sessions from an Excel file.
+    Each sheet represents a dog, with sessions as rows.
+    
+    Args:
+        excel_filepath: Path to the Excel file
+        db_type: Database type (sqlite, postgres, etc.)
+        session_type: 'airscent' or 'trailing'
+        
+    Returns:
+        tuple: (success: bool, message: str, sessions_restored: int)
+    """
+    try:
+        from openpyxl import load_workbook
+    except ImportError:
+        return False, "openpyxl not installed. Run: pip install openpyxl", 0
+    
+    try:
+        import config
+        from sqlalchemy import text
+        
+        old_db_type = config.DB_TYPE
+        config.DB_TYPE = db_type
+        
+        from database import engine, get_connection
+        from importlib import reload
+        import database
+        
+        if old_db_type != db_type:
+            engine.dispose()
+            reload(database)
+        
+        # Load workbook
+        wb = load_workbook(str(excel_filepath))
+        
+        sessions_restored = 0
+        errors = []
+        
+        # Reverse the field mapping to go from UI name -> DB column
+        if session_type == 'trailing':
+            field_mapping = {v: k for k, v in TRAILING_FIELD_MAPPING.items()}
+            table_name = 't_training_sessions'
+            session_num_col = 't_session_number'
+            dog_name_col = 't_dog_name'
+        else:
+            field_mapping = {v: k for k, v in AREA_SEARCH_FIELD_MAPPING.items()}
+            table_name = 'training_sessions'
+            session_num_col = 'session_number'
+            dog_name_col = 'dog_name'
+        
+        with database.get_connection() as conn:
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+                
+                # Get headers from first row
+                headers = []
+                for cell in ws[1]:
+                    if cell.value:
+                        # Map UI name back to DB column
+                        db_col = field_mapping.get(cell.value, cell.value.lower().replace(' ', '_'))
+                        headers.append(db_col)
+                    else:
+                        headers.append(None)
+                
+                # Skip sheets with no data
+                if ws.max_row < 2:
+                    continue
+                
+                # Process each row (starting from row 2)
+                for row in ws.iter_rows(min_row=2):
+                    row_data = {}
+                    terrains_data = None
+                    purposes_data = None
+                    distractions_data = None
+                    responses_data = None
+                    
+                    for idx, cell in enumerate(row):
+                        if idx < len(headers) and headers[idx]:
+                            col_name = headers[idx]
+                            # Check for special columns (handle both mapped and unmapped names)
+                            if col_name in ('terrain_types', 'terrains', 'selected_terrains', 't_selected_terrains'):
+                                terrains_data = cell.value
+                            elif col_name in ('session_purposes', 'purposes', 'selected_purposes', 't_selected_purposes'):
+                                purposes_data = cell.value
+                            elif col_name in ('distractions', 't_distractions'):
+                                distractions_data = cell.value
+                            elif col_name == 'subject_responses':
+                                responses_data = cell.value
+                            else:
+                                row_data[col_name] = cell.value
+                    
+                    if not row_data:
+                        continue
+                    
+                    try:
+                        # Build insert statement based on session type
+                        if session_type == 'trailing':
+                            # Insert trailing session
+                            columns = ['t_session_number', 't_date', 't_handler', 't_field_support',
+                                       't_dog_name', 't_location', 't_start_time', 't_finish_time',
+                                       't_trail_age', 't_trail_length', 't_difficulty', 't_trail_layer',
+                                       't_cross_track_layer', 't_cross_track_age',
+                                       't_weather_laying', 't_temperature_laying', 't_wind_speed_laying',
+                                       't_wind_direction_laying', 't_humidity_laying',
+                                       't_weather_running', 't_temperature_running', 't_wind_speed_running',
+                                       't_wind_direction_running', 't_humidity_running',
+                                       't_start_behavior', 't_consistency', 't_head_position', 't_pace',
+                                       't_indication', 't_time_to_complete', 't_success_rate', 't_impression',
+                                       't_map_files', 'uuid', 'status']
+                        else:
+                            columns = ['session_number', 'date', 'handler', 'session_purpose',
+                                       'field_support', 'dog_name', 'location', 'search_area_size',
+                                       'num_subjects', 'handler_knowledge', 'weather', 'temperature',
+                                       'wind_direction', 'wind_speed', 'search_type', 'drive_level',
+                                       'subjects_found', 'a_percent_searched', 'start_time', 'finish_time',
+                                       'comments', 'image_files', 'uuid', 'status']
+                        
+                        # Filter to only columns that exist in row_data
+                        insert_columns = [c for c in columns if c in row_data and row_data[c] is not None]
+                        
+                        if not insert_columns:
+                            continue
+                        
+                        # Build VALUES clause with parameters
+                        placeholders = ', '.join([f':{c}' for c in insert_columns])
+                        col_list = ', '.join(insert_columns)
+                        
+                        # Build params dict
+                        params = {c: row_data[c] for c in insert_columns}
+                        
+                        # Insert the session
+                        conn.execute(text(f"INSERT INTO {table_name} ({col_list}) VALUES ({placeholders})"), params)
+                        
+                        # Get the session ID for inserting related data
+                        session_num = row_data.get(session_num_col)
+                        dog_name = row_data.get(dog_name_col)
+                        
+                        if session_num and dog_name:
+                            result = conn.execute(text(
+                                f"SELECT id FROM {table_name} WHERE {session_num_col} = :snum AND {dog_name_col} = :dname"
+                            ), {"snum": session_num, "dname": dog_name})
+                            row_result = result.fetchone()
+                            if row_result:
+                                session_id = row_result[0]
+                                
+                                # Insert related data
+                                if session_type == 'trailing':
+                                    # Terrains (comma separated)
+                                    if terrains_data:
+                                        for terrain in terrains_data.split(','):
+                                            terrain = terrain.strip()
+                                            if terrain:
+                                                conn.execute(text(
+                                                    "INSERT INTO t_selected_terrains (t_session_id, terrain_name) VALUES (:sid, :name)"
+                                                ), {"sid": session_id, "name": terrain})
+                                    
+                                    # Purposes (comma separated)
+                                    if purposes_data:
+                                        for purpose in purposes_data.split(','):
+                                            purpose = purpose.strip()
+                                            if purpose:
+                                                conn.execute(text(
+                                                    "INSERT INTO t_selected_purposes (t_session_id, purpose_name) VALUES (:sid, :name)"
+                                                ), {"sid": session_id, "name": purpose})
+                                    
+                                    # Distractions (type:response,type:response format)
+                                    if distractions_data:
+                                        for distraction in distractions_data.split(','):
+                                            distraction = distraction.strip()
+                                            if distraction:
+                                                parts = distraction.split(':', 1)
+                                                dtype = parts[0].strip()
+                                                dresp = parts[1].strip() if len(parts) > 1 else ''
+                                                distraction_json = json.dumps({"type": dtype, "response": dresp})
+                                                conn.execute(text(
+                                                    "INSERT INTO t_distractions (t_session_id, distraction_data) VALUES (:sid, :data)"
+                                                ), {"sid": session_id, "data": distraction_json})
+                                
+                                else:  # airscent
+                                    # Terrains (comma separated)
+                                    if terrains_data:
+                                        for terrain in terrains_data.split(','):
+                                            terrain = terrain.strip()
+                                            if terrain:
+                                                conn.execute(text(
+                                                    "INSERT INTO selected_terrains (session_id, terrain_name) VALUES (:sid, :name)"
+                                                ), {"sid": session_id, "name": terrain})
+                                    
+                                    # Purposes (comma separated)
+                                    if purposes_data:
+                                        for purpose in purposes_data.split(','):
+                                            purpose = purpose.strip()
+                                            if purpose:
+                                                conn.execute(text(
+                                                    "INSERT INTO a_selected_purposes (session_id, purpose_name) VALUES (:sid, :name)"
+                                                ), {"sid": session_id, "name": purpose})
+                                    
+                                    # Subject responses (subject:tfr:refind format)
+                                    if responses_data:
+                                        for response in responses_data.split(','):
+                                            response = response.strip()
+                                            if response:
+                                                parts = response.split(':')
+                                                if len(parts) >= 1:
+                                                    try:
+                                                        subj_num = int(parts[0].strip())
+                                                        tfr = parts[1].strip() if len(parts) > 1 else ''
+                                                        refind = parts[2].strip() if len(parts) > 2 else ''
+                                                        conn.execute(text(
+                                                            "INSERT INTO subject_responses (session_id, subject_number, tfr, refind) VALUES (:sid, :snum, :tfr, :refind)"
+                                                        ), {"sid": session_id, "snum": subj_num, "tfr": tfr, "refind": refind})
+                                                    except ValueError:
+                                                        pass  # Skip invalid subject numbers
+                        
+                        sessions_restored += 1
+                        
+                    except Exception as e:
+                        error_msg = str(e)
+                        if "UNIQUE constraint" in error_msg or "duplicate key" in error_msg:
+                            # Session already exists - skip (data was already cleared before restore)
+                            errors.append(f"Duplicate session skipped: {row_data.get(session_num_col)}")
+                        else:
+                            errors.append(f"Row insert error: {e}")
+            
+            conn.commit()
+        
+        # Restore original DB type
+        if old_db_type != db_type:
+            config.DB_TYPE = old_db_type
+            database.engine.dispose()
+            reload(database)
+        
+        if errors:
+            return True, f"Restored {sessions_restored} sessions with {len(errors)} errors", sessions_restored
+        return True, f"Successfully restored {sessions_restored} sessions", sessions_restored
+        
+    except Exception as e:
+        # Restore original DB type on error
+        try:
+            import config
+            import database
+            from importlib import reload
+            if 'old_db_type' in dir() and old_db_type != db_type:
+                config.DB_TYPE = old_db_type
+                database.engine.dispose()
+                reload(database)
+        except:
+            pass
+        
+        import traceback
+        traceback.print_exc()
+        return False, f"Excel restore error: {e}", 0
+
+
+def export_all_sessions_to_excel(db_type, primary_folder, secondary_folder=None):
+    """
+    Export all sessions (both area search and trailing) to Excel files
+    in both primary and secondary folders.
+    
+    Args:
+        db_type: Database type
+        primary_folder: Primary folder path (either dedicated Excel folder or primary storage)
+        secondary_folder: Optional secondary backup folder path (only used if primary is not dedicated Excel folder)
+        
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    results = []
+    
+    # Ensure folder exists
+    excel_path = Path(primary_folder)
+    excel_path.mkdir(parents=True, exist_ok=True)
+    
+    # Export area search sessions
+    success, msg, filepath = export_sessions_to_excel(db_type, str(excel_path), 'airscent')
+    if success:
+        results.append(f"Area Search: {msg}")
+        
+        # Copy to secondary if exists (for JSON folder fallback mode)
+        if secondary_folder and filepath:
+            secondary_path = Path(secondary_folder)
+            secondary_path.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.copy2(filepath, str(secondary_path / Path(filepath).name))
+            except Exception as e:
+                results.append(f"Warning: Could not copy to secondary: {e}")
+    else:
+        results.append(f"Area Search export failed: {msg}")
+    
+    # Export trailing sessions
+    success, msg, filepath = export_sessions_to_excel(db_type, str(excel_path), 'trailing')
+    if success:
+        results.append(f"Trailing: {msg}")
+        
+        # Copy to secondary if exists (for JSON folder fallback mode)
+        if secondary_folder and filepath:
+            secondary_path = Path(secondary_folder)
+            secondary_path.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.copy2(filepath, str(secondary_path / Path(filepath).name))
+            except Exception as e:
+                results.append(f"Warning: Could not copy to secondary: {e}")
+    else:
+        results.append(f"Trailing export failed: {msg}")
+    
+    return True, "; ".join(results)

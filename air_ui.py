@@ -71,10 +71,10 @@ def setup_airscent_tab(ui):
     frame.pack(fill="both", expand=True)
     
     # F1 Help text at top
-    help_label = tk.Label(frame, text="Push F1 to view the Help window.",
-                         font=('Arial', 9),
-                         fg='red')
-    help_label.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
+    # help_label = tk.Label(frame, text="Push F1 to view the Help window.",
+    #                      font=('Arial', 9),
+    #                      fg='red')
+    # help_label.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
     
     # =========================================================================
     # SESSION INFORMATION FRAME (Row 1)
@@ -186,7 +186,8 @@ def setup_airscent_tab(ui):
     ui.a_location_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
     
     tk.Label(search_frame, text="Search Area (Acres):").grid(row=0, column=2, sticky="w", padx=5, pady=2)
-    tk.Entry(search_frame, textvariable=sv.search_area_size, width=18).grid(row=0, column=3, sticky="w", padx=5, pady=2)
+    ttk.Combobox(search_frame, textvariable=sv.search_area_size, width=16,
+                 values=["10", "20", "30", "40", "50", "60", "70", "80", "90", "100", "110", "120"]).grid(row=0, column=3, sticky="w", padx=5, pady=2)
     
     tk.Label(search_frame, text="Number of Subjects:").grid(row=0, column=4, sticky="w", padx=5, pady=2)
     ui.a_num_subjects_combo = ttk.Combobox(search_frame, textvariable=sv.num_subjects, width=15, state="readonly",
@@ -286,7 +287,7 @@ def setup_airscent_tab(ui):
     tree_scrollbar.config(command=ui.a_subject_responses_tree.yview)
     
     ui.a_subject_responses_tree.heading('subject', text='Subject #')
-    ui.a_subject_responses_tree.heading('tfr', text='TFR')
+    ui.a_subject_responses_tree.heading('tfr', text='Initial Find')
     ui.a_subject_responses_tree.heading('refind', text='Re-find')
     
     ui.a_subject_responses_tree.column('subject', width=80, anchor='center')

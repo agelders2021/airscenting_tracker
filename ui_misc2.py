@@ -282,6 +282,13 @@ class Misc2Operations:
             self.ui.config["airscenting"]["last_handler"] = handler
             self.ui.save_config()
 
+        # Save last dog name to nested airscenting config
+        if dog_name:
+            if "airscenting" not in self.ui.config:
+                self.ui.config["airscenting"] = {}
+            self.ui.config["airscenting"]["last_dog"] = dog_name
+            self.ui.save_config()
+
         # Save session to JSON backup (include uuid and update_time for sync)
         # Get status from session_data or default to 'active'
         session_status = session_data.get("status", "active")

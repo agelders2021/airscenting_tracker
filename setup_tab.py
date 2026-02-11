@@ -154,6 +154,10 @@ class SetupTab:
                                        command=self.initialize_data_structures, state="disabled")
         self.s_create_db_btn.pack(side="left", padx=5)
         
+        # Restore from Primary Backup button
+        tk.Button(db_frame, text="Restore from Primary Backup", 
+                 command=lambda: self.restore_from_backup('primary')).pack(side="left", padx=5)
+        
         # User selection combobox
         tk.Label(db_frame, text="User:").pack(side="left", padx=(15, 2))
         # # Create a custom style for the grey background combobox
@@ -195,7 +199,7 @@ class SetupTab:
         
         tk.Button(backup_frame, text="Browse", command=self.ui.file_ops.select_backup_folder).pack(side="left", padx=5)
         tk.Button(backup_frame, text="Restore from Secondary Backup", 
-                 command=self.ui.misc_data_ops.restore_settings_from_json).pack(side="left", padx=5)
+                 command=lambda: self.restore_from_backup('secondary')).pack(side="left", padx=5)
         
         # PDF Export Folder
         pdf_frame = tk.LabelFrame(frame, text="PDF Export Folder", padx=10, pady=5)
@@ -210,6 +214,21 @@ class SetupTab:
         pdf_entry.bind('<FocusOut>', lambda e: self._validate_typed_path('pdf'))
         
         tk.Button(pdf_frame, text="Browse", command=self.ui.file_ops.select_pdf_folder).pack(side="left", padx=5)
+        
+        # Excel Export Folder
+        excel_frame = tk.LabelFrame(frame, text="Excel File Folder", padx=10, pady=5)
+        excel_frame.pack(fill="x", pady=5)
+        
+        excel_entry = tk.Entry(excel_frame, textvariable=sv.excel_folder, width=70)
+        excel_entry.pack(side="left", padx=5)
+        ToolTip(excel_entry, 
+                "Folder where Excel backup files will be saved.\n"
+                "Session data is exported to Excel format on program exit.\n"
+                "These files can be edited and restored via Partial Restore.")
+        # Add FocusOut handler to validate typed paths
+        excel_entry.bind('<FocusOut>', lambda e: self._validate_typed_path('excel'))
+        
+        tk.Button(excel_frame, text="Browse", command=self._select_excel_folder).pack(side="left", padx=5)
         
         # Default values
         defaults_frame = tk.LabelFrame(frame, text="Default Values (Optional)", padx=10, pady=5)
@@ -475,11 +494,19 @@ class SetupTab:
             self.ui.machine_backup_folder = folder
             self.ui.save_bootstrap()
 
+    def _select_excel_folder(self):
+        """Select Excel file folder"""
+        folder = filedialog.askdirectory(title="Select Excel File Folder")
+        if folder:
+            sv.excel_folder.set(folder)
+            self.ui.machine_excel_folder = folder
+            self.ui.save_bootstrap()
+
     def _validate_typed_path(self, path_type):
         """Validate a path that was typed (not browsed) and update bootstrap if needed.
         
         Args:
-            path_type: 'primary', 'secondary', 'trail_maps', or 'pdf'
+            path_type: 'primary', 'secondary', 'trail_maps', 'pdf', or 'excel'
         """
         if path_type == 'primary':
             path_var = sv.db_path
@@ -501,6 +528,11 @@ class SetupTab:
             old_path = getattr(self.ui, 'machine_pdf_folder', '') or ''
             attr_name = 'machine_pdf_folder'
             label = "PDF Export Folder"
+        elif path_type == 'excel':
+            path_var = sv.excel_folder
+            old_path = getattr(self.ui, 'machine_excel_folder', '') or ''
+            attr_name = 'machine_excel_folder'
+            label = "Excel File Folder"
         else:
             return
         
@@ -1271,7 +1303,7 @@ class SetupTab:
                 pass
 
     def load_terrain_from_database(self):
-        """Load terrain types from database into Setup tab treeview"""
+        """Load terrain types from database into Setup tab treeview and update all combos"""
         db_type = sv.db_type.get()
         
         # For SQLite, check if database file exists before trying to connect
@@ -1280,7 +1312,7 @@ class SetupTab:
             db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
             if not os.path.exists(db_path):
                 # Database doesn't exist - clear treeview and return
-                if hasattr(self, 'terrain_tree'):
+                if hasattr(self, 's_terrain_tree'):
                     self.s_terrain_tree.delete(*self.s_terrain_tree.get_children())
                 return
         
@@ -1299,9 +1331,9 @@ class SetupTab:
             
             from sqlalchemy import text
             
-            # Query terrain_types table
+            # Query terrain_types table - use sort_order for ordering
             with database.get_connection() as conn:
-                result = conn.execute(text("SELECT name FROM terrain_types ORDER BY name"))
+                result = conn.execute(text("SELECT name FROM terrain_types ORDER BY sort_order, name"))
                 terrain_types = [row[0] for row in result]
             
             # Restore original DB_TYPE
@@ -1309,14 +1341,16 @@ class SetupTab:
             database.engine.dispose()
             reload(database)
             
+            # Update sv master list
+            sv.terrain_types_list = terrain_types
+            
             # Clear and populate treeview
             self.s_terrain_tree.delete(*self.s_terrain_tree.get_children())
             for idx, terrain in enumerate(terrain_types, 1):
                 self.s_terrain_tree.insert('', tk.END, text=str(idx), values=(terrain,))
             
-            # Also update Entry tab terrain combo box
-            if hasattr(self.ui, 'a_terrain_combo') and self.ui.a_terrain_combo:
-                self.ui.a_terrain_combo['values'] = terrain_types
+            # Update all terrain combo boxes
+            self._update_all_terrain_combos()
                 
         except Exception as e:
             # Restore original DB_TYPE on error
@@ -1333,15 +1367,24 @@ class SetupTab:
             # If table doesn't exist yet, silently skip
             if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
                 # Clear the treeview
-                if hasattr(self, 'terrain_tree'):
+                if hasattr(self, 's_terrain_tree'):
                     self.s_terrain_tree.delete(*self.s_terrain_tree.get_children())
             else:
                 # print(f"Error loading terrain types: {e}")
-
                 pass
 
+    def _update_all_terrain_combos(self):
+        """Update all terrain combo boxes with current sv.terrain_types_list"""
+        # Update area search terrain combo
+        if hasattr(self.ui, 'a_terrain_combo') and self.ui.a_terrain_combo:
+            self.ui.a_terrain_combo['values'] = sv.terrain_types_list
+        
+        # Update trailing terrain combo
+        if hasattr(self.ui, 'trailing_entry') and self.ui.trailing_entry:
+            self.ui.trailing_entry.update_terrain_types(sv.terrain_types_list)
+
     def load_distraction_from_database(self):
-        """Load distraction types from database into Setup tab treeview"""
+        """Load distraction types from database into Setup tab treeview and update all combos"""
         db_type = sv.db_type.get()
         
         # For SQLite, check if database file exists before trying to connect
@@ -1350,7 +1393,7 @@ class SetupTab:
             db_path = config_module.DB_CONFIG["sqlite"]["url"].replace("sqlite:///", "")
             if not os.path.exists(db_path):
                 # Database doesn't exist - clear treeview and return
-                if hasattr(self, 'distraction_type_tree'):
+                if hasattr(self, 's_distraction_type_tree'):
                     self.s_distraction_type_tree.delete(*self.s_distraction_type_tree.get_children())
                 return
         
@@ -1369,9 +1412,9 @@ class SetupTab:
             
             from sqlalchemy import text
             
-            # Query distraction_types table
+            # Query distraction_types table - use sort_order for ordering
             with database.get_connection() as conn:
-                result = conn.execute(text("SELECT name FROM distraction_types ORDER BY name"))
+                result = conn.execute(text("SELECT name FROM distraction_types ORDER BY sort_order, name"))
                 distraction_types = [row[0] for row in result]
             
             # Restore original DB_TYPE
@@ -1379,10 +1422,16 @@ class SetupTab:
             database.engine.dispose()
             reload(database)
             
+            # Update sv master list
+            sv.distraction_types_list = distraction_types
+            
             # Clear and populate treeview
             self.s_distraction_type_tree.delete(*self.s_distraction_type_tree.get_children())
             for idx, distraction in enumerate(distraction_types, 1):
                 self.s_distraction_type_tree.insert('', tk.END, text=str(idx), values=(distraction,))
+            
+            # Update all distraction combo boxes
+            self._update_all_distraction_combos()
                 
         except Exception as e:
             # Restore original DB_TYPE on error
@@ -1399,12 +1448,17 @@ class SetupTab:
             # If table doesn't exist yet, silently skip
             if "no such table" in str(e).lower() or "does not exist" in str(e).lower():
                 # Clear the treeview
-                if hasattr(self, 'distraction_type_tree'):
+                if hasattr(self, 's_distraction_type_tree'):
                     self.s_distraction_type_tree.delete(*self.s_distraction_type_tree.get_children())
             else:
                 # print(f"Error loading distraction types: {e}")
-
                 pass
+
+    def _update_all_distraction_combos(self):
+        """Update all distraction combo boxes with current sv.distraction_types_list"""
+        # Update trailing distraction combo
+        if hasattr(self.ui, 'trailing_entry') and self.ui.trailing_entry:
+            self.ui.trailing_entry.update_distraction_types(sv.distraction_types_list)
 
     def update_location_button_states(self, *args):
         """Enable/disable location buttons based on entry content"""
@@ -2026,56 +2080,115 @@ class SetupTab:
                 pass
 
     def move_terrain_up(self):
-        """Move selected terrain type up"""
+        """Move selected terrain type up in order"""
         selection = self.s_terrain_tree.selection()
-        if selection:
-            item = selection[0]
-            values = self.s_terrain_tree.item(item, 'values')
-            terrain = values[0]
-            
-            existing = self.ui.config.get("terrain_types", [])
-            idx = existing.index(terrain)
-            if idx > 0:
-                # Swap with previous
-                existing[idx], existing[idx-1] = existing[idx-1], existing[idx]
-                self.ui.config["terrain_types"] = existing
-                
-                # Rebuild treeview
-                self.s_terrain_tree.delete(*self.s_terrain_tree.get_children())
-                for i, t in enumerate(existing, 1):
-                    new_item = self.s_terrain_tree.insert('', tk.END, text=str(i), values=(t,))
-                    if t == terrain:
-                        self.s_terrain_tree.selection_set(new_item)
-                        self.s_terrain_tree.see(new_item)
-                
-                # Save config
-                self.ui.save_config()
+        if not selection:
+            return
+        
+        item = selection[0]
+        values = self.s_terrain_tree.item(item, 'values')
+        terrain = values[0]
+        
+        # Get current list from sv
+        if terrain not in sv.terrain_types_list:
+            return
+        
+        idx = sv.terrain_types_list.index(terrain)
+        if idx <= 0:
+            return  # Already at top
+        
+        # Swap in the list
+        sv.terrain_types_list[idx], sv.terrain_types_list[idx-1] = sv.terrain_types_list[idx-1], sv.terrain_types_list[idx]
+        
+        # Update sort_order in database for all items
+        self._save_terrain_order_to_database()
+        
+        # Rebuild treeview
+        self.s_terrain_tree.delete(*self.s_terrain_tree.get_children())
+        for i, t in enumerate(sv.terrain_types_list, 1):
+            new_item = self.s_terrain_tree.insert('', tk.END, text=str(i), values=(t,))
+            if t == terrain:
+                self.s_terrain_tree.selection_set(new_item)
+                self.s_terrain_tree.see(new_item)
+        
+        # Update all combos
+        self._update_all_terrain_combos()
 
     def move_terrain_down(self):
-        """Move selected terrain type down"""
+        """Move selected terrain type down in order"""
         selection = self.s_terrain_tree.selection()
-        if selection:
-            item = selection[0]
-            values = self.s_terrain_tree.item(item, 'values')
-            terrain = values[0]
+        if not selection:
+            return
+        
+        item = selection[0]
+        values = self.s_terrain_tree.item(item, 'values')
+        terrain = values[0]
+        
+        # Get current list from sv
+        if terrain not in sv.terrain_types_list:
+            return
+        
+        idx = sv.terrain_types_list.index(terrain)
+        if idx >= len(sv.terrain_types_list) - 1:
+            return  # Already at bottom
+        
+        # Swap in the list
+        sv.terrain_types_list[idx], sv.terrain_types_list[idx+1] = sv.terrain_types_list[idx+1], sv.terrain_types_list[idx]
+        
+        # Update sort_order in database for all items
+        self._save_terrain_order_to_database()
+        
+        # Rebuild treeview
+        self.s_terrain_tree.delete(*self.s_terrain_tree.get_children())
+        for i, t in enumerate(sv.terrain_types_list, 1):
+            new_item = self.s_terrain_tree.insert('', tk.END, text=str(i), values=(t,))
+            if t == terrain:
+                self.s_terrain_tree.selection_set(new_item)
+                self.s_terrain_tree.see(new_item)
+        
+        # Update all combos
+        self._update_all_terrain_combos()
+
+    def _save_terrain_order_to_database(self):
+        """Save current terrain order to database sort_order column"""
+        db_type = sv.db_type.get()
+        
+        try:
+            import config
+            old_db_type = config.DB_TYPE
+            config.DB_TYPE = db_type
             
-            existing = self.ui.config.get("terrain_types", [])
-            idx = existing.index(terrain)
-            if idx < len(existing) - 1:
-                # Swap with next
-                existing[idx], existing[idx+1] = existing[idx+1], existing[idx]
-                self.ui.config["terrain_types"] = existing
-                
-                # Rebuild treeview
-                self.s_terrain_tree.delete(*self.s_terrain_tree.get_children())
-                for i, t in enumerate(existing, 1):
-                    new_item = self.s_terrain_tree.insert('', tk.END, text=str(i), values=(t,))
-                    if t == terrain:
-                        self.s_terrain_tree.selection_set(new_item)
-                        self.s_terrain_tree.see(new_item)
-                
-                # Save config
-                self.ui.save_config()
+            from database import engine
+            engine.dispose()
+            from importlib import reload
+            import database
+            reload(database)
+            
+            from sqlalchemy import text
+            
+            with database.get_connection() as conn:
+                for idx, terrain in enumerate(sv.terrain_types_list):
+                    conn.execute(
+                        text("UPDATE terrain_types SET sort_order = :order WHERE name = :name"),
+                        {"order": idx, "name": terrain}
+                    )
+                conn.commit()
+            
+            config.DB_TYPE = old_db_type
+            database.engine.dispose()
+            reload(database)
+            
+        except Exception as e:
+            try:
+                import config
+                import database
+                from importlib import reload
+                config.DB_TYPE = old_db_type
+                database.engine.dispose()
+                reload(database)
+            except:
+                pass
+            # print(f"Error saving terrain order: {e}")
 
     def restore_default_terrain_types(self):
         """Restore default terrain types"""
@@ -2084,17 +2197,54 @@ class SetupTab:
             "This will replace your terrain types with the default list. Continue?"
         )
         if result:
-            self.ui.config["terrain_types"] = ui_utils.get_default_terrain_types()
+            default_terrains = ui_utils.get_default_terrain_types()
+            db_type = sv.db_type.get()
             
-            # Rebuild treeview
-            self.s_terrain_tree.delete(*self.s_terrain_tree.get_children())
-            for idx, terrain in enumerate(self.ui.config["terrain_types"], 1):
-                self.s_terrain_tree.insert('', tk.END, text=str(idx), values=(terrain,))
-            
-            self.ui.show_status_message("Restored default terrain types", "info")
-            
-            # Save config
-            self.ui.save_config()
+            try:
+                import config
+                old_db_type = config.DB_TYPE
+                config.DB_TYPE = db_type
+                
+                from database import engine
+                engine.dispose()
+                from importlib import reload
+                import database
+                reload(database)
+                
+                from sqlalchemy import text
+                
+                with database.get_connection() as conn:
+                    # Clear existing terrain types
+                    conn.execute(text("DELETE FROM terrain_types"))
+                    
+                    # Insert defaults with sort_order
+                    for idx, terrain in enumerate(default_terrains):
+                        conn.execute(
+                            text("INSERT INTO terrain_types (name, sort_order, user_name) VALUES (:name, :order, :user)"),
+                            {"name": terrain, "order": idx, "user": ui_utils.get_username()}
+                        )
+                    conn.commit()
+                
+                config.DB_TYPE = old_db_type
+                database.engine.dispose()
+                reload(database)
+                
+                # Reload from database to update sv list and all combos
+                self.load_terrain_from_database()
+                
+                self.ui.show_status_message("Restored default terrain types", "info")
+                
+            except Exception as e:
+                try:
+                    import config
+                    import database
+                    from importlib import reload
+                    config.DB_TYPE = old_db_type
+                    database.engine.dispose()
+                    reload(database)
+                except:
+                    pass
+                messagebox.showerror("Error", f"Failed to restore defaults: {e}")
     
 
     def update_distraction_type_button_states(self, *args):
@@ -2242,75 +2392,171 @@ class SetupTab:
                 pass
 
     def move_distraction_up(self):
-        """Move selected distraction type up"""
+        """Move selected distraction type up in order"""
         selection = self.s_distraction_type_tree.selection()
-        if selection:
-            item = selection[0]
-            values = self.s_distraction_type_tree.item(item, 'values')
-            distraction = values[0]
-            
-            existing = self.ui.config.get("distraction_types", [])
-            idx = existing.index(distraction)
-            if idx > 0:
-                # Swap with previous
-                existing[idx], existing[idx-1] = existing[idx-1], existing[idx]
-                self.ui.config["distraction_types"] = existing
-                
-                # Rebuild treeview
-                self.s_distraction_type_tree.delete(*self.s_distraction_type_tree.get_children())
-                for i, d in enumerate(existing, 1):
-                    new_item = self.s_distraction_type_tree.insert('', tk.END, text=str(i), values=(d,))
-                    if d == distraction:
-                        self.s_distraction_type_tree.selection_set(new_item)
-                        self.s_distraction_type_tree.see(new_item)
-                
-                # Save config
-                self.ui.save_config()
+        if not selection:
+            return
+        
+        item = selection[0]
+        values = self.s_distraction_type_tree.item(item, 'values')
+        distraction = values[0]
+        
+        # Get current list from sv
+        if distraction not in sv.distraction_types_list:
+            return
+        
+        idx = sv.distraction_types_list.index(distraction)
+        if idx <= 0:
+            return  # Already at top
+        
+        # Swap in the list
+        sv.distraction_types_list[idx], sv.distraction_types_list[idx-1] = sv.distraction_types_list[idx-1], sv.distraction_types_list[idx]
+        
+        # Update sort_order in database for all items
+        self._save_distraction_order_to_database()
+        
+        # Rebuild treeview
+        self.s_distraction_type_tree.delete(*self.s_distraction_type_tree.get_children())
+        for i, d in enumerate(sv.distraction_types_list, 1):
+            new_item = self.s_distraction_type_tree.insert('', tk.END, text=str(i), values=(d,))
+            if d == distraction:
+                self.s_distraction_type_tree.selection_set(new_item)
+                self.s_distraction_type_tree.see(new_item)
+        
+        # Update all combos
+        self._update_all_distraction_combos()
 
     def move_distraction_down(self):
-        """Move selected distraction type down"""
+        """Move selected distraction type down in order"""
         selection = self.s_distraction_type_tree.selection()
-        if selection:
-            item = selection[0]
-            values = self.s_distraction_type_tree.item(item, 'values')
-            distraction = values[0]
+        if not selection:
+            return
+        
+        item = selection[0]
+        values = self.s_distraction_type_tree.item(item, 'values')
+        distraction = values[0]
+        
+        # Get current list from sv
+        if distraction not in sv.distraction_types_list:
+            return
+        
+        idx = sv.distraction_types_list.index(distraction)
+        if idx >= len(sv.distraction_types_list) - 1:
+            return  # Already at bottom
+        
+        # Swap in the list
+        sv.distraction_types_list[idx], sv.distraction_types_list[idx+1] = sv.distraction_types_list[idx+1], sv.distraction_types_list[idx]
+        
+        # Update sort_order in database for all items
+        self._save_distraction_order_to_database()
+        
+        # Rebuild treeview
+        self.s_distraction_type_tree.delete(*self.s_distraction_type_tree.get_children())
+        for i, d in enumerate(sv.distraction_types_list, 1):
+            new_item = self.s_distraction_type_tree.insert('', tk.END, text=str(i), values=(d,))
+            if d == distraction:
+                self.s_distraction_type_tree.selection_set(new_item)
+                self.s_distraction_type_tree.see(new_item)
+        
+        # Update all combos
+        self._update_all_distraction_combos()
+
+    def _save_distraction_order_to_database(self):
+        """Save current distraction order to database sort_order column"""
+        db_type = sv.db_type.get()
+        
+        try:
+            import config
+            old_db_type = config.DB_TYPE
+            config.DB_TYPE = db_type
             
-            existing = self.ui.config.get("distraction_types", [])
-            idx = existing.index(distraction)
-            if idx < len(existing) - 1:
-                # Swap with next
-                existing[idx], existing[idx+1] = existing[idx+1], existing[idx]
-                self.ui.config["distraction_types"] = existing
-                
-                # Rebuild treeview
-                self.s_distraction_type_tree.delete(*self.s_distraction_type_tree.get_children())
-                for i, d in enumerate(existing, 1):
-                    new_item = self.s_distraction_type_tree.insert('', tk.END, text=str(i), values=(d,))
-                    if d == distraction:
-                        self.s_distraction_type_tree.selection_set(new_item)
-                        self.s_distraction_type_tree.see(new_item)
-                
-                # Save config
-                self.ui.save_config()
+            from database import engine
+            engine.dispose()
+            from importlib import reload
+            import database
+            reload(database)
+            
+            from sqlalchemy import text
+            
+            with database.get_connection() as conn:
+                for idx, distraction in enumerate(sv.distraction_types_list):
+                    conn.execute(
+                        text("UPDATE distraction_types SET sort_order = :order WHERE name = :name"),
+                        {"order": idx, "name": distraction}
+                    )
+                conn.commit()
+            
+            config.DB_TYPE = old_db_type
+            database.engine.dispose()
+            reload(database)
+            
+        except Exception as e:
+            try:
+                import config
+                import database
+                from importlib import reload
+                config.DB_TYPE = old_db_type
+                database.engine.dispose()
+                reload(database)
+            except:
+                pass
+            # print(f"Error saving distraction order: {e}")
 
     def restore_default_distraction_types(self):
-        """Restore default distraction types"""
+        """Restore default distraction types to database"""
         result = messagebox.askyesno(
             "Restore Defaults",
             "This will replace your distraction types with the default list. Continue?"
         )
         if result:
-            self.ui.config["distraction_types"] = ui_utils.get_default_distraction_types()
+            default_distractions = ui_utils.get_default_distraction_types()
+            db_type = sv.db_type.get()
             
-            # Rebuild treeview
-            self.s_distraction_type_tree.delete(*self.s_distraction_type_tree.get_children())
-            for idx, distraction in enumerate(self.ui.config["distraction_types"], 1):
-                self.s_distraction_type_tree.insert('', tk.END, text=str(idx), values=(distraction,))
-            
-            self.ui.show_status_message("Restored default distraction types", "info")
-            
-            # Save config
-            self.ui.save_config()
+            try:
+                import config
+                old_db_type = config.DB_TYPE
+                config.DB_TYPE = db_type
+                
+                from database import engine
+                engine.dispose()
+                from importlib import reload
+                import database
+                reload(database)
+                
+                from sqlalchemy import text
+                
+                with database.get_connection() as conn:
+                    # Clear existing distraction types
+                    conn.execute(text("DELETE FROM distraction_types"))
+                    
+                    # Insert defaults with sort_order
+                    for idx, distraction in enumerate(default_distractions):
+                        conn.execute(
+                            text("INSERT INTO distraction_types (name, sort_order, user_name) VALUES (:name, :order, :user)"),
+                            {"name": distraction, "order": idx, "user": ui_utils.get_username()}
+                        )
+                    conn.commit()
+                
+                config.DB_TYPE = old_db_type
+                database.engine.dispose()
+                reload(database)
+                
+                # Reload from database to update sv list and all combos
+                self.load_distraction_from_database()
+                
+                self.ui.show_status_message("Restored default distraction types", "info")
+                
+            except Exception as e:
+                try:
+                    import config
+                    import database
+                    from importlib import reload
+                    config.DB_TYPE = old_db_type
+                    database.engine.dispose()
+                    reload(database)
+                except:
+                    pass
+                messagebox.showerror("Error", f"Failed to restore defaults: {e}")
     
 
     def save_configuration_settings(self):
@@ -2350,13 +2596,9 @@ class SetupTab:
             dog_names = db_mgr.load_dogs()
             self.ui.config["dog_names"] = dog_names if dog_names else []
             
-            # Get terrain types from database
-            terrain_types = db_mgr.load_terrain_types()
-            self.ui.config["terrain_types"] = terrain_types if terrain_types else []
-            
-            # Get distraction types from database
-            distraction_types = db_mgr.load_distraction_types()
-            self.ui.config["distraction_types"] = distraction_types if distraction_types else []
+            # Note: terrain_types and distraction_types are stored in database with sort_order
+            # They are loaded into sv.terrain_types_list and sv.distraction_types_list
+            # and should not be stored in config file
             
             # Get training locations from database
             locations = db_mgr.load_locations()
@@ -2398,13 +2640,8 @@ class SetupTab:
             dog_names = db_mgr.load_dogs()
             self.ui.config["dog_names"] = dog_names if dog_names else []
             
-            # Get terrain types from database
-            terrain_types = db_mgr.load_terrain_types()
-            self.ui.config["terrain_types"] = terrain_types if terrain_types else []
-            
-            # Get distraction types from database
-            distraction_types = db_mgr.load_distraction_types()
-            self.ui.config["distraction_types"] = distraction_types if distraction_types else []
+            # Note: terrain_types and distraction_types are stored in database with sort_order
+            # They are loaded into sv.terrain_types_list and sv.distraction_types_list
             
             # Get training locations from database
             locations = db_mgr.load_locations()
@@ -2593,3 +2830,207 @@ class SetupTab:
         # Save bootstrap
         with open(BOOTSTRAP_FILE, 'w') as f:
             json.dump(bootstrap, f, indent=2)
+    
+    def restore_from_backup(self, backup_type='primary'):
+        """
+        Restore from backup with choice of complete (JSON) or partial (Excel) restore.
+        
+        Args:
+            backup_type: 'primary' or 'secondary' - which backup folder to use
+        """
+        from tkinter import filedialog
+        
+        # Determine the backup folder path
+        if backup_type == 'primary':
+            base_folder = sv.db_path.get().strip()
+            if not base_folder:
+                messagebox.showerror("Error", "Primary Storage Folder is not configured.")
+                return
+            json_folder = Path(base_folder) / "JSON"
+        else:  # secondary
+            base_folder = sv.backup_folder.get().strip()
+            if not base_folder:
+                messagebox.showerror("Error", "Secondary Backup Folder is not configured.")
+                return
+            json_folder = Path(base_folder) / "JSON"
+        
+        if not json_folder.exists():
+            messagebox.showerror("Error", f"Backup folder does not exist:\n{json_folder}")
+            return
+        
+        # Ask user for restore type
+        result = messagebox.askyesnocancel(
+            "Restore Type",
+            "Choose the type of restore:\n\n"
+            "YES = Complete Restore (JSON file)\n"
+            "       Restores all data including dogs, locations,\n"
+            "       terrain types, distraction types, and sessions.\n\n"
+            "NO = Partial Restore (Excel file)\n"
+            "       Restores only session data for either\n"
+            "       Area Search or Trailing sessions.\n\n"
+            "CANCEL = Cancel",
+            icon='question'
+        )
+        
+        if result is None:  # Cancel
+            return
+        
+        if result:  # Yes - Complete restore from JSON
+            # Let user pick a JSON file
+            json_file = filedialog.askopenfilename(
+                title="Select Full Backup JSON File",
+                initialdir=str(json_folder),
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+            )
+            
+            if not json_file:
+                return
+            
+            # Perform complete restore
+            self._perform_complete_restore(json_file)
+        else:  # No - Partial restore from Excel
+            self._perform_partial_restore(json_folder)
+    
+    def _perform_complete_restore(self, json_filepath):
+        """Perform complete restore from JSON backup file."""
+        try:
+            with open(json_filepath, 'r', encoding='utf-8') as f:
+                backup_data = json.load(f)
+            
+            # Check if it's a valid backup file
+            if 'backup_version' not in backup_data:
+                # May be a legacy backup - try to restore
+                messagebox.showinfo("Info", "Legacy backup file detected. Attempting restore...")
+            
+            # Delegate to misc_data_ops for actual restore
+            self.ui.misc_data_ops._perform_full_restore(backup_data)
+            
+            # Refresh UI
+            self.load_dogs_from_database()
+            self.load_locations_from_database()
+            self.load_terrain_from_database()
+            self.load_distraction_from_database()
+            
+            # Set restart required flag
+            sv.restart_required = True
+            
+            messagebox.showinfo("Restore Complete", 
+                f"Database restored from:\n{Path(json_filepath).name}\n\n"
+                "⚠️ Please restart the program before entering session tabs.")
+            
+        except Exception as e:
+            messagebox.showerror("Restore Error", f"Failed to restore from JSON:\n{e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _perform_partial_restore(self, json_folder):
+        """Perform partial restore from Excel file."""
+        from tkinter import filedialog
+        
+        # First warn about what partial restore does
+        result = messagebox.askyesno(
+            "Partial Restore Warning",
+            "⚠️ IMPORTANT: Partial Restore from Excel\n\n"
+            "This restores ONLY session data for one type of search\n"
+            "(either Area Search OR Trailing).\n\n"
+            "It does NOT restore:\n"
+            "  • Dog names\n"
+            "  • Training locations\n"
+            "  • Terrain types\n"
+            "  • Distraction types\n"
+            "  • Other ancillary data from the Setup tab\n\n"
+            "Do you want to continue?",
+            icon='warning'
+        )
+        
+        if not result:
+            return
+        
+        # Second warning about Excel data not being validated
+        result = messagebox.askyesno(
+            "Data Consistency Warning",
+            "⚠️ SECOND WARNING\n\n"
+            "Any changes made directly in the Excel file are NOT checked\n"
+            "for consistency when reloading.\n\n"
+            "Invalid data may cause errors or unexpected behavior.\n\n"
+            "Make sure the Excel file contains valid data before proceeding.\n\n"
+            "Do you want to continue?",
+            icon='warning'
+        )
+        
+        if not result:
+            return
+        
+        # Let user pick an Excel file - prefer Excel folder if configured
+        excel_folder = sv.excel_folder.get().strip()
+        initial_dir = excel_folder if excel_folder else str(json_folder)
+        
+        excel_file = filedialog.askopenfilename(
+            title="Select Excel Backup File",
+            initialdir=initial_dir,
+            filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")]
+        )
+        
+        if not excel_file:
+            return
+        
+        # Determine session type from filename
+        filename = Path(excel_file).name.lower()
+        if 'trailing' in filename:
+            session_type = 'trailing'
+            table_name = 't_training_sessions'
+            type_display = 'Trailing'
+        else:
+            session_type = 'airscent'
+            table_name = 'training_sessions'
+            type_display = 'Area Search'
+        
+        # Confirm the session type
+        result = messagebox.askyesno(
+            "Confirm Session Type",
+            f"This appears to be a {type_display} sessions backup.\n\n"
+            f"Proceeding will:\n"
+            f"  1. CLEAR all existing {type_display} sessions from the database\n"
+            f"  2. Restore sessions from the Excel file\n\n"
+            f"This action cannot be undone!\n\n"
+            f"Do you want to continue?",
+            icon='warning'
+        )
+        
+        if not result:
+            return
+        
+        try:
+            from sqlalchemy import text
+            import database
+            
+            # Run migration to ensure ON DELETE CASCADE is in place
+            from schema import migrate_add_cascade_delete
+            migrate_add_cascade_delete()
+            
+            # Clear the appropriate sessions table (CASCADE will handle related tables)
+            with database.get_connection() as conn:
+                conn.execute(text(f"DELETE FROM {table_name}"))
+                conn.commit()
+            
+            # Restore from Excel
+            from backup_management import restore_sessions_from_excel
+            
+            success, msg, count = restore_sessions_from_excel(
+                excel_file, sv.db_type.get(), session_type
+            )
+            
+            if success:
+                # Set restart required flag
+                sv.restart_required = True
+                
+                messagebox.showinfo("Restore Complete", 
+                    f"{type_display} sessions restored:\n{msg}\n\n"
+                    "⚠️ Please restart the program before entering session tabs.")
+            else:
+                messagebox.showerror("Restore Error", msg)
+            
+        except Exception as e:
+            messagebox.showerror("Restore Error", f"Failed to restore from Excel:\n{e}")
+            import traceback
+            traceback.print_exc()

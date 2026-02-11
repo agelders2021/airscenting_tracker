@@ -94,6 +94,11 @@ class Stringvars:
         # Note: This is a list, not StringVar, to hold multiple selections
         self.terrain_list = []  
         
+        # ===== TERRAIN TYPES AND DISTRACTION TYPES (Master lists from database) =====
+        # These are the ordered lists used to populate combo boxes across all tabs
+        self.terrain_types_list = []
+        self.distraction_types_list = []
+        
         # ===== SUBJECT RESPONSES (List of dicts) =====
         # Note: This holds structured data for subject responses
         self.subject_responses = []
@@ -166,6 +171,7 @@ class Stringvars:
         self.trail_maps_folder = tk.StringVar(master=master)
         self.backup_folder = tk.StringVar(master=master)
         self.pdf_folder = tk.StringVar(master=master)
+        self.excel_folder = tk.StringVar(master=master)
         self.config_path = tk.StringVar(master=master)
         
         # ===== SETUP TAB - DATABASE =====
@@ -197,6 +203,10 @@ class Stringvars:
         
         # Track if background sync is in progress (blocks Edit/Delete operations)
         self.sync_in_progress = False
+        
+        # Track if a database restore has occurred and restart is required
+        # When True, user must restart the program before entering session tabs
+        self.restart_required = False
     
     # ========================================
     # HELPER METHODS - SESSION OPERATIONS
@@ -824,7 +834,7 @@ if __name__ == "__main__":
     # Example 5: Change detection
     print("\nExample 5: Change detection")
     snapshot = sv.get_state_string()
-    sv.temperature.set("72ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°F")
+    sv.temperature.set("72ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°F")
     has_changes = sv.has_changes_from(snapshot)
     print(f"Has changes: {has_changes}")
     
