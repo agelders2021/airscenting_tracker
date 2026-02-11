@@ -634,7 +634,9 @@ class TrailingEntryTab:
         
         self.distraction_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         dist_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
+        ToolTip(self.distraction_tree,"To modify an entry, click on the desired row which populates the Distraction/Response entries to the left.\n"
+                "Follow the tooltip directions associated with each entry to modify. If only 'Distraction' entry is changed, click 'Update'\n"
+                "to make it  permanent.",delay=250)
         # Button frame
         button_frame = tk.Frame(table_container)
         button_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
@@ -727,6 +729,7 @@ class TrailingEntryTab:
         map_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         
         self.map_listbox.bind('<Double-Button-1>', lambda e: self._view_selected_trail_map())
+        ToolTip(self.map_listbox,"Drop maps, images or videos here",delay=250)
         
         map_button_frame = tk.Frame(list_button_container)
         map_button_frame.pack(side=tk.RIGHT, padx=(5, 0))

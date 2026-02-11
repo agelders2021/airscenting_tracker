@@ -15,33 +15,33 @@ import re
 
 # Help content organized by section
 HELP_SECTIONS = {
-    "SAR K9 Training Record": """Preface: This is a preliminary help file to get the user started.  This window can always be viewed by pushing F1 on your keyboard.  It is advised that the user read this entire document one time to get an idea of how to use the program.  However, it is not necessary to memorize it since tooltips pop up when hovering the mouse over most of the more complicated entries.
-Chapter 1 – Setup
-  • Select the primary storage folder.  The database and configuration files are saved here.  Browse to the location you wish to save this data.  On a modern Windows machine placing the folder either on a path included in Microsoft OneDrive or a Dropbox folder is recommended.  Then, in the event of a hardware failure, the training log can be recovered as soon as the hardware is repaired.
-  • Click on ‘Initialize Data Structures’ which creates an empty database. 
-  • Select a backup folder.  While optional, it is STRONGLY recommended to configure this.  Ideally, this folder should reside on an external hard drive or another service such as Google Drive or Dropbox.  This additional redundancy helps ensure that data is never lost.
+    "SAR K9 Training Record Introduction": """This is a preliminary help file to get the user started.  This window can always be viewed by pushing F1 on your keyboard.  It is advised that the user read this entire document one time to get an idea of how to use the program.  However, it is not necessary to memorize it since tooltips pop up when hovering the mouse over most of the more complicated entries.""",
+
+    "Setup": """• Select the primary storage folder.  The database and configuration files are saved here.  Click the **Browse** button and navigate to the location you wish to save this data.  On a modern Windows machine placing the folder either on a path included in Microsoft OneDrive or a Dropbox folder is recommended.  Then, in the event of a hardware failure, the training log can be recovered as soon as the hardware is repaired.
+  • Click **on Initialize Data Structures** which creates an empty database. 
+  • In a similar manner select a backup folder.  While optional, it is STRONGLY recommended to configure this.  Ideally, this folder should reside on an external hard drive or another service such as Google Drive or Dropbox.  This additional redundancy helps ensure that data is never lost.
   • Configure a PDF export folder.  This folder is used to export human readable logs suitable for certification or legal requirements.
-  • Configure a folder for Excel compatible data files.
-  • Now enter training locations that will be used repeatedly. While not required, this shortcut will simplify data entry later.  To enter a location, either type in the name followed by ‘Enter’ or click the ‘Add Location’ button.
-  • Dog names are entered in an identical manner.  Unlike location names, however, all dogs that are to be recorded must be entered here.
-  • Terrain Types and Distraction types are entered in a similar manner.  The user can adjust the order they appear in the table as desired. The most commonly used entries should usually appear at the top of each list.
-  • Now click ‘Save Configuration’ then exit the program (using the \\N{Negative Squared Cross Mark} at the upper right corner of the window or by clicking the ‘Quit’ button.
-Chapter 2 – Usage
-  • General
-  • After completing configuration in the setup tab, restart the application and select either the ‘Area Search Session Tab’ or ‘Trailing Session Tab’ as needed.
-  • Notice that some fields have white backgrounds while others are light-grey. White fields can generally have free text entered while light grey windows must use the dropdown by clicking the \\N{Modifier Letter Down Arrowhead} on the right side of the entry. A few of the white entry fields also have a \\N{Modifier Letter Down Arrowhead} which for common entries.
-  • Start Time and Finish Time entries are unique – hover the mouse over the left half and rotate the mouse scroll wheel to change the hour.  Hover over the right side to adjust the minutes.  The time is recorded in 24-hour Military time to avoid confusion. Light grey in the time entry implies that no time is selected.  If a time is accidentally entered, double-click over the colon ‘:’ in that entry to unset it.
-  • Data entry of some of the fields is not obvious.
-  • ‘Add Session Purpose’ and ‘Session Purposes’ – these are paired fields that can accumulate multiple training purposes. 
-  • ‘Add Session Purpose’ – selects one purpose at a time to be added to accumulated purposes.  One can either use the dropdown list or type in a custom purpose followed by ‘Enter.’
-  • ‘Session Purposes’ – is the list of all purposes of this training session.  If a purpose is added by mistake, simply double-click that entry to remove it.
-  • ‘Add Terrain Type’ and ‘Accumulated Terrains’ behave in the same manner as the Session Purpose pair described above.
-  • On the Area Search Training Session Tab ‘Number of Subjects’, ‘Subjects Found’ and the table to the right of ‘Subjects Found’ work in tandem.  Notice that ‘Subjects Found’ is disabled until the number of subjects is entered.  Once that is done select the number of subjects found which enables the table to the right.  For each subject found a single click under the heading ‘Indication on Initial Find’ or ‘Indication on Refind’ presents a dropdown box to fill in the dog’s action.
-  • On the Trailing Training Session tab find three linked entries in the box labeled ‘Distractions.’  First select the desired distraction, then select response. One can either use the dropdown list or type in a custom answer.  If typing a custom response, that entry must be registered by typing ‘Enter’.  Notice that the pair will then present in the ‘Accumulated Distractions’ table.  If not satisfied with an entry, it can be selected by hovering over the desired entry and clicking the mouse. Note that the ‘Distraction’ and ‘Response’ fields list that entry and may now be edited. If only the ‘Distraction’ entry is modified, click ‘Update’ to register that change. Editing the ‘Response’ updates automatically.
-  • Images – usually photos or maps can be added either by browsing to the desired file or using Windows drag and drop.
-  • ‘View/Edit/Hide Prior Sessions(s) – This can be useful if the user discovers that a prior session needs to be updated.
-  • The user has the ability to hide a session.  This function is in  lieu of a delete function which would be permanent and could lead to irreversible errors. When in view mode simply click ‘Hide.’ Hidden sessions can be selected from the View/Edit/Hide window using the radio buttons at the bottom of the form.
-  • ‘Export PDF’ – generates human readable logs for review by team members or for certification."""
+  • Configure a folder for Excel compatible data files. While these files can be edited and used to update the database, no error checking is performed on those updates so any mistake in editing could corrupt the database.
+  • Now enter training locations that will be used repeatedly. While not required, this shortcut will simplify data entry later.  To enter a location, either type in the name followed by **Enter** or click the **Add Location** button.
+  • Dog names are entered in an identical manner.  Unlike location names, however, all dogs that are to be recorded must be entered here. Once used in a session, never delete or alter a dog name since it is possible to lose access to any sessions using a different name.
+  • **Terrain Types** and **Distraction ****T****ypes** are entered in a similar manner.  The user can adjust the order they appear in the table as desired. The most commonly used entries should usually appear at the top of each list.
+  • Now click **Save Configuration** then exit the program (using the ❎ at the upper right corner of the window or by clicking the ‘Quit’ button.""",
+
+    "Usage": """• Notice that some fields have white backgrounds while others are light grey. White fields can generally have free text entered while light-grey windows must use the dropdown by clicking the ˅ or ▼ on the right side of the entry. A few of the white entry fields also have a ˅ or ▼ for common entries.
+  • **Start Time and Finish Time entries** – hover the mouse over the left half and rotate the mouse scroll wheel to change the hour.  Hover over the right side to adjust the minutes.  The time is recorded in 24-hour Military time to avoid confusion. Light grey in the time entry implies that no time is selected.  If a time is accidentally entered, double-click over the colon ‘:’ in that entry to unset it.
+  • **Add Session Purpose **and** Session** **Purposes** – these are paired fields that can accumulate multiple training purposes. 
+  • **Add Session Purpose** – selects one purpose at a time to be added to accumulated purposes.  Use either use the dropdown list or type in a custom purpose followed by **Enter**.
+  • **Session Purposes** – is the list of all purposes of this training session.  If a purpose is added by mistake, simply double-click that entry to remove it.
+  • **Add Terrain Type **and** Accumulated Terrains** behave in the same manner as the Session Purpose pair described above.""",
+
+    "Area Search Session Specific Items": """On the Area Search Training Session Tab **Number of Subjects****,**** Subjects Found **and the table to the right of **Subjects Found** work in tandem.  Notice that ‘Subjects Found’ is disabled until the number of subjects is entered.  Once that is done select the number of subjects found which enables the table to the right.  For each subject found a single click under the heading ‘Indication on Initial Find’ or ‘Indication on Refind’ presents a dropdown box to fill in the dog’s action.""",
+
+    "Trailing Session Specific Items": """On the Trailing Training Session tab find three linked entries in the box labeled **Distractions**. First, select the desired distraction, then select response. One can either use the dropdown list or type in a custom answer.  If typing a custom response, that entry must be registered by typing **Enter**.  Notice that the pair will then present in the **Accumulated Distractions** table.  If not satisfied with an entry, it can be selected by hovering over the desired entry and clicking the mouse. Note that the **Distraction** and **Response** fields list that entry and may now be edited. If only the **Distraction** entry is modified, click **Update** to register that change. Editing the **Response** updates automatically.""",
+
+    "Miscellaneous Items": """**Images** – usually photos or maps can be added either by browsing to the desired file or using Windows drag and drop.
+**View/Edit/Hide Prior Sessions(s)** – This can be useful if the user discovers that a prior session needs to be updated.
+The user has the ability to hide a session.  This function is in lieu of a delete function which would be permanent and could lead to irreversible errors. When in view mode simply click **Hide**’ To return a session to the active list hidden sessions can be selected from the View/Edit/Hide window using the radio buttons at the bottom of the form. Then simply click **Restore**.
+**Export PDF** – generates human readable logs for review by team members or for certification. These documents are saved in the folder defined at setup time."""
 }
 
 

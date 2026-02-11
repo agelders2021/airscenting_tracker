@@ -57,6 +57,31 @@ def escape_for_python_string(text):
     return text
 
 
+def convert_unicode_names(text):
+    """
+    Convert \\N{unicode name} sequences to actual unicode characters.
+    
+    Examples:
+        \\N{BULLET} -> •
+        \\N{EM DASH} -> —
+        \\N{RIGHT SINGLE QUOTATION MARK} -> '
+    """
+    import unicodedata
+    
+    pattern = r'\\N\{([^}]+)\}'
+    
+    def replace_unicode_name(match):
+        name = match.group(1)
+        try:
+            return unicodedata.lookup(name)
+        except KeyError:
+            # If name not found, leave it as-is
+            print(f"  Warning: Unknown unicode name: {name}")
+            return match.group(0)
+    
+    return re.sub(pattern, replace_unicode_name, text)
+
+
 def get_run_text(run):
     """Convert a run to text with simple markers for formatting."""
     text = run.text
@@ -476,6 +501,9 @@ def generate_help_window_py(sections, output_path):
     # Build the HELP_SECTIONS dictionary content
     sections_items = []
     for title, content in sections.items():
+        # Convert \N{name} sequences to actual unicode characters
+        content = convert_unicode_names(content)
+        title = convert_unicode_names(title)
         escaped_content = escape_for_python_string(content)
         sections_items.append(f'    "{title}": """{escaped_content}"""')
     

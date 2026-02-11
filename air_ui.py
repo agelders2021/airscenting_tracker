@@ -537,6 +537,7 @@ def setup_airscent_tab(ui):
     map_scroll.pack(side=tk.RIGHT, fill=tk.Y)
     
     ui.a_map_listbox.bind('<Double-Button-1>', lambda e: ui.file_ops.view_selected_map())
+    ToolTip(ui.a_map_listbox,"Drop maps, images or videos here",delay=250)
     
     # Setup mouse wheel handling for the map listbox
     ui._setup_listbox_wheel(ui.a_map_listbox)

@@ -72,7 +72,7 @@ import sv
 
 # App constants
 APP_TITLE = "SAR K9 Training Record"
-APP_VERSION = "1.0.12-alpha"
+APP_VERSION = "1.0.1-alpha"
 GITHUB_URL = "github.com/agelders2021/sar-k9-training-record"
 
 
