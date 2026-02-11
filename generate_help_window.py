@@ -1,4 +1,207 @@
+#!/usr/bin/env python3
 """
+Generate help_window.py from a Word Document
+
+This script reads a Word document (.docx) and generates the help_window.py file
+for the SAR K9 Training Records application using tkinter (no PyQt6 required).
+
+DOCUMENT STRUCTURE REQUIREMENTS:
+--------------------------------
+The Word document should be structured with:
+- Heading 1 styles for main section titles (these become the navigation items)
+- Regular paragraphs for content under each heading
+- Bold text is converted to **text** markers
+- Italic text is converted to *text* markers  
+- Bullet lists are preserved with bullet characters
+- Numbered lists are preserved with numbers
+
+Example document structure:
+    Getting Started          <- Heading 1
+    Welcome to the app...    <- Normal paragraph
+    
+    Key features:            <- Normal paragraph
+    • Feature one            <- Bullet list
+    • Feature two            <- Bullet list
+    
+    Dog Management           <- Heading 1
+    This section covers...   <- Normal paragraph
+
+USAGE:
+------
+    python generate_help_window.py input.docx [output.py]
+    
+    If output.py is not specified, it defaults to help_window.py
+
+DEPENDENCIES:
+-------------
+    pip install python-docx --break-system-packages
+"""
+
+import sys
+import re
+from pathlib import Path
+
+try:
+    from docx import Document
+    from docx.oxml.ns import qn
+except ImportError:
+    print("Error: python-docx is required.")
+    print("Install with: pip install python-docx --break-system-packages")
+    sys.exit(1)
+
+
+def escape_for_python_string(text):
+    """Escape text for use in a Python triple-quoted string."""
+    text = text.replace('\\', '\\\\')
+    text = text.replace('"""', '\\"\\"\\"')
+    return text
+
+
+def get_run_text(run):
+    """Convert a run to text with simple markers for formatting."""
+    text = run.text
+    if not text:
+        return ''
+    
+    # Apply formatting markers that we'll parse in the Text widget
+    if run.bold and run.italic:
+        text = f'***{text}***'
+    elif run.bold:
+        text = f'**{text}**'
+    elif run.italic:
+        text = f'*{text}*'
+    
+    return text
+
+
+def get_paragraph_text(paragraph):
+    """Convert a paragraph to text."""
+    parts = []
+    for run in paragraph.runs:
+        parts.append(get_run_text(run))
+    
+    return ''.join(parts)
+
+
+def is_heading1(paragraph):
+    """Check if paragraph is a Heading 1."""
+    style_name = paragraph.style.name if paragraph.style else ''
+    return style_name == 'Heading 1' or style_name.startswith('Heading 1')
+
+
+def is_heading2(paragraph):
+    """Check if paragraph is a Heading 2."""
+    style_name = paragraph.style.name if paragraph.style else ''
+    return style_name == 'Heading 2' or style_name.startswith('Heading 2')
+
+
+def is_heading3(paragraph):
+    """Check if paragraph is a Heading 3."""
+    style_name = paragraph.style.name if paragraph.style else ''
+    return style_name == 'Heading 3' or style_name.startswith('Heading 3')
+
+
+def is_list_paragraph(paragraph):
+    """Check if paragraph is a list item."""
+    numPr = paragraph._element.find(qn('w:pPr'))
+    if numPr is not None:
+        numPr = numPr.find(qn('w:numPr'))
+        if numPr is not None:
+            return True
+    
+    style_name = paragraph.style.name if paragraph.style else ''
+    if 'List' in style_name:
+        return True
+    
+    return False
+
+
+def get_list_type(paragraph):
+    """Determine if list is bulleted or numbered."""
+    style_name = paragraph.style.name if paragraph.style else ''
+    if 'Number' in style_name or 'Numbered' in style_name:
+        return 'numbered'
+    return 'bullet'
+
+
+def parse_docx(docx_path):
+    """
+    Parse a Word document and extract sections.
+    
+    Returns a dictionary: {section_title: text_content}
+    """
+    doc = Document(docx_path)
+    
+    sections = {}
+    current_section = None
+    current_content = []
+    numbered_counter = 0
+    
+    for paragraph in doc.paragraphs:
+        text = paragraph.text.strip()
+        
+        # Skip empty paragraphs
+        if not text:
+            if current_section and current_content and current_content[-1] != '':
+                current_content.append('')  # Add blank line
+            continue
+        
+        # Check for Heading 1 - new section
+        if is_heading1(paragraph):
+            # Save previous section
+            if current_section and current_content:
+                sections[current_section] = '\n'.join(current_content).strip()
+            current_section = text
+            current_content = []
+            numbered_counter = 0
+            continue
+        
+        # Skip content before first heading
+        if current_section is None:
+            continue
+        
+        # Handle headings within section
+        if is_heading2(paragraph):
+            content_text = get_paragraph_text(paragraph)
+            current_content.append('')
+            current_content.append(f'## {content_text}')
+            current_content.append('')
+            numbered_counter = 0
+            continue
+        
+        if is_heading3(paragraph):
+            content_text = get_paragraph_text(paragraph)
+            current_content.append('')
+            current_content.append(f'### {content_text}')
+            current_content.append('')
+            numbered_counter = 0
+            continue
+        
+        # Handle list items
+        if is_list_paragraph(paragraph):
+            content_text = get_paragraph_text(paragraph)
+            list_type = get_list_type(paragraph)
+            if list_type == 'numbered':
+                numbered_counter += 1
+                current_content.append(f'  {numbered_counter}. {content_text}')
+            else:
+                current_content.append(f'  • {content_text}')
+            continue
+        
+        # Regular paragraph
+        numbered_counter = 0
+        content_text = get_paragraph_text(paragraph)
+        if content_text:
+            current_content.append(content_text)
+    
+    # Save last section
+    if current_section and current_content:
+        sections[current_section] = '\n'.join(current_content).strip()
+    
+    return sections
+
+
+TEMPLATE_HEADER = '''"""
 Help Window Module
 
 This module provides a searchable help dialog for the SAR K9 Training Records application.
@@ -15,33 +218,9 @@ import re
 
 # Help content organized by section
 HELP_SECTIONS = {
-    "SAR K9 Training Record": """Preface: This is a preliminary help file to get the user started.  This window can always be viewed by pushing F1 on your keyboard.  It is advised that the user read this entire document one time to get an idea of how to use the program.  However, it is not necessary to memorize it since tooltips pop up when hovering the mouse over most of the more complicated entries.
-Chapter 1 – Setup
-  • Select the primary storage folder.  The database and configuration files are saved here.  Browse to the location you wish to save this data.  On a modern Windows machine placing the folder either on a path included in Microsoft OneDrive or a Dropbox folder is recommended.  Then, in the event of a hardware failure, the training log can be recovered as soon as the hardware is repaired.
-  • Click on ‘Initialize Data Structures’ which creates an empty database. 
-  • Select a backup folder.  While optional, it is STRONGLY recommended to configure this.  Ideally, this folder should reside on an external hard drive or another service such as Google Drive or Dropbox.  This additional redundancy helps ensure that data is never lost.
-  • Configure a PDF export folder.  This folder is used to export human readable logs suitable for certification or legal requirements.
-  • Configure a folder for Excel compatible data files.
-  • Now enter training locations that will be used repeatedly. While not required, this shortcut will simplify data entry later.  To enter a location, either type in the name followed by ‘Enter’ or click the ‘Add Location’ button.
-  • Dog names are entered in an identical manner.  Unlike location names, however, all dogs that are to be recorded must be entered here.
-  • Terrain Types and Distraction types are entered in a similar manner.  The user can adjust the order they appear in the table as desired. The most commonly used entries should usually appear at the top of each list.
-  • Now click ‘Save Configuration’ then exit the program (using the \\N{Negative Squared Cross Mark} at the upper right corner of the window or by clicking the ‘Quit’ button.
-Chapter 2 – Usage
-  • General
-  • After completing configuration in the setup tab, restart the application and select either the ‘Area Search Session Tab’ or ‘Trailing Session Tab’ as needed.
-  • Notice that some fields have white backgrounds while others are light-grey. White fields can generally have free text entered while light grey windows must use the dropdown by clicking the \\N{Modifier Letter Down Arrowhead} on the right side of the entry. A few of the white entry fields also have a \\N{Modifier Letter Down Arrowhead} which for common entries.
-  • Start Time and Finish Time entries are unique – hover the mouse over the left half and rotate the mouse scroll wheel to change the hour.  Hover over the right side to adjust the minutes.  The time is recorded in 24-hour Military time to avoid confusion. Light grey in the time entry implies that no time is selected.  If a time is accidentally entered, double-click over the colon ‘:’ in that entry to unset it.
-  • Data entry of some of the fields is not obvious.
-  • ‘Add Session Purpose’ and ‘Session Purposes’ – these are paired fields that can accumulate multiple training purposes. 
-  • ‘Add Session Purpose’ – selects one purpose at a time to be added to accumulated purposes.  One can either use the dropdown list or type in a custom purpose followed by ‘Enter.’
-  • ‘Session Purposes’ – is the list of all purposes of this training session.  If a purpose is added by mistake, simply double-click that entry to remove it.
-  • ‘Add Terrain Type’ and ‘Accumulated Terrains’ behave in the same manner as the Session Purpose pair described above.
-  • On the Area Search Training Session Tab ‘Number of Subjects’, ‘Subjects Found’ and the table to the right of ‘Subjects Found’ work in tandem.  Notice that ‘Subjects Found’ is disabled until the number of subjects is entered.  Once that is done select the number of subjects found which enables the table to the right.  For each subject found a single click under the heading ‘Indication on Initial Find’ or ‘Indication on Refind’ presents a dropdown box to fill in the dog’s action.
-  • On the Trailing Training Session tab find three linked entries in the box labeled ‘Distractions.’  First select the desired distraction, then select response. One can either use the dropdown list or type in a custom answer.  If typing a custom response, that entry must be registered by typing ‘Enter’.  Notice that the pair will then present in the ‘Accumulated Distractions’ table.  If not satisfied with an entry, it can be selected by hovering over the desired entry and clicking the mouse. Note that the ‘Distraction’ and ‘Response’ fields list that entry and may now be edited. If only the ‘Distraction’ entry is modified, click ‘Update’ to register that change. Editing the ‘Response’ updates automatically.
-  • Images – usually photos or maps can be added either by browsing to the desired file or using Windows drag and drop.
-  • ‘View/Edit/Hide Prior Sessions(s) – This can be useful if the user discovers that a prior session needs to be updated.
-  • The user has the ability to hide a session.  This function is in  lieu of a delete function which would be permanent and could lead to irreversible errors. When in view mode simply click ‘Hide.’ Hidden sessions can be selected from the View/Edit/Hide window using the radio buttons at the bottom of the form.
-  • ‘Export PDF’ – generates human readable logs for review by team members or for certification."""
+'''
+
+TEMPLATE_FOOTER = '''
 }
 
 
@@ -200,33 +379,33 @@ class HelpWindow:
         self.content_text.delete(1.0, tk.END)
         
         # Insert title
-        self.content_text.insert(tk.END, title + "\n\n", 'title')
+        self.content_text.insert(tk.END, title + "\\n\\n", 'title')
         
         # Process content line by line
-        lines = content.split('\n')
+        lines = content.split('\\n')
         for line in lines:
             if line.startswith('## '):
                 # Heading 2
-                self.content_text.insert(tk.END, line[3:] + "\n", 'heading2')
+                self.content_text.insert(tk.END, line[3:] + "\\n", 'heading2')
             elif line.startswith('### '):
                 # Heading 3
-                self.content_text.insert(tk.END, line[4:] + "\n", 'heading3')
-            elif line.strip().startswith('•') or re.match(r'^\s*\d+\.', line):
+                self.content_text.insert(tk.END, line[4:] + "\\n", 'heading3')
+            elif line.strip().startswith('•') or re.match(r'^\\s*\\d+\\.', line):
                 # Bullet or numbered list
-                self.insert_formatted_text(line + "\n", 'bullet')
+                self.insert_formatted_text(line + "\\n", 'bullet')
             elif line.strip():
                 # Regular paragraph
-                self.insert_formatted_text(line + "\n", 'normal')
+                self.insert_formatted_text(line + "\\n", 'normal')
             else:
                 # Empty line
-                self.content_text.insert(tk.END, "\n")
+                self.content_text.insert(tk.END, "\\n")
         
         self.content_text.configure(state=tk.DISABLED)
     
     def insert_formatted_text(self, text, base_tag):
         """Insert text with bold/italic formatting."""
         # Pattern to match **bold**, *italic*, and ***bolditalic***
-        pattern = r'(\*\*\*.*?\*\*\*|\*\*.*?\*\*|\*.*?\*)'
+        pattern = r'(\\*\\*\\*.*?\\*\\*\\*|\\*\\*.*?\\*\\*|\\*.*?\\*)'
         
         parts = re.split(pattern, text)
         for part in parts:
@@ -288,3 +467,61 @@ if __name__ == "__main__":
     help_win.show()
     
     root.mainloop()
+'''
+
+
+def generate_help_window_py(sections, output_path):
+    """Generate the help_window.py file from parsed sections."""
+    
+    # Build the HELP_SECTIONS dictionary content
+    sections_items = []
+    for title, content in sections.items():
+        escaped_content = escape_for_python_string(content)
+        sections_items.append(f'    "{title}": """{escaped_content}"""')
+    
+    sections_dict = ',\n\n'.join(sections_items)
+    
+    # Combine the template parts
+    output = TEMPLATE_HEADER + sections_dict + TEMPLATE_FOOTER
+    
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(output)
+    
+    print(f"Generated {output_path}")
+    print(f"  - {len(sections)} sections created")
+    for title in sections.keys():
+        print(f"    • {title}")
+
+
+def main():
+    if len(sys.argv) < 2:
+        print(__doc__)
+        print("\nError: Please provide the input Word document path.")
+        print("Usage: python generate_help_window.py input.docx [output.py]")
+        sys.exit(1)
+    
+    input_path = Path(sys.argv[1])
+    output_path = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("help_window.py")
+    
+    if not input_path.exists():
+        print(f"Error: Input file not found: {input_path}")
+        sys.exit(1)
+    
+    if not input_path.suffix.lower() == '.docx':
+        print(f"Error: Input file must be a .docx file, got: {input_path.suffix}")
+        sys.exit(1)
+    
+    print(f"Reading: {input_path}")
+    sections = parse_docx(input_path)
+    
+    if not sections:
+        print("Warning: No sections found in document.")
+        print("Make sure to use Heading 1 style for section titles.")
+        sys.exit(1)
+    
+    generate_help_window_py(sections, output_path)
+    print("\nDone!")
+
+
+if __name__ == "__main__":
+    main()
