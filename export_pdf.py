@@ -144,11 +144,11 @@ def show_export_dialog(parent, db_type, current_dog, get_connection_func, backup
         
         sessions = get_sessions_for_dog(export_status_var.get())
         
-        for session in sessions:
+        for i, session in enumerate(sessions, start=1):
             session_num, date, handler, dog, status = session
             handler = handler or ""
             status_marker = " [HIDDEN]" if status == 'deleted' else ""
-            text = f"Session #{session_num:3d}  |  {date}  |  {handler:20s}{status_marker}"
+            text = f"Session #{i:3d}  |  {date}  |  {handler:20s}{status_marker}"
             listbox.insert("end", text)
             session_numbers.append(session_num)
         
@@ -617,7 +617,7 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
         return None
     
     def format_temperature(value):
-        """Format temperature value - add Â°F suffix only if value is purely numeric"""
+        """Format temperature value - add Ã‚Â°F suffix only if value is purely numeric"""
         if not value or not str(value).strip():
             return value
         val_str = str(value).strip()
@@ -691,9 +691,9 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
                                  style=[('LINEABOVE', (0,0), (-1,-1), 1, colors.grey)]))
                 story.append(Spacer(1, 0.15*inch))
         
-        # Session header
+        # Session header - use ordinal position (idx+1), not database session number
         date_str = str(session['date']) if session['date'] else ""
-        session_header = Paragraph(f"<b>Session #{session['session_number']}</b> - {date_str}", heading_style)
+        session_header = Paragraph(f"<b>Session #{idx + 1}</b> - {date_str}", heading_style)
         story.append(session_header)
         story.append(Spacer(1, 0.1*inch))
         
@@ -742,7 +742,7 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
             if row:
                 search_data.append(row)
         
-        # Temperature with Â°F suffix if purely numeric
+        # Temperature with Ã‚Â°F suffix if purely numeric
         temp_row = make_field("Temperature", format_temperature(session.get('temperature')))
         if temp_row:
             search_data.append(temp_row)

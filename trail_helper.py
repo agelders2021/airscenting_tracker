@@ -57,6 +57,16 @@ class TrailingHelper:
         
         is_update = hasattr(self.trailing_entry, 'editing_session') and self.trailing_entry.editing_session
         
+        if is_update:
+            # Use the actual DB session number (not the displayed ordinal)
+            db_session_number = getattr(self.trailing_entry, 'current_db_session_number', None)
+            if db_session_number is not None:
+                session_data['t_session_number'] = str(db_session_number)
+        else:
+            # New session: use DB MAX+1 (not the displayed ordinal)
+            actual_db_number = self.get_next_trailing_db_session_number(dog_name)
+            session_data['t_session_number'] = str(actual_db_number)
+        
         success, session_id, message = db_ops.save_session(session_data, is_update)
         
         if success:
@@ -85,6 +95,8 @@ class TrailingHelper:
             
             # Clear form and prepare for next session
             self.trailing_entry.clear_form()
+            # Clear DB session number since we're no longer editing
+            self.trailing_entry.current_db_session_number = None
             
             # Save last handler and dog to config
             current_handler = sv.t_handler.get()
@@ -142,7 +154,18 @@ class TrailingHelper:
     # =========================================================================
     
     def get_trailing_next_session_number(self, dog_name):
-        """Get next session number for a dog in trailing"""
+        """Get next display session number for a dog in trailing.
+        
+        Returns count of active sessions + 1 (ordinal position for display).
+        For actual DB session number on save, use get_next_db_session_number().
+        """
+        from t_ui_database import DatabaseOperations as TDatabaseOperations
+        db_ops = TDatabaseOperations(self)
+        active_sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter="Active")
+        return len(active_sessions) + 1
+    
+    def get_next_trailing_db_session_number(self, dog_name):
+        """Get next DB session number (MAX+1) for actual database insert."""
         from t_ui_database import DatabaseOperations as TDatabaseOperations
         db_ops = TDatabaseOperations(self)
         return db_ops.get_next_session_number(dog_name)
@@ -210,15 +233,14 @@ class TrailingHelper:
             session_listbox.delete(0, tk.END)
             session_data_list.clear()
             
-            for session in sessions_to_show:
-                session_num = session.get('t_session_number', '?')
+            for i, session in enumerate(sessions_to_show, start=1):
                 date = session.get('t_date', '')
                 handler = session.get('t_handler', '') or ''
                 location = session.get('t_location', '') or ''
                 status = session.get('status', 'active')
                 status_marker = " [HIDDEN]" if status == 'deleted' else ""
                 
-                display_text = f"#{session_num:3d}  |  {str(date):10s}  |  {handler:15s}  |  {location:20s}{status_marker}"
+                display_text = f"#{i:3d}  |  {str(date):10s}  |  {handler:15s}  |  {location:20s}{status_marker}"
                 session_listbox.insert(tk.END, display_text)
                 session_data_list.append(session)
         
@@ -272,17 +294,20 @@ class TrailingHelper:
                 return
             
             selected_sessions = [session_data_list[i] for i in selected_indices]
-            selected_nums = [s.get('t_session_number') for s in selected_sessions]
+            # DB session numbers for actual operations
+            selected_db_nums = [s.get('t_session_number') for s in selected_sessions]
+            # Display ordinals for user messages
+            selected_display_nums = [i + 1 for i in selected_indices]
             status_filter = sv.t_session_status_filter.get()
             
             if status_filter == 'deleted':
                 result = messagebox.askyesno("Confirm Restore",
-                    f"Restore {len(selected_nums)} session(s) to active?\n\nSessions: {', '.join(map(str, selected_nums))}",
+                    f"Restore {len(selected_display_nums)} session(s) to active?\n\nSessions: {', '.join(map(str, selected_display_nums))}",
                     icon='question')
                 if result:
-                    for session_num in selected_nums:
+                    for session_num in selected_db_nums:
                         db_ops.update_session_status(session_num, dog_name, 'active')
-                    self.show_status_message(f"Restored {len(selected_nums)} trailing session(s)", "info")
+                    self.show_status_message(f"Restored {len(selected_db_nums)} trailing session(s)", "info")
                     # Reset filter to active for next dialog open
                     sv.t_session_status_filter.set("active")
                     # Clear session list and reset form for new entry
@@ -290,6 +315,7 @@ class TrailingHelper:
                     self.trailing_entry.current_session_index = -1
                     self.trailing_entry.editing_session = False
                     self.trailing_entry.editing_row = None
+                    self.trailing_entry.current_db_session_number = None
                     # Update session number to next available
                     next_session = self.get_trailing_next_session_number(dog_name)
                     sv.t_session.set(str(next_session))
@@ -297,12 +323,12 @@ class TrailingHelper:
                     dialog.destroy()
             else:
                 result = messagebox.askyesno("Confirm Hide",
-                    f"Mark {len(selected_nums)} session(s) as hidden?\n\nSessions: {', '.join(map(str, selected_nums))}",
+                    f"Mark {len(selected_display_nums)} session(s) as hidden?\n\nSessions: {', '.join(map(str, selected_display_nums))}",
                     icon='warning')
                 if result:
-                    for session_num in selected_nums:
+                    for session_num in selected_db_nums:
                         db_ops.update_session_status(session_num, dog_name, 'deleted')
-                    self.show_status_message(f"Hidden {len(selected_nums)} trailing session(s)", "info")
+                    self.show_status_message(f"Hidden {len(selected_db_nums)} trailing session(s)", "info")
                     # Reset filter to active for next dialog open
                     sv.t_session_status_filter.set("active")
                     # Clear session list and reset form for new entry
@@ -310,6 +336,7 @@ class TrailingHelper:
                     self.trailing_entry.current_session_index = -1
                     self.trailing_entry.editing_session = False
                     self.trailing_entry.editing_row = None
+                    self.trailing_entry.current_db_session_number = None
                     # Update session number to next available
                     next_session = self.get_trailing_next_session_number(dog_name)
                     sv.t_session.set(str(next_session))
@@ -353,6 +380,8 @@ class TrailingHelper:
         self.trailing_entry.set_session_data(session_data)
         self.trailing_entry.editing_session = True
         self.trailing_entry.editing_row = session_data.get('id')
+        # Store actual DB session number for save operations
+        self.trailing_entry.current_db_session_number = session_data.get('t_session_number')
         self.trailing_entry.update_save_button_text()
         
         # Set session number to UI index (1-based), not database session number
@@ -444,18 +473,20 @@ class TrailingHelper:
             return
         
         dog_name = sv.t_dog.get()
-        session_number = sv.t_session.get()
+        # Use the actual DB session number, not the displayed ordinal
+        db_session_num = getattr(self.trailing_entry, 'current_db_session_number', None)
         
-        if not dog_name or not session_number:
+        if not dog_name or db_session_num is None:
             return
         
         try:
-            session_num = int(session_number)
-        except ValueError:
+            session_num = int(db_session_num)
+        except (ValueError, TypeError):
             return
         
+        display_num = sv.t_session.get()
         result = messagebox.askyesno("Restore Session",
-            f"Mark trailing session {session_num} for {dog_name} as active?",
+            f"Mark trailing session {display_num} for {dog_name} as active?",
             icon='question')
         
         if result:
@@ -463,7 +494,7 @@ class TrailingHelper:
             success = db_ops.update_session_status(session_num, dog_name, 'active')
             
             if success:
-                self.show_status_message(f"Trailing session {session_num} restored to active", "info")
+                self.show_status_message(f"Trailing session {display_num} restored to active", "info")
                 
                 for session in self.trailing_entry.dog_sessions_list:
                     if session.get('t_session_number') == session_num:
@@ -484,18 +515,20 @@ class TrailingHelper:
             return
         
         dog_name = sv.t_dog.get()
-        session_number = sv.t_session.get()
+        # Use the actual DB session number, not the displayed ordinal
+        db_session_num = getattr(self.trailing_entry, 'current_db_session_number', None)
         
-        if not dog_name or not session_number:
+        if not dog_name or db_session_num is None:
             return
         
         try:
-            session_num = int(session_number)
-        except ValueError:
+            session_num = int(db_session_num)
+        except (ValueError, TypeError):
             return
         
+        display_num = sv.t_session.get()
         result = messagebox.askyesno("Hide Session",
-            f"Mark trailing session {session_num} for {dog_name} as hidden?\n\nThis can be undone with the Restore button.",
+            f"Mark trailing session {display_num} for {dog_name} as hidden?\n\nThis can be undone with the Restore button.",
             icon='warning')
         
         if result:
@@ -503,7 +536,7 @@ class TrailingHelper:
             success = db_ops.update_session_status(session_num, dog_name, 'deleted')
             
             if success:
-                self.show_status_message(f"Trailing session {session_num} marked as hidden", "info")
+                self.show_status_message(f"Trailing session {display_num} marked as hidden", "info")
                 
                 for session in self.trailing_entry.dog_sessions_list:
                     if session.get('t_session_number') == session_num:
@@ -594,15 +627,14 @@ class TrailingHelper:
             status_filter = export_status_var.get()
             sessions = db_ops.get_all_sessions_for_dog(dog_name, status_filter=status_filter.capitalize() if status_filter != "both" else "All")
             
-            for session in sessions:
-                session_num = session.get('t_session_number', '?')
+            for i, session in enumerate(sessions, start=1):
                 date = session.get('t_date', '')
                 handler = session.get('t_handler', '') or ''
                 location = session.get('t_location', '') or ''
                 status = session.get('status', 'active')
                 status_marker = " [HIDDEN]" if status == 'deleted' else ""
                 
-                display_text = f"#{session_num:3d}  |  {str(date):10s}  |  {handler:15s}  |  {location:20s}{status_marker}"
+                display_text = f"#{i:3d}  |  {str(date):10s}  |  {handler:15s}  |  {location:20s}{status_marker}"
                 session_listbox.insert(tk.END, display_text)
                 session_data_list.append(session)
             
@@ -760,14 +792,14 @@ class TrailingHelper:
                 return None
             
             def format_temperature(value):
-                """Format temperature value - add Â°F suffix only if value is purely numeric"""
+                """Format temperature value - add Ã‚Â°F suffix only if value is purely numeric"""
                 if not value or not str(value).strip():
                     return value
                 val_str = str(value).strip()
                 # Check if value is purely numeric (int or float)
                 try:
                     float(val_str)
-                    return f"{val_str}Â°F"
+                    return f"{val_str}Ã‚Â°F"
                 except ValueError:
                     # Mixed content - return as-is
                     return val_str
@@ -821,10 +853,9 @@ class TrailingHelper:
                                          style=[('LINEABOVE', (0,0), (-1,-1), 1, colors.grey)]))
                         elements.append(Spacer(1, 0.15*inch))
                 
-                # Session header
-                session_num = session_data.get('t_session_number', '?')
+                # Session header - use ordinal position (i+1), not database session number
                 date_str = str(session_data.get('t_date', '')) if session_data.get('t_date') else ''
-                elements.append(Paragraph(f"<b>Session #{session_num}</b> - {date_str}", heading_style))
+                elements.append(Paragraph(f"<b>Session #{i + 1}</b> - {date_str}", heading_style))
                 elements.append(Spacer(1, 0.1*inch))
                 
                 # Session Information
@@ -906,7 +937,7 @@ class TrailingHelper:
                 row = add_field('Weather (Laying)', session_data.get('t_weather_laying'))
                 if row:
                     weather_laying_data.append(row)
-                # Temperature with Â°F suffix if purely numeric
+                # Temperature with Ã‚Â°F suffix if purely numeric
                 row = add_field('Temperature (Laying)', format_temperature(session_data.get('t_temp_laying')))
                 if row:
                     weather_laying_data.append(row)
@@ -929,7 +960,7 @@ class TrailingHelper:
                 row = add_field('Weather (Running)', session_data.get('t_weather_running'))
                 if row:
                     weather_running_data.append(row)
-                # Temperature with Â°F suffix if purely numeric
+                # Temperature with Ã‚Â°F suffix if purely numeric
                 row = add_field('Temperature (Running)', format_temperature(session_data.get('t_temp_running')))
                 if row:
                     weather_running_data.append(row)

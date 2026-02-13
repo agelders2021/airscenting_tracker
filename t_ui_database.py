@@ -128,7 +128,13 @@ class DatabaseManager:
     # ===== TRAILING SESSION OPERATIONS =====
     
     def get_next_session_number(self, dog_name=None):
-        """Get the next session number for a dog (counts active sessions only)"""
+        """Get the next session number for a dog (MAX + 1 across ALL sessions).
+        
+        Uses MAX(t_session_number) rather than COUNT(*) of active sessions,
+        because hidden/deleted sessions still occupy their session_number in
+        the DB (UNIQUE constraint on session_number + dog_name).  Using COUNT
+        would reassign a number that's already taken by a hidden session.
+        """
         if not self._db_exists() or not dog_name:
             return 1
         
@@ -136,19 +142,16 @@ class DatabaseManager:
             old_db_type = self._switch_db_context()
             
             with get_connection() as conn:
-                # Count active sessions only (status = 'active' or status IS NULL)
-                # This is consistent with air scenting behavior
                 result = conn.execute(
-                    text("SELECT COUNT(*) FROM t_training_sessions WHERE t_dog_name = :dog_name AND (status = 'active' OR status IS NULL)"),
+                    text("SELECT MAX(t_session_number) FROM t_training_sessions WHERE t_dog_name = :dog_name"),
                     {"dog_name": dog_name}
                 )
                 row = result.fetchone()
             
             self._restore_db_context(old_db_type)
             
-            if row and row[0]:
-                return row[0] + 1
-            return 1
+            max_num = row[0] if row and row[0] is not None else 0
+            return max_num + 1
             
         except Exception as e:
             self._restore_db_context(old_db_type)
@@ -157,11 +160,17 @@ class DatabaseManager:
     
     def save_trailing_session(self, session_data, is_update=False):
         """
-        Save or update a trailing session to the database
+        Save or update a trailing session to the database.
+        
+        Always checks if a row with (t_session_number, t_dog_name) already
+        exists.  If it does, the row is updated regardless of ``is_update``.
+        This prevents UNIQUE-constraint violations when hidden/deleted sessions
+        still occupy the same session number.
         
         Args:
             session_data: Dictionary with all session fields (t_ prefixed)
-            is_update: If True, update existing; if False, insert new
+            is_update: Hint from caller; True when editing an existing session.
+                       The method also detects existing rows independently.
             
         Returns:
             tuple: (success: bool, session_id: int or None, message: str)
@@ -176,72 +185,77 @@ class DatabaseManager:
                 session_number = session_data.get('t_session_number')
                 dog_name = session_data.get('t_dog_name')
                 
-                if is_update:
-                    # Check if session exists
-                    result = conn.execute(
-                        text("SELECT id, uuid FROM t_training_sessions WHERE t_session_number = :session_number AND t_dog_name = :dog_name"),
-                        {"session_number": session_number, "dog_name": dog_name}
-                    )
-                    existing = result.fetchone()
-                    
-                    if existing:
-                        session_id = existing[0]
-                        existing_uuid = existing[1]
-                        
-                        # Keep existing UUID, update timestamp
-                        conn.execute(
-                            text("""
-                                UPDATE t_training_sessions SET
-                                    t_date = :t_date,
-                                    t_handler = :t_handler,
-                                    t_field_support = :t_field_support,
-                                    t_location = :t_location,
-                                    t_start_time = :t_start_time,
-                                    t_finish_time = :t_finish_time,
-                                    t_trail_age = :t_trail_age,
-                                    t_trail_length = :t_trail_length,
-                                    t_difficulty = :t_difficulty,
-                                    t_trail_layer = :t_trail_layer,
-                                    t_cross_track_layer = :t_cross_track_layer,
-                                    t_cross_track_age = :t_cross_track_age,
-                                    t_weather_laying = :t_weather_laying,
-                                    t_temperature_laying = :t_temperature_laying,
-                                    t_wind_speed_laying = :t_wind_speed_laying,
-                                    t_wind_direction_laying = :t_wind_direction_laying,
-                                    t_humidity_laying = :t_humidity_laying,
-                                    t_weather_running = :t_weather_running,
-                                    t_temperature_running = :t_temperature_running,
-                                    t_wind_speed_running = :t_wind_speed_running,
-                                    t_wind_direction_running = :t_wind_direction_running,
-                                    t_humidity_running = :t_humidity_running,
-                                    t_start_behavior = :t_start_behavior,
-                                    t_consistency = :t_consistency,
-                                    t_head_position = :t_head_position,
-                                    t_pace = :t_pace,
-                                    t_indication = :t_indication,
-                                    t_time_to_complete = :t_time_to_complete,
-                                    t_success_rate = :t_success_rate,
-                                    t_impression = :t_impression,
-                                    t_map_files = :t_map_files,
-                                    update_time = :update_time,
-                                    user_name = :user_name
-                                WHERE t_session_number = :t_session_number AND t_dog_name = :t_dog_name
-                            """),
-                            {
-                                **session_data,
-                                "update_time": get_current_update_time(),
-                                "user_name": get_username()
-                            }
-                        )
-                        conn.commit()
-                        self._restore_db_context(old_db_type)
-                        return True, session_id, "Session updated successfully"
-                    else:
-                        # Session doesn't exist for update, insert instead
-                        is_update = False
+                # Ensure session_number is int
+                try:
+                    session_number = int(session_number)
+                    session_data['t_session_number'] = session_number
+                except (ValueError, TypeError):
+                    self._restore_db_context(old_db_type)
+                    return False, None, f"Invalid session number: {session_number}"
                 
-                if not is_update:
-                    # Generate new UUID for new session
+                # Always check if session exists (regardless of is_update flag)
+                result = conn.execute(
+                    text("SELECT id, uuid FROM t_training_sessions WHERE t_session_number = :session_number AND t_dog_name = :dog_name"),
+                    {"session_number": session_number, "dog_name": dog_name}
+                )
+                existing = result.fetchone()
+                
+                if existing:
+                    session_id = existing[0]
+                    existing_uuid = existing[1]
+                    
+                    # Keep existing UUID, update timestamp
+                    conn.execute(
+                        text("""
+                            UPDATE t_training_sessions SET
+                                t_date = :t_date,
+                                t_handler = :t_handler,
+                                t_field_support = :t_field_support,
+                                t_location = :t_location,
+                                t_start_time = :t_start_time,
+                                t_finish_time = :t_finish_time,
+                                t_trail_age = :t_trail_age,
+                                t_trail_length = :t_trail_length,
+                                t_difficulty = :t_difficulty,
+                                t_trail_layer = :t_trail_layer,
+                                t_cross_track_layer = :t_cross_track_layer,
+                                t_cross_track_age = :t_cross_track_age,
+                                t_weather_laying = :t_weather_laying,
+                                t_temperature_laying = :t_temperature_laying,
+                                t_wind_speed_laying = :t_wind_speed_laying,
+                                t_wind_direction_laying = :t_wind_direction_laying,
+                                t_humidity_laying = :t_humidity_laying,
+                                t_weather_running = :t_weather_running,
+                                t_temperature_running = :t_temperature_running,
+                                t_wind_speed_running = :t_wind_speed_running,
+                                t_wind_direction_running = :t_wind_direction_running,
+                                t_humidity_running = :t_humidity_running,
+                                t_start_behavior = :t_start_behavior,
+                                t_consistency = :t_consistency,
+                                t_head_position = :t_head_position,
+                                t_pace = :t_pace,
+                                t_indication = :t_indication,
+                                t_time_to_complete = :t_time_to_complete,
+                                t_success_rate = :t_success_rate,
+                                t_impression = :t_impression,
+                                t_map_files = :t_map_files,
+                                update_time = :update_time,
+                                user_name = :user_name,
+                                status = 'active'
+                            WHERE t_session_number = :t_session_number AND t_dog_name = :t_dog_name
+                        """),
+                        {
+                            **session_data,
+                            "update_time": get_current_update_time(),
+                            "user_name": get_username()
+                        }
+                    )
+                    conn.commit()
+                    self._restore_db_context(old_db_type)
+                    return True, session_id, "Session updated successfully"
+                
+                else:
+                    # Row does not exist — safe to INSERT
                     new_uuid = generate_session_uuid()
                     
                     conn.execute(

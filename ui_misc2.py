@@ -271,6 +271,16 @@ class Misc2Operations:
                     })
 
             db_mgr.save_subject_responses(session_id, subject_responses_list)
+
+            # Compute and store content checksum covering main + child tables.
+            # This is compared against the JSON backup during sync to detect
+            # real content conflicts (not timestamp noise).
+            try:
+                from backup_sync import update_session_checksum
+                update_session_checksum(
+                    sv.db_type.get(), 'a', session_number, dog_name)
+            except Exception as e:
+                print(f"Warning: Could not update session checksum: {e}")
         finally:
             if working_dialog:
                 working_dialog.close(delay_ms=200)

@@ -280,7 +280,7 @@ class MiscDataOperations:
         result = messagebox.askyesno(
             "Rebuild Database?",
             f"{reason}\n\n"
-            f"Found in {json_path}:\n" + "\n".join(f"  Ã¢â‚¬Â¢ {item}" for item in restore_items) + "\n\n"
+            f"Found in {json_path}:\n" + "\n".join(f"  ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {item}" for item in restore_items) + "\n\n"
             "Would you like to rebuild the database from these backups?",
             icon='question'
         )
@@ -1324,7 +1324,7 @@ class MiscDataOperations:
         
         # Warning
         warning = tk.Label(dialog, 
-            text="Ã¢Å¡Â Ã¯Â¸Â Warning: Restoring will add missing data from the backup.\nExisting data will not be overwritten.",
+            text="ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Warning: Restoring will add missing data from the backup.\nExisting data will not be overwritten.",
             fg="orange", justify="center")
         warning.pack(pady=5)
         
@@ -1589,25 +1589,47 @@ class MiscDataOperations:
             return False
     
     def _restore_related_tables(self, backup_data, database):
-        """Restore related tables like session_terrains, session_purposes, etc."""
-        related_tables = [
-            "session_terrains", "session_purposes", "subject_responses",
-            "t_session_terrains", "t_session_purposes", "t_session_distractions"
+        """Restore related tables like selected_terrains, a_selected_purposes, etc.
+        
+        Handles both old backup files (which used wrong key names like
+        'session_terrains') and new ones (which use correct names like
+        'selected_terrains').
+        """
+        from sqlalchemy import text
+        
+        # Map: (JSON key names to try) → actual DB table name
+        # First key is the correct name (new backups), second is old wrong name.
+        table_mappings = [
+            (["selected_terrains", "session_terrains"], "selected_terrains"),
+            (["a_selected_purposes", "session_purposes"], "a_selected_purposes"),
+            (["subject_responses"], "subject_responses"),
+            (["t_selected_terrains", "t_session_terrains"], "t_selected_terrains"),
+            (["t_selected_purposes", "t_session_purposes"], "t_selected_purposes"),
+            (["t_distractions", "t_session_distractions"], "t_distractions"),
         ]
         
-        for table_name in related_tables:
-            if table_name in backup_data:
-                for row in backup_data[table_name]:
-                    try:
-                        with database.get_connection() as conn:
-                            columns = [k for k in row.keys() if k != 'id']
-                            placeholders = [f":{k}" for k in columns]
-                            sql = f"INSERT OR IGNORE INTO {table_name} ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
-                            params = {k: row.get(k) for k in columns}
-                            conn.execute(text(sql), params)
-                            conn.commit()
-                    except:
-                        pass
+        for json_keys, db_table in table_mappings:
+            # Find data under any of the possible key names
+            rows = None
+            for key in json_keys:
+                if key in backup_data:
+                    rows = backup_data[key]
+                    break
+            
+            if not rows:
+                continue
+            
+            for row in rows:
+                try:
+                    with database.get_connection() as conn:
+                        columns = [k for k in row.keys() if k != 'id']
+                        placeholders = [f":{k}" for k in columns]
+                        sql = f"INSERT OR IGNORE INTO {db_table} ({', '.join(columns)}) VALUES ({', '.join(placeholders)})"
+                        params = {k: row.get(k) for k in columns}
+                        conn.execute(text(sql), params)
+                        conn.commit()
+                except:
+                    pass
     
     def _restore_sessions_from_backup_folder(self, json_folder, db_type):
         """

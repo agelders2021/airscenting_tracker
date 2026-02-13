@@ -365,6 +365,10 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
             last_dog = db_ops.load_db_setting("last_dog_name", "")
             # print(f"DEBUG _load_last_dog_for_air_session: last_dog from db = '{last_dog}'")
             
+            # Fall back to config if DB setting is empty (e.g. after DB rebuild)
+            if not last_dog:
+                last_dog = airscenting_config.get("last_dog", "")
+            
             if last_dog:
                 # Check if dog exists in the combobox values
                 if hasattr(self, 'a_dog_combo'):
@@ -916,39 +920,40 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
                 for row in result:
                     backup_data["distraction_types"].append(dict(zip(columns, row)))
                 
-                # Try to export related tables (terrains, purposes, distractions for trailing)
+                # Export child tables (terrains, purposes, responses, distractions)
+                # Table names must match schema.py exactly.
                 try:
-                    result = conn.execute(text("SELECT * FROM session_terrains"))
+                    result = conn.execute(text("SELECT * FROM selected_terrains"))
                     columns = result.keys()
-                    backup_data["session_terrains"] = [dict(zip(columns, row)) for row in result]
+                    backup_data["selected_terrains"] = [dict(zip(columns, row)) for row in result]
                 except:
                     pass
                 
                 try:
-                    result = conn.execute(text("SELECT * FROM session_purposes"))
+                    result = conn.execute(text("SELECT * FROM a_selected_purposes"))
                     columns = result.keys()
-                    backup_data["session_purposes"] = [dict(zip(columns, row)) for row in result]
+                    backup_data["a_selected_purposes"] = [dict(zip(columns, row)) for row in result]
                 except:
                     pass
                 
                 try:
-                    result = conn.execute(text("SELECT * FROM t_session_terrains"))
+                    result = conn.execute(text("SELECT * FROM t_selected_terrains"))
                     columns = result.keys()
-                    backup_data["t_session_terrains"] = [dict(zip(columns, row)) for row in result]
+                    backup_data["t_selected_terrains"] = [dict(zip(columns, row)) for row in result]
                 except:
                     pass
                 
                 try:
-                    result = conn.execute(text("SELECT * FROM t_session_purposes"))
+                    result = conn.execute(text("SELECT * FROM t_selected_purposes"))
                     columns = result.keys()
-                    backup_data["t_session_purposes"] = [dict(zip(columns, row)) for row in result]
+                    backup_data["t_selected_purposes"] = [dict(zip(columns, row)) for row in result]
                 except:
                     pass
                 
                 try:
-                    result = conn.execute(text("SELECT * FROM t_session_distractions"))
+                    result = conn.execute(text("SELECT * FROM t_distractions"))
                     columns = result.keys()
-                    backup_data["t_session_distractions"] = [dict(zip(columns, row)) for row in result]
+                    backup_data["t_distractions"] = [dict(zip(columns, row)) for row in result]
                 except:
                     pass
                 

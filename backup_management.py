@@ -195,10 +195,10 @@ class BackupSyncManager:
         1. Scan primary JSON folder
         2. Scan secondary JSON folder (if exists)
         3. Get DB sessions with UUID/update_time
-        4. Sync DB ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Primary JSON (DB newer or missing in JSON)
-        5. Sync Primary JSON ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ DB (JSON newer)
-        6. Sync Primary ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Secondary (Primary newer or missing)
-        7. Sync Secondary ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Primary (Secondary newer, also update DB)
+        4. Sync DB ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Primary JSON (DB newer or missing in JSON)
+        5. Sync Primary JSON ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ DB (JSON newer)
+        6. Sync Primary ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Secondary (Primary newer or missing)
+        7. Sync Secondary ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Primary (Secondary newer, also update DB)
         """
         primary_path = Path(primary_folder) if primary_folder else None
         secondary_path = Path(secondary_folder) if secondary_folder else None
@@ -228,7 +228,7 @@ class BackupSyncManager:
         # print(f"Sync: Found {len(db_sessions)} sessions in database")
         pass
         
-        # Step 4: Sync DB ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Primary JSON
+        # Step 4: Sync DB ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Primary JSON
         if primary_path and primary_path.exists():
             if status_callback:
                 status_callback("Sync: Updating JSON from database...")
@@ -238,21 +238,21 @@ class BackupSyncManager:
                 # Re-scan primary after updates
                 primary_dict = scan_json_folder(primary_path)
         
-        # Step 5: Sync Primary JSON ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ DB
+        # Step 5: Sync Primary JSON ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ DB
         if primary_dict:
             if status_callback:
                 status_callback("Sync: Updating database from JSON...")
             count = sync_json_to_db(primary_dict, db_sessions, db_type)
             self.sync_results["json_to_db"] = count
         
-        # Step 6: Sync Primary ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Secondary
+        # Step 6: Sync Primary ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Secondary
         if secondary_path and secondary_path.exists() and primary_dict:
             if status_callback:
                 status_callback("Sync: Mirroring to secondary backup...")
             count = sync_primary_to_secondary(primary_dict, secondary_dict, secondary_path)
             self.sync_results["primary_to_secondary"] = count
         
-        # Step 7: Sync Secondary ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Primary (and DB)
+        # Step 7: Sync Secondary ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Primary (and DB)
         if secondary_path and secondary_path.exists() and primary_path and primary_path.exists():
             if status_callback:
                 status_callback("Sync: Checking secondary for newer files...")
@@ -282,43 +282,52 @@ def scan_json_folder(folder_path):
     if not folder.exists():
         return result
     
-    for json_file in folder.glob("*session*.json"):
-        try:
-            with open(json_file, 'r') as f:
-                data = json.load(f)
+    # Match ALL session file naming conventions:
+    # Old: *session*.json  (e.g., Fido_session_5_20250107.json)
+    # New: a_*.json, t_*.json (e.g., a_UserName_Fido_5.json)
+    seen_files = set()
+    for pattern in ['a_*.json', 't_*.json', '*session*.json']:
+        for json_file in folder.glob(pattern):
+            if json_file in seen_files:
+                continue
+            seen_files.add(json_file)
             
-            session_uuid = data.get("uuid")
-            update_time_str = data.get("update_time")
-            
-            # Parse update_time from JSON
-            update_time = None
-            if update_time_str:
-                try:
-                    update_time = datetime.fromisoformat(update_time_str)
-                except:
-                    pass
-            
-            # Get file modification time as fallback
-            file_mtime = datetime.fromtimestamp(json_file.stat().st_mtime)
-            
-            # If no update_time in JSON, use file modification time
-            if update_time is None:
-                update_time = file_mtime
-            
-            # Use UUID as key if available, otherwise use filename
-            key = session_uuid if session_uuid else json_file.stem
-            
-            result[key] = {
-                "update_time": update_time,
-                "file_mtime": file_mtime,
-                "filepath": json_file,
-                "data": data,
-                "has_uuid": bool(session_uuid)
-            }
-            
-        except Exception as e:
-            # print(f"Warning: Could not read {json_file}: {e}")
-            pass
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                session_uuid = data.get("uuid")
+                update_time_str = data.get("update_time")
+                
+                # Parse update_time from JSON
+                update_time = None
+                if update_time_str:
+                    try:
+                        update_time = datetime.fromisoformat(str(update_time_str).replace('Z', '+00:00'))
+                    except:
+                        pass
+                
+                # Get file modification time as fallback
+                file_mtime = datetime.fromtimestamp(json_file.stat().st_mtime)
+                
+                # If no update_time in JSON, use file modification time
+                if update_time is None:
+                    update_time = file_mtime
+                
+                # Use UUID as key if available, otherwise use filename
+                key = session_uuid if session_uuid else json_file.stem
+                
+                result[key] = {
+                    "update_time": update_time,
+                    "file_mtime": file_mtime,
+                    "filepath": json_file,
+                    "data": data,
+                    "has_uuid": bool(session_uuid)
+                }
+                
+            except Exception as e:
+                # print(f"Warning: Could not read {json_file}: {e}")
+                pass
     
     return result
 
@@ -661,7 +670,7 @@ def load_full_session_from_db(session_number, dog_name, db_type):
 def sync_json_to_db(json_dict, db_sessions, db_type):
     """
     Sync JSON to database - create missing or update DB entries where JSON is newer.
-    Uses file modification time for comparison (handles manual edits).
+    Uses update_time from JSON data as primary comparison, falls back to file_mtime.
     
     Returns:
         int: Number of DB records created/updated
@@ -685,10 +694,12 @@ def sync_json_to_db(json_dict, db_sessions, db_type):
                 # print(f"Sync error inserting session from JSON: {e}")
                 pass
         else:
-            # Both exist - check if JSON file is newer (use file mtime for manual edits)
+            # Both exist - check if JSON is newer
             db_time = _parse_update_time(db_info["update_time"])
-            # Use file modification time, falling back to update_time from JSON
-            json_time = json_info.get("file_mtime") or _parse_update_time(json_info.get("update_time"))
+            
+            # Prefer update_time from JSON data, fall back to file_mtime
+            json_update_time = _parse_update_time(json_info.get("data", {}).get("update_time"))
+            json_time = json_update_time or json_info.get("file_mtime") or _parse_update_time(json_info.get("update_time"))
             
             if db_time and json_time and json_time > db_time:
                 # print(f"Sync: JSON file newer than DB for {session_uuid}, updating DB...")
@@ -698,8 +709,6 @@ def sync_json_to_db(json_dict, db_sessions, db_type):
                 except Exception as e:
                     # print(f"Sync error updating DB from JSON: {e}")
                     pass
-    
-    return count
     
     return count
 
@@ -1314,7 +1323,7 @@ def sync_primary_to_secondary(primary_dict, secondary_dict, secondary_folder):
     """
     Sync primary JSON folder to secondary - copy newer/missing files.
     Only copies valid JSON files.
-    Uses file modification time for comparison (handles manual edits).
+    Uses update_time from JSON data as primary comparison, falls back to file_mtime.
     
     Returns:
         int: Number of files copied
@@ -1330,12 +1339,15 @@ def sync_primary_to_secondary(primary_dict, secondary_dict, secondary_folder):
             # File not in secondary
             should_copy = True
         else:
-            # Use file modification time for comparison (more reliable for manual edits)
-            primary_mtime = primary_info.get("file_mtime") or primary_info.get("update_time")
-            secondary_mtime = secondary_info.get("file_mtime") or secondary_info.get("update_time")
+            # Use update_time from data, fall back to file_mtime
+            primary_update = _parse_update_time(primary_info.get("data", {}).get("update_time"))
+            primary_time = primary_update or primary_info.get("file_mtime") or primary_info.get("update_time")
             
-            if primary_mtime and secondary_mtime:
-                if primary_mtime > secondary_mtime:
+            secondary_update = _parse_update_time(secondary_info.get("data", {}).get("update_time"))
+            secondary_time = secondary_update or secondary_info.get("file_mtime") or secondary_info.get("update_time")
+            
+            if primary_time and secondary_time:
+                if primary_time > secondary_time:
                     should_copy = True
         
         if should_copy:
@@ -1363,7 +1375,7 @@ def sync_secondary_to_primary(secondary_dict, primary_dict, primary_folder, db_t
     """
     Sync secondary JSON folder to primary - copy newer files and update DB.
     Only copies valid JSON files.
-    Uses file modification time for comparison (handles manual edits).
+    Uses update_time from JSON data as primary comparison, falls back to file_mtime.
     
     Returns:
         int: Number of files copied
@@ -1379,12 +1391,15 @@ def sync_secondary_to_primary(secondary_dict, primary_dict, primary_folder, db_t
             # File not in primary
             should_copy = True
         else:
-            # Use file modification time for comparison (more reliable for manual edits)
-            secondary_mtime = secondary_info.get("file_mtime") or secondary_info.get("update_time")
-            primary_mtime = primary_info.get("file_mtime") or primary_info.get("update_time")
+            # Use update_time from data, fall back to file_mtime
+            secondary_update = _parse_update_time(secondary_info.get("data", {}).get("update_time"))
+            secondary_time = secondary_update or secondary_info.get("file_mtime") or secondary_info.get("update_time")
             
-            if secondary_mtime and primary_mtime:
-                if secondary_mtime > primary_mtime:
+            primary_update = _parse_update_time(primary_info.get("data", {}).get("update_time"))
+            primary_time = primary_update or primary_info.get("file_mtime") or primary_info.get("update_time")
+            
+            if secondary_time and primary_time:
+                if secondary_time > primary_time:
                     should_copy = True
         
         if should_copy:

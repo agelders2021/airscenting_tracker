@@ -665,15 +665,15 @@ class Navigation:
         listbox.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=listbox.yview)
         
-        # Populate listbox
-        for session in sessions:
+        # Populate listbox with ordinal session numbers
+        for i, session in enumerate(sessions, start=1):
             session_num, date, handler, location = session
             handler = handler or ""
             location = location or ""
-            text = f"Session #{session_num:3d}  |  {date}  |  {handler:20s}  |  {location}"
+            text = f"Session #{i:3d}  |  {date}  |  {handler:20s}  |  {location}"
             listbox.insert("end", text)
         
-        # Store session numbers for reference
+        # Store DB session numbers for reference (maps listbox index to DB number)
         session_numbers = [s[0] for s in sessions]
         
         # Refresh function to update listbox when filter changes
@@ -692,11 +692,11 @@ class Navigation:
             listbox.delete(0, "end")
             session_numbers.clear()
             
-            for session in new_sessions:
+            for i, session in enumerate(new_sessions, start=1):
                 session_num, date, handler, location = session
                 handler = handler or ""
                 location = location or ""
-                text = f"Session #{session_num:3d}  |  {date}  |  {handler:20s}  |  {location}"
+                text = f"Session #{i:3d}  |  {date}  |  {handler:20s}  |  {location}"
                 listbox.insert("end", text)
                 session_numbers.append(session_num)
             
