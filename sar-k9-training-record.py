@@ -58,6 +58,7 @@ from ui_navigation import Navigation
 from ui_database import DatabaseOperations, get_db_manager
 from ui_misc_data_ops import MiscDataOperations
 from ui_misc2 import Misc2Operations
+from lock_manager import LockManager
 
 # Tab UI modules
 import air_ui
@@ -142,6 +143,22 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         sv.pdf_folder.set(self.machine_pdf_folder)
         sv.excel_folder.set(self.machine_excel_folder)
         sv.current_user.set(self.machine_current_user)
+        
+        # =====================================================================
+        # SESSION LOCK CHECK
+        # Check for an existing lock file in the secondary backup folder.
+        # If another machine/user holds the lock, the user is prompted to
+        # either exit immediately or take over.
+        # =====================================================================
+        self.lock_manager = None
+        secondary_folder = self.machine_backup_folder
+        if secondary_folder and Path(secondary_folder).exists():
+            self.lock_manager = LockManager(self.root, secondary_folder)
+            if not self.lock_manager.check_startup_lock():
+                # User chose to exit – tear down and abort startup
+                self.root.destroy()
+                import sys
+                sys.exit(0)
         
         # Initialize helper modules
         self.file_ops = FileOperations(self)
@@ -284,6 +301,11 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         
         # Bind F1 key to show help window
         self.root.bind("<F1>", lambda e: show_help_window(self.root))
+        
+        # Start session lock activity tracking (must be after UI is built)
+        if self.lock_manager:
+            self.lock_manager.force_exit_callback = self._lock_force_exit
+            self.lock_manager.start()
     
     # =========================================================================
     # STATUS BAR
@@ -768,7 +790,26 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         # Save exit time to config for backup comparison on next startup
         self._save_exit_time()
         
+        # Release session lock (deletes the lock file and cancels timers)
+        if self.lock_manager:
+            self.lock_manager.release()
+        
         self.root.destroy()
+    
+    def _lock_force_exit(self):
+        """Called by LockManager on inactivity timeout.
+
+        Performs the exit backup and releases the lock but does NOT prompt
+        about unsaved form data.  The LockManager handles root.destroy().
+        """
+        try:
+            self._perform_exit_backup()
+        except Exception:
+            pass
+        try:
+            self._save_exit_time()
+        except Exception:
+            pass
     
     def _save_exit_time(self):
         """Save the current time as exit time in config for backup comparison."""

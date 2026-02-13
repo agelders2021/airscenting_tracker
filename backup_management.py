@@ -1535,10 +1535,26 @@ def export_sessions_to_excel(db_type, json_folder, session_type='airscent'):
     """
     try:
         from openpyxl import Workbook
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
         from openpyxl.utils import get_column_letter
     except ImportError:
         return False, "openpyxl not installed. Run: pip install openpyxl", None
+    
+    # -----------------------------------------------------------------
+    # System-generated columns that should be protected (read-only) in
+    # the exported Excel file.  These are managed by the application or
+    # database and must not be hand-edited.
+    # -----------------------------------------------------------------
+    PROTECTED_COLUMNS_AIRSCENT = {
+        'id', 'user_name', 'created_at', 'updated_at', 'entry_type',
+        'update_time', 'uuid', 'checksum', 'primary_timestamp',
+        'secondary_timestamp', 'status', 'image_files',
+    }
+    PROTECTED_COLUMNS_TRAILING = {
+        'id', 'user_name', 'created_at', 'updated_at', 'entry_type',
+        'update_time', 'uuid', 'checksum', 'primary_timestamp',
+        'secondary_timestamp', 'status', 't_map_files',
+    }
     
     try:
         import config
@@ -1571,6 +1587,51 @@ def export_sessions_to_excel(db_type, json_folder, session_type='airscent'):
             top=Side(style='thin'),
             bottom=Side(style='thin')
         )
+        
+        # Styling for protected (system-generated) columns
+        protected_header_fill = PatternFill(start_color='808080', end_color='808080', fill_type='solid')
+        protected_fill = PatternFill(start_color='E0E0E0', end_color='E0E0E0', fill_type='solid')
+        unlocked = Protection(locked=False)
+        
+        def _protect_sheet(ws, all_col_names, protected_set):
+            """Apply cell protection to a worksheet.
+            
+            System-generated columns are locked and shaded gray.
+            User-editable columns are unlocked.  Sheet protection is
+            enabled so the locked cells become read-only.
+            
+            Args:
+                ws: openpyxl Worksheet
+                all_col_names: list of DB column names in column order
+                protected_set: set of column names to protect
+            """
+            # Build a boolean list: True = protected for each column index
+            col_protected = [
+                (name in protected_set) for name in all_col_names
+            ]
+            
+            for col_idx in range(len(all_col_names)):
+                is_prot = col_protected[col_idx]
+                col_letter = get_column_letter(col_idx + 1)
+                
+                for row_idx in range(1, ws.max_row + 1):
+                    cell = ws[f"{col_letter}{row_idx}"]
+                    if is_prot:
+                        # Protected: keep locked (default), gray background
+                        # Header row gets darker gray; data rows get light gray
+                        if row_idx == 1:
+                            cell.fill = protected_header_fill
+                        else:
+                            cell.fill = protected_fill
+                    else:
+                        # Editable: unlock so user can edit when sheet is protected
+                        cell.protection = unlocked
+            
+            # Enable sheet protection.  Allow sorting and filtering so
+            # the user can still explore the data.
+            ws.protection.sheet = True
+            ws.protection.sort = False        # False = allowed
+            ws.protection.autoFilter = False  # False = allowed
         
         sessions_exported = 0
         
@@ -1696,6 +1757,9 @@ def export_sessions_to_excel(db_type, json_folder, session_type='airscent'):
                     # Adjust column widths
                     for col_idx in range(1, len(headers) + 1):
                         ws.column_dimensions[get_column_letter(col_idx)].width = 15
+                    
+                    # Protect system-generated columns from editing
+                    _protect_sheet(ws, all_columns, PROTECTED_COLUMNS_TRAILING)
             
             else:  # airscent
                 field_mapping = AREA_SEARCH_FIELD_MAPPING
@@ -1809,6 +1873,9 @@ def export_sessions_to_excel(db_type, json_folder, session_type='airscent'):
                     # Adjust column widths
                     for col_idx in range(1, len(headers) + 1):
                         ws.column_dimensions[get_column_letter(col_idx)].width = 15
+                    
+                    # Protect system-generated columns from editing
+                    _protect_sheet(ws, all_columns, PROTECTED_COLUMNS_AIRSCENT)
         
         # Restore original DB type
         if old_db_type != db_type:
