@@ -350,6 +350,13 @@ def fetch_sessions_by_numbers(dog_name, session_numbers, get_connection_func):
                 )
                 terrains = [t[0] for t in terrain_result.fetchall()]
                 
+                # Get selected purposes for this session
+                purpose_result = conn.execute(
+                    text("SELECT purpose_name FROM a_selected_purposes WHERE session_id = :session_id ORDER BY purpose_name"),
+                    {"session_id": session_id}
+                )
+                purposes = [p[0] for p in purpose_result.fetchall()]
+                
                 # Get subject responses for this session
                 subject_result = conn.execute(
                     text("SELECT subject_number, tfr, refind FROM subject_responses WHERE session_id = :session_id ORDER BY subject_number"),
@@ -389,6 +396,7 @@ def fetch_sessions_by_numbers(dog_name, session_numbers, get_connection_func):
                     'comments': row[20],
                     'image_files': image_files,
                     'terrains': terrains,
+                    'purposes': purposes,
                     'subject_responses': subject_responses
                 }
                 
@@ -603,7 +611,7 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
     )
     
     # Title
-    title = Paragraph(f"Air-Scenting Training Log for {dog_name}", title_style)
+    title = Paragraph(f"Area Search Training Log for {dog_name}", title_style)
     story.append(title)
     story.append(Spacer(1, 0.2*inch))
     
@@ -617,7 +625,7 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
         return None
     
     def format_temperature(value):
-        """Format temperature value - add Ã‚Â°F suffix only if value is purely numeric"""
+        """Format temperature value - add Ãƒâ€šÃ‚Â°F suffix only if value is purely numeric"""
         if not value or not str(value).strip():
             return value
         val_str = str(value).strip()
@@ -742,7 +750,7 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
             if row:
                 search_data.append(row)
         
-        # Temperature with Ã‚Â°F suffix if purely numeric
+        # Temperature with Ãƒâ€šÃ‚Â°F suffix if purely numeric
         temp_row = make_field("Temperature", format_temperature(session.get('temperature')))
         if temp_row:
             search_data.append(temp_row)
@@ -761,6 +769,13 @@ def generate_pdf(filepath, dog_name, sessions, trail_maps_folder):
         if session.get('terrains'):
             terrain_text = ", ".join(session['terrains'])
             row = make_field("Terrain Types", terrain_text)
+            if row:
+                search_data.append(row)
+        
+        # Add session purposes
+        if session.get('purposes'):
+            purposes_text = ", ".join(session['purposes'])
+            row = make_field("Session Purposes", purposes_text)
             if row:
                 search_data.append(row)
         

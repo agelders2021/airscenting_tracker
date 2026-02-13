@@ -799,7 +799,7 @@ class TrailingHelper:
                 # Check if value is purely numeric (int or float)
                 try:
                     float(val_str)
-                    return f"{val_str}Ã‚Â°F"
+                    return f"{val_str}\N{Degree Sign}F"
                 except ValueError:
                     # Mixed content - return as-is
                     return val_str

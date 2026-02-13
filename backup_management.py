@@ -195,10 +195,10 @@ class BackupSyncManager:
         1. Scan primary JSON folder
         2. Scan secondary JSON folder (if exists)
         3. Get DB sessions with UUID/update_time
-        4. Sync DB ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Primary JSON (DB newer or missing in JSON)
-        5. Sync Primary JSON ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ DB (JSON newer)
-        6. Sync Primary ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Secondary (Primary newer or missing)
-        7. Sync Secondary ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Primary (Secondary newer, also update DB)
+        4. Sync DB ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Primary JSON (DB newer or missing in JSON)
+        5. Sync Primary JSON ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ DB (JSON newer)
+        6. Sync Primary ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Secondary (Primary newer or missing)
+        7. Sync Secondary ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Primary (Secondary newer, also update DB)
         """
         primary_path = Path(primary_folder) if primary_folder else None
         secondary_path = Path(secondary_folder) if secondary_folder else None
@@ -228,31 +228,35 @@ class BackupSyncManager:
         # print(f"Sync: Found {len(db_sessions)} sessions in database")
         pass
         
-        # Step 4: Sync DB ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Primary JSON
-        if primary_path and primary_path.exists():
-            if status_callback:
-                status_callback("Sync: Updating JSON from database...")
-            count = sync_db_to_json(db_sessions, primary_dict, primary_path, db_type)
-            self.sync_results["db_to_json"] = count
-            if count > 0:
-                # Re-scan primary after updates
-                primary_dict = scan_json_folder(primary_path)
+        # Step 4: Sync DB ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Primary JSON
+        # DISABLED (Feb 2026): sync_db_to_json wrote individual session files
+        # to the primary JSON folder. Individual session files are no longer
+        # written; full_backup_*.json on exit captures all data instead.
+        # To re-enable, uncomment the block below.
+        # if primary_path and primary_path.exists():
+        #     if status_callback:
+        #         status_callback("Sync: Updating JSON from database...")
+        #     count = sync_db_to_json(db_sessions, primary_dict, primary_path, db_type)
+        #     self.sync_results["db_to_json"] = count
+        #     if count > 0:
+        #         # Re-scan primary after updates
+        #         primary_dict = scan_json_folder(primary_path)
         
-        # Step 5: Sync Primary JSON ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ DB
+        # Step 5: Sync Primary JSON ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ DB
         if primary_dict:
             if status_callback:
                 status_callback("Sync: Updating database from JSON...")
             count = sync_json_to_db(primary_dict, db_sessions, db_type)
             self.sync_results["json_to_db"] = count
         
-        # Step 6: Sync Primary ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Secondary
+        # Step 6: Sync Primary ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Secondary
         if secondary_path and secondary_path.exists() and primary_dict:
             if status_callback:
                 status_callback("Sync: Mirroring to secondary backup...")
             count = sync_primary_to_secondary(primary_dict, secondary_dict, secondary_path)
             self.sync_results["primary_to_secondary"] = count
         
-        # Step 7: Sync Secondary ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ Primary (and DB)
+        # Step 7: Sync Secondary ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Primary (and DB)
         if secondary_path and secondary_path.exists() and primary_path and primary_path.exists():
             if status_callback:
                 status_callback("Sync: Checking secondary for newer files...")

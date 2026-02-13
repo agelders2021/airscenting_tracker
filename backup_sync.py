@@ -336,7 +336,7 @@ class DatabaseOps:
                            a_percent_searched, start_time, finish_time
                     FROM training_sessions
                 """))
-                # Fetch ALL rows immediately before any other queries —
+                # Fetch ALL rows immediately before any other queries â€”
                 # prevents cursor invalidation on some DB backends.
                 rows = result.fetchall()
                 
@@ -452,7 +452,7 @@ class DatabaseOps:
                            update_time, uuid, status, checksum, primary_timestamp, secondary_timestamp, user_name
                     FROM t_training_sessions
                 """))
-                # Fetch ALL rows immediately before any other queries —
+                # Fetch ALL rows immediately before any other queries â€”
                 # prevents cursor invalidation on some DB backends.
                 rows = result.fetchall()
                 
@@ -1172,6 +1172,24 @@ def write_json_file(folder_path: Path, session: SessionInfo) -> Optional[datetim
     Returns:
         File modification timestamp after write, or None on failure
     """
+    # -------------------------------------------------------------------------
+    # DISABLED (Feb 2026): Individual session JSON files are no longer written.
+    # Full database backups (full_backup_*.json) are created on exit instead,
+    # which capture all session data in a single file.
+    #
+    # This function is called from multiple places in the sync system:
+    #   - perform_full_sync()        (push to secondary, mirror to primary)
+    #   - _apply_conflict_resolution()
+    #   - _sync_session()
+    #   - _rebuild_from_backups()
+    #   - update_session_checksum()
+    #   - save_session_with_backup()
+    #
+    # To RE-ENABLE individual session file writing, remove or comment out
+    # the 'return None' line below.
+    # -------------------------------------------------------------------------
+    return None  # Individual session file writing disabled
+
     try:
         folder_path.mkdir(parents=True, exist_ok=True)
         
@@ -1183,7 +1201,7 @@ def write_json_file(folder_path: Path, session: SessionInfo) -> Optional[datetim
         data = session.data.copy()
         
         # Strip DB-specific fields that are meaningless in JSON backup.
-        # 'id' is the auto-increment primary key — different on every machine.
+        # 'id' is the auto-increment primary key â€” different on every machine.
         # 'primary_timestamp' and 'secondary_timestamp' are sync bookkeeping.
         for strip_key in ('id', 'primary_timestamp', 'secondary_timestamp'):
             data.pop(strip_key, None)
@@ -1311,10 +1329,10 @@ class BackupSyncManager:
         Perform complete synchronization.
         
         Simplified approach - compares local (DB) vs remote (secondary) per session:
-        - Same checksum → skip (in sync)
-        - Different checksum → conflict, ask user
-        - New in remote only → import
-        - New in local only → push to secondary
+        - Same checksum â†’ skip (in sync)
+        - Different checksum â†’ conflict, ask user
+        - New in remote only â†’ import
+        - New in local only â†’ push to secondary
         Primary JSON simply mirrors the DB after all decisions are made.
         
         Args:
@@ -1374,13 +1392,13 @@ class BackupSyncManager:
         local_keys = set(db_sessions.keys())
         remote_keys = set(secondary_sessions.keys())
         
-        # Sessions only in local → will push to secondary later
+        # Sessions only in local â†’ will push to secondary later
         local_only = local_keys - remote_keys
         
-        # Sessions only in remote → new, import them
+        # Sessions only in remote â†’ new, import them
         remote_only = remote_keys - local_keys
         
-        # Sessions in both → compare stored checksums
+        # Sessions in both â†’ compare stored checksums
         shared_keys = local_keys & remote_keys
         
         conflicts = []
@@ -1399,7 +1417,7 @@ class BackupSyncManager:
             if local_checksum and remote_checksum and local_checksum == remote_checksum:
                 in_sync_count += 1
             else:
-                # Checksums differ → real content conflict, user must decide.
+                # Checksums differ â†’ real content conflict, user must decide.
                 # Show update_time so user knows which is newer.
                 local_time = local_session.update_time or datetime.min
                 remote_time = remote_session.update_time or remote_session.file_mtime or datetime.min
@@ -1473,7 +1491,7 @@ class BackupSyncManager:
                 if ts:
                     self.sync_results['secondary_writes'] += 1
                     # write_json_file computed and stored the checksum on
-                    # the session object — store the same value in DB so
+                    # the session object â€” store the same value in DB so
                     # next sync comparison uses identical stored checksums.
                     if local_session.checksum:
                         self.db_ops.store_checksum(
@@ -1493,7 +1511,7 @@ class BackupSyncManager:
                 primary_session = primary_sessions.get(key)
                 
                 if primary_session is None:
-                    # Missing from primary → write it
+                    # Missing from primary â†’ write it
                     ts = write_json_file(self.primary_folder, db_session)
                     if ts:
                         self.sync_results['primary_writes'] += 1
@@ -1865,7 +1883,7 @@ def update_session_checksum(db_type: str, session_type: str,
     2. Compute a content checksum over all user data.
     3. Store the checksum in the DB's ``checksum`` column.
     4. Write JSON backup files (primary and secondary) so they are
-       always up-to-date — not just after the next startup sync.
+       always up-to-date â€” not just after the next startup sync.
     
     Args:
         db_type: Database type ('sqlite', 'postgres', etc.)
@@ -1913,7 +1931,7 @@ def update_session_checksum(db_type: str, session_type: str,
             if secondary_folder:
                 write_json_file(secondary_folder, target_session)
         except Exception as e:
-            # JSON write failure is non-fatal — sync will catch up later
+            # JSON write failure is non-fatal â€” sync will catch up later
             print(f"Warning: Could not write JSON backup: {e}")
         
         return checksum
