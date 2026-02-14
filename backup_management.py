@@ -195,10 +195,10 @@ class BackupSyncManager:
         1. Scan primary JSON folder
         2. Scan secondary JSON folder (if exists)
         3. Get DB sessions with UUID/update_time
-        4. Sync DB ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Primary JSON (DB newer or missing in JSON)
-        5. Sync Primary JSON ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ DB (JSON newer)
-        6. Sync Primary ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Secondary (Primary newer or missing)
-        7. Sync Secondary ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Primary (Secondary newer, also update DB)
+        4. Sync DB ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ Primary JSON (DB newer or missing in JSON)
+        5. Sync Primary JSON ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ DB (JSON newer)
+        6. Sync Primary ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ Secondary (Primary newer or missing)
+        7. Sync Secondary ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ Primary (Secondary newer, also update DB)
         """
         primary_path = Path(primary_folder) if primary_folder else None
         secondary_path = Path(secondary_folder) if secondary_folder else None
@@ -228,7 +228,7 @@ class BackupSyncManager:
         # print(f"Sync: Found {len(db_sessions)} sessions in database")
         pass
         
-        # Step 4: Sync DB ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Primary JSON
+        # Step 4: Sync DB ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ Primary JSON
         # DISABLED (Feb 2026): sync_db_to_json wrote individual session files
         # to the primary JSON folder. Individual session files are no longer
         # written; full_backup_*.json on exit captures all data instead.
@@ -242,21 +242,21 @@ class BackupSyncManager:
         #         # Re-scan primary after updates
         #         primary_dict = scan_json_folder(primary_path)
         
-        # Step 5: Sync Primary JSON ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ DB
+        # Step 5: Sync Primary JSON ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ DB
         if primary_dict:
             if status_callback:
                 status_callback("Sync: Updating database from JSON...")
             count = sync_json_to_db(primary_dict, db_sessions, db_type)
             self.sync_results["json_to_db"] = count
         
-        # Step 6: Sync Primary ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Secondary
+        # Step 6: Sync Primary ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ Secondary
         if secondary_path and secondary_path.exists() and primary_dict:
             if status_callback:
                 status_callback("Sync: Mirroring to secondary backup...")
             count = sync_primary_to_secondary(primary_dict, secondary_dict, secondary_path)
             self.sync_results["primary_to_secondary"] = count
         
-        # Step 7: Sync Secondary ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Primary (and DB)
+        # Step 7: Sync Secondary ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ Primary (and DB)
         if secondary_path and secondary_path.exists() and primary_path and primary_path.exists():
             if status_callback:
                 status_callback("Sync: Checking secondary for newer files...")
@@ -1876,6 +1876,35 @@ def export_sessions_to_excel(db_type, json_folder, session_type='airscent'):
                     
                     # Protect system-generated columns from editing
                     _protect_sheet(ws, all_columns, PROTECTED_COLUMNS_AIRSCENT)
+            
+            # ---------------------------------------------------------------
+            # Add a protected "_Dog Names" sheet listing every dog in the
+            # dogs table.  Used during restore to keep the dog list in sync.
+            # ---------------------------------------------------------------
+            DOG_NAMES_SHEET = "_Dog Names"
+            try:
+                dogs_result = conn.execute(text(
+                    "SELECT name FROM dogs ORDER BY name"
+                ))
+                all_dog_names = [r[0] for r in dogs_result]
+            except Exception:
+                all_dog_names = []
+            
+            if all_dog_names:
+                ws_dogs = wb.create_sheet(title=DOG_NAMES_SHEET)
+                ws_dogs.cell(row=1, column=1, value="Dog Name")
+                ws_dogs['A1'].font = header_font
+                ws_dogs['A1'].fill = header_fill
+                ws_dogs['A1'].alignment = header_alignment
+                ws_dogs['A1'].border = thin_border
+                for di, dname in enumerate(all_dog_names, 2):
+                    cell = ws_dogs.cell(row=di, column=1, value=dname)
+                    cell.border = thin_border
+                ws_dogs.column_dimensions['A'].width = 25
+                # Protect the entire sheet (all cells remain locked by default)
+                ws_dogs.protection.sheet = True
+                ws_dogs.protection.sort = False        # allow sorting
+                ws_dogs.protection.autoFilter = False   # allow filtering
         
         # Restore original DB type
         if old_db_type != db_type:
@@ -1971,7 +2000,31 @@ def restore_sessions_from_excel(excel_filepath, db_type, session_type='airscent'
             dog_name_col = 'dog_name'
         
         with database.get_connection() as conn:
+            # ---------------------------------------------------------------
+            # Merge dog names from the "_Dog Names" sheet (additive only).
+            # Never delete pre-existing dog names since they may be
+            # referenced by sessions that are not part of this Excel file.
+            # ---------------------------------------------------------------
+            DOG_NAMES_SHEET = "_Dog Names"
+            if DOG_NAMES_SHEET in wb.sheetnames:
+                ws_dogs = wb[DOG_NAMES_SHEET]
+                for dog_row in ws_dogs.iter_rows(min_row=2, max_col=1):
+                    dname = dog_row[0].value
+                    if dname and str(dname).strip():
+                        dname = str(dname).strip()
+                        try:
+                            conn.execute(
+                                text("INSERT INTO dogs (name) VALUES (:name)"),
+                                {"name": dname}
+                            )
+                        except Exception:
+                            pass  # already exists or other constraint
+            
             for sheet_name in wb.sheetnames:
+                # Skip the dog-names metadata sheet
+                if sheet_name == DOG_NAMES_SHEET:
+                    continue
+                
                 ws = wb[sheet_name]
                 
                 # Get headers from first row
