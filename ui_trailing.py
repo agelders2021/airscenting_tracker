@@ -535,10 +535,14 @@ class TrailingEntryTab:
                              '100\N{Degree Sign}F to 110\N{Degree Sign}F']).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="w", padx=5, pady=2)
-        tk.Entry(weather_frame, textvariable=sv.t_humidity_laying, width=14).grid(row=1, column=3, sticky="w", padx=5, pady=2)
+        ttk.Combobox(weather_frame, textvariable=sv.t_humidity_laying,
+                     values=['Very Low','Low','Moderate','High','Very High'],width=12).grid(row=1, column=3, sticky="w", padx=5, pady=2)
+        #tk.Entry(weather_frame, textvariable=sv.t_humidity_laying, width=14).grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Wind Speed:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
-        tk.Entry(weather_frame, textvariable=sv.t_wind_laying, width=14).grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        ttk.Combobox(weather_frame, textvariable=sv.t_wind_laying,
+                     values=['Calm','Very Light','Light','Moderate','High','Gusty'],width=12).grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        #tk.Entry(weather_frame, textvariable=sv.t_wind_laying, width=14).grid(row=2, column=1, sticky="w", padx=5, pady=2)
     
     def _create_weather_running_section(self, frame):
         """Create Weather at Time of Running Trail section"""
@@ -564,10 +568,14 @@ class TrailingEntryTab:
                              '100\N{Degree Sign}F to 110\N{Degree Sign}F']).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="w", padx=5, pady=2)
-        tk.Entry(weather_frame, textvariable=sv.t_humidity_running, width=14).grid(row=1, column=3, sticky="w", padx=5, pady=2)
+        ttk.Combobox(weather_frame, textvariable=sv.t_humidity_running,
+                     values=['Very Low','Low','Moderate','High','Very High'],width=12).grid(row=1, column=3, sticky="w", padx=5, pady=2)
+        # tk.Entry(weather_frame, textvariable=sv.t_humidity_running, width=14).grid(row=1, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Wind Speed:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
-        tk.Entry(weather_frame, textvariable=sv.t_wind_running, width=14).grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        ttk.Combobox(weather_frame, textvariable=sv.t_wind_running,
+                     values=['Calm','Very Light','Light','Moderate','High','Gusty'],width=12).grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        #tk.Entry(weather_frame, textvariable=sv.t_wind_running, width=14).grid(row=2, column=1, sticky="w", padx=5, pady=2)
     
     def _create_behavior_section(self, frame):
         """Create Dog Behavior & Performance section"""

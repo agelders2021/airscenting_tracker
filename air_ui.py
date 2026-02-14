@@ -210,7 +210,7 @@ def setup_airscent_tab(ui):
     weather_combo.grid(row=1, column=1, sticky="w", padx=5, pady=2)
     
     tk.Label(search_frame, text="Wind Direction:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
-    wind_dir_combo = ttk.Combobox(search_frame, textvariable=sv.wind_direction, width=16, state="readonly",
+    wind_dir_combo = ttk.Combobox(search_frame, textvariable=sv.wind_direction, width=16, state="normal",
                                    values=['North', 'South', 'East', 'West',
                                           'NE', 'NW', 'SE', 'SW', 'Variable'])
     wind_dir_combo.grid(row=1, column=3, sticky="w", padx=5, pady=2)
@@ -250,7 +250,9 @@ def setup_airscent_tab(ui):
                          '100\N{Degree Sign}F to 110\N{Degree Sign}F']).grid(row=2, column=1, sticky="w", padx=5, pady=2)
     
     tk.Label(search_frame, text="Wind Speed:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
-    wind_speed_entry = tk.Entry(search_frame, textvariable=sv.wind_speed, width=18)
+    wind_speed_entry = ttk.Combobox(search_frame, textvariable=sv.wind_speed,
+                                    values=['Calm','Very Light','Light','Moderate','High','Very High','Gusty'],width=16)
+    # wind_speed_entry = tk.Entry(search_frame, textvariable=sv.wind_speed, width=18)
     wind_speed_entry.grid(row=2, column=3, sticky="w", padx=5, pady=2)
     ToolTip(wind_speed_entry, "Enter wind speed (e.g., '10 mph' or 'calm')", delay=500)
     
