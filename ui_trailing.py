@@ -263,7 +263,9 @@ class TrailingEntryTab:
         tk.Label(session_frame, text="Handler:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
         # Initialize handler from config
         sv.t_handler.set(self._get_config_value('get_handler_name', ""))
-        tk.Entry(session_frame, textvariable=sv.t_handler, width=15).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        t_handler_entry = tk.Entry(session_frame, textvariable=sv.t_handler, width=15)
+        t_handler_entry.grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        t_handler_entry.bind('<FocusOut>', lambda e: sv.t_handler.set(sv.t_handler.get()[:1].upper() + sv.t_handler.get()[1:]) if sv.t_handler.get() else None)
         
         tk.Label(session_frame, text="Add Session Purpose:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
         self.purpose_combo = ttk.Combobox(session_frame, textvariable=sv.t_purpose, width=16, state="enabled",
@@ -296,7 +298,9 @@ class TrailingEntryTab:
         
         # Row 2: Field Support, Dog, Resume/Hide buttons (aligned with Previous/Next)
         tk.Label(session_frame, text="Field Support:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
-        tk.Entry(session_frame, textvariable=sv.t_field_support, width=15).grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        t_field_support_entry = tk.Entry(session_frame, textvariable=sv.t_field_support, width=15)
+        t_field_support_entry.grid(row=2, column=1, sticky="w", padx=5, pady=2)
+        t_field_support_entry.bind('<FocusOut>', lambda e: sv.t_field_support.set(sv.t_field_support.get()[:1].upper() + sv.t_field_support.get()[1:]) if sv.t_field_support.get() else None)
         
         tk.Label(session_frame, text="Dog:").grid(row=2, column=2, sticky="e", padx=5, pady=2)
         # Initialize dog from config
@@ -480,7 +484,9 @@ class TrailingEntryTab:
         tk.Entry(trail_frame,textvariable=sv.t_trail_layer,width=location_width + 2).grid(row=2,column=1,padx=4,pady=2)
 
         tk.Label(trail_frame,text="Cross Track Layer:").grid(row=2,column=2,sticky="e",padx=5,pady=2)
-        tk.Entry(trail_frame,textvariable=sv.t_cross_track_layer,width=terrain_width + 2).grid(row=2,column=3,sticky="w",padx=4,pady=2)
+        t_cross_track_entry = tk.Entry(trail_frame,textvariable=sv.t_cross_track_layer,width=terrain_width + 2)
+        t_cross_track_entry.grid(row=2,column=3,sticky="w",padx=4,pady=2)
+        t_cross_track_entry.bind('<FocusOut>', lambda e: sv.t_cross_track_layer.set(sv.t_cross_track_layer.get()[:1].upper() + sv.t_cross_track_layer.get()[1:]) if sv.t_cross_track_layer.get() else None)
 
         tk.Label(trail_frame,text="Cross Track Age:").grid(row=2,column=4,sticky="e",padx=5,pady=2)
         # tk.Entry(trail_frame,textvariable=sv.t_cross_track_age,width=entry_terrain_width).grid(row=2,column=5,sticky="w",padx=5,pady=(5,2))

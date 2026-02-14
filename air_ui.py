@@ -118,6 +118,7 @@ def setup_airscent_tab(ui):
     tk.Label(session_frame, text="Handler:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
     ui.a_handler_entry = tk.Entry(session_frame, textvariable=sv.handler, width=15)
     ui.a_handler_entry.grid(row=1, column=1, sticky="w", padx=5, pady=2)
+    ui.a_handler_entry.bind('<FocusOut>', lambda e: sv.handler.set(sv.handler.get()[:1].upper() + sv.handler.get()[1:]) if sv.handler.get() else None)
     
     tk.Label(session_frame, text="Add Session Purpose:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
     ui.a_purpose_combo = ttk.Combobox(session_frame, textvariable=sv.a_purpose, width=22, state="normal",
@@ -152,6 +153,7 @@ def setup_airscent_tab(ui):
     tk.Label(session_frame, text="Field Support:").grid(row=2, column=0, sticky="e", padx=5, pady=2)
     ui.a_field_support_entry = tk.Entry(session_frame, textvariable=sv.field_support, width=15)
     ui.a_field_support_entry.grid(row=2, column=1, sticky="w", padx=5, pady=2)
+    ui.a_field_support_entry.bind('<FocusOut>', lambda e: sv.field_support.set(sv.field_support.get()[:1].upper() + sv.field_support.get()[1:]) if sv.field_support.get() else None)
     
     tk.Label(session_frame, text="Dog:").grid(row=2, column=2, sticky="e", padx=5, pady=2)
     ui.a_dog_combo = ttk.Combobox(session_frame, textvariable=sv.dog, width=22, state="readonly")

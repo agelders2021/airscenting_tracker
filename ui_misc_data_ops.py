@@ -207,6 +207,657 @@ class MiscDataOperations:
             messagebox.showerror("Restore Error", f"Failed to restore from backup:\n{e}")
             return False
     
+    def _check_secondary_for_newer_backup(self):
+        """
+        Check if the secondary backup folder has a newer full_backup file
+        than the primary folder.  If so, analyse the backup to identify
+        exactly which sessions differ, present the details to the user,
+        and merge only if the user confirms.
+
+        Called once during startup, after the database has been validated.
+        """
+        try:
+            secondary_folder = sv.backup_folder.get().strip()
+            if not secondary_folder:
+                return
+
+            secondary_path = Path(secondary_folder)
+            if not secondary_path.exists():
+                return
+
+            secondary_json = secondary_path / "JSON"
+            if not secondary_json.exists():
+                return
+
+            # Find newest full backup in secondary
+            sec_backups = list(secondary_json.glob("full_backup_*.json"))
+            if not sec_backups:
+                return
+
+            sec_backups.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+            newest_secondary = sec_backups[0]
+            sec_mtime = datetime.fromtimestamp(newest_secondary.stat().st_mtime)
+
+            # Find newest full backup in primary
+            primary_folder = sv.db_path.get().strip()
+            if not primary_folder:
+                return
+
+            primary_json = Path(primary_folder) / "JSON"
+            pri_mtime = datetime.min  # default if no primary backups exist
+
+            if primary_json.exists():
+                pri_backups = list(primary_json.glob("full_backup_*.json"))
+                if pri_backups:
+                    pri_backups.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+                    pri_mtime = datetime.fromtimestamp(pri_backups[0].stat().st_mtime)
+
+            # Compare: secondary must be newer by more than 60 seconds
+            if sec_mtime <= pri_mtime or (sec_mtime - pri_mtime).total_seconds() <= 60:
+                return
+
+            # --- Load the backup and analyse changes -----------------------
+            try:
+                with open(newest_secondary, 'r', encoding='utf-8') as f:
+                    backup_data = json.load(f)
+            except Exception:
+                return
+
+            if backup_data.get("backup_version") != "2.0":
+                return
+
+            changes = self._analyze_secondary_backup_changes(backup_data)
+
+            if not changes:
+                return  # analysis failed
+
+            air_updated  = changes.get("air_updated", [])
+            air_added    = changes.get("air_added", [])
+            trail_updated = changes.get("trail_updated", [])
+            trail_added  = changes.get("trail_added", [])
+
+            total = len(air_updated) + len(air_added) + len(trail_updated) + len(trail_added)
+            if total == 0:
+                return  # nothing to do
+
+            # --- Build a detailed message for the user ---------------------
+            msg = (
+                f"The secondary backup folder contains a more recent "
+                f"backup than the primary folder:\n\n"
+                f"Secondary backup: {newest_secondary.name}\n"
+                f"  Created: {sec_mtime.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"Primary latest: "
+                f"{pri_mtime.strftime('%Y-%m-%d %H:%M:%S') if pri_mtime != datetime.min else '(none)'}"
+                f"\n\n"
+            )
+
+            if air_added:
+                msg += f"New Area Search sessions ({len(air_added)}):\n"
+                for desc in air_added:
+                    msg += f"  + {desc}\n"
+                msg += "\n"
+
+            if air_updated:
+                msg += f"Updated Area Search sessions ({len(air_updated)}):\n"
+                for desc in air_updated:
+                    msg += f"  * {desc}\n"
+                msg += "\n"
+
+            if trail_added:
+                msg += f"New Trailing sessions ({len(trail_added)}):\n"
+                for desc in trail_added:
+                    msg += f"  + {desc}\n"
+                msg += "\n"
+
+            if trail_updated:
+                msg += f"Updated Trailing sessions ({len(trail_updated)}):\n"
+                for desc in trail_updated:
+                    msg += f"  * {desc}\n"
+                msg += "\n"
+
+            msg += "Would you like to apply these changes?"
+
+            result = messagebox.askyesno(
+                "Newer Secondary Backup Found", msg, icon='question')
+
+            if result:
+                self._merge_secondary_backup_sessions(backup_data)
+
+        except Exception:
+            # Never block startup on this check
+            pass
+
+    def _parse_update_time_value(self, value):
+        """
+        Parse an update_time value to a datetime for comparison.
+        Handles datetime objects, ISO strings (with T or space separator),
+        and None/empty.
+
+        Returns:
+            datetime or None
+        """
+        if not value:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            # Normalise common formats
+            cleaned = value.replace('T', ' ').rstrip('Z').split('+')[0].strip()
+            for fmt in ('%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d'):
+                try:
+                    return datetime.strptime(cleaned, fmt)
+                except ValueError:
+                    continue
+        return None
+
+    def _analyze_secondary_backup_changes(self, backup_data):
+        """
+        Read-only comparison of *backup_data* against the current database.
+        Returns a dict with four lists of human-readable descriptions:
+
+            {
+                "air_updated":   ["Dog Fido #3 (2026-01-15)", ...],
+                "air_added":     [...],
+                "trail_updated": [...],
+                "trail_added":   [...],
+            }
+
+        Returns None on error.
+        """
+        from sqlalchemy import text as sa_text
+
+        try:
+            result = {
+                "air_updated": [],
+                "air_added": [],
+                "trail_updated": [],
+                "trail_added": [],
+            }
+
+            # --- Airscenting sessions --------------------------------------
+            for bk in backup_data.get("airscenting_sessions", []):
+                try:
+                    snum = bk.get("session_number")
+                    dog  = bk.get("dog_name")
+                    if snum is None or not dog:
+                        continue
+
+                    bk_time = self._parse_update_time_value(bk.get("update_time"))
+                    bk_date = bk.get("date", "")
+                    desc = f"Dog {dog} #{snum}"
+                    if bk_date:
+                        desc += f" ({bk_date})"
+
+                    from database import get_connection
+                    with get_connection() as conn:
+                        row = conn.execute(
+                            sa_text("SELECT id, update_time FROM training_sessions "
+                                    "WHERE session_number = :snum AND dog_name = :dog"),
+                            {"snum": snum, "dog": dog}
+                        ).fetchone()
+
+                    if row:
+                        db_time = self._parse_update_time_value(row[1])
+                        if bk_time and (db_time is None or bk_time > db_time):
+                            result["air_updated"].append(desc)
+                    else:
+                        result["air_added"].append(desc)
+                except Exception:
+                    pass
+
+            # --- Trailing sessions -----------------------------------------
+            for bk in backup_data.get("trailing_sessions", []):
+                try:
+                    snum = bk.get("t_session_number")
+                    dog  = bk.get("t_dog_name")
+                    if snum is None or not dog:
+                        continue
+
+                    bk_time = self._parse_update_time_value(bk.get("update_time"))
+                    bk_date = bk.get("t_date", "")
+                    desc = f"Dog {dog} #{snum}"
+                    if bk_date:
+                        desc += f" ({bk_date})"
+
+                    from database import get_connection
+                    with get_connection() as conn:
+                        row = conn.execute(
+                            sa_text("SELECT id, update_time FROM t_training_sessions "
+                                    "WHERE t_session_number = :snum "
+                                    "AND t_dog_name = :dog"),
+                            {"snum": snum, "dog": dog}
+                        ).fetchone()
+
+                    if row:
+                        db_time = self._parse_update_time_value(row[1])
+                        if bk_time and (db_time is None or bk_time > db_time):
+                            result["trail_updated"].append(desc)
+                    else:
+                        result["trail_added"].append(desc)
+                except Exception:
+                    pass
+
+            return result
+
+        except Exception:
+            return None
+
+    def _merge_secondary_backup_sessions(self, backup_data):
+        """
+        Merge individual sessions from *backup_data* into the database,
+        updating only those whose update_time is newer than what is in the
+        DB and inserting any that are entirely new.
+
+        Also updates child-table rows (terrains, purposes, responses,
+        distractions) for every session that is touched.
+
+        Args:
+            backup_data: Already-loaded dict from a full_backup_*.json file
+        """
+        from sqlalchemy import text as sa_text
+        import database
+        from importlib import reload
+
+        try:
+            # --- set up database connection --------------------------------
+            import config
+            old_db_type = config.DB_TYPE
+            db_type = sv.db_type.get()
+            config.DB_TYPE = db_type
+
+            from database import engine
+            engine.dispose()
+            reload(database)
+
+            stats = {
+                "air_updated": 0,
+                "air_added": 0,
+                "trail_updated": 0,
+                "trail_added": 0,
+            }
+
+            # ---------------------------------------------------------------
+            # Build lookup indexes for child-table rows in the backup.
+            # Key = backup session id  →  list of child rows
+            # ---------------------------------------------------------------
+            air_child_tables = {
+                "selected_terrains": {},       # session_id → [rows]
+                "a_selected_purposes": {},     # session_id → [rows]
+                "subject_responses": {},       # session_id → [rows]
+            }
+            trail_child_tables = {
+                "t_selected_terrains": {},     # t_session_id → [rows]
+                "t_selected_purposes": {},     # t_session_id → [rows]
+                "t_distractions": {},          # t_session_id → [rows]
+            }
+
+            for table_key, idx_dict in air_child_tables.items():
+                for row in backup_data.get(table_key, []):
+                    sid = row.get("session_id")
+                    if sid is not None:
+                        idx_dict.setdefault(sid, []).append(row)
+
+            for table_key, idx_dict in trail_child_tables.items():
+                for row in backup_data.get(table_key, []):
+                    sid = row.get("t_session_id")
+                    if sid is not None:
+                        idx_dict.setdefault(sid, []).append(row)
+
+            # ---------------------------------------------------------------
+            # Airscenting sessions
+            # ---------------------------------------------------------------
+            for bk_session in backup_data.get("airscenting_sessions", []):
+                try:
+                    snum = bk_session.get("session_number")
+                    dog  = bk_session.get("dog_name")
+                    if snum is None or not dog:
+                        continue
+
+                    bk_time = self._parse_update_time_value(
+                        bk_session.get("update_time"))
+
+                    with database.get_connection() as conn:
+                        row = conn.execute(
+                            sa_text("SELECT id, update_time FROM training_sessions "
+                                    "WHERE session_number = :snum AND dog_name = :dog"),
+                            {"snum": snum, "dog": dog}
+                        ).fetchone()
+
+                        if row:
+                            db_id = row[0]
+                            db_time = self._parse_update_time_value(row[1])
+
+                            # Only update if backup is strictly newer
+                            if bk_time and (db_time is None or bk_time > db_time):
+                                # Update main session row
+                                cols = [k for k in bk_session.keys()
+                                        if k not in ('id',)]
+                                set_clause = ', '.join(
+                                    [f"{c} = :{c}" for c in cols])
+                                params = {c: bk_session.get(c) for c in cols}
+                                params["_db_id"] = db_id
+                                conn.execute(
+                                    sa_text(f"UPDATE training_sessions "
+                                            f"SET {set_clause} WHERE id = :_db_id"),
+                                    params)
+
+                                # Replace child rows
+                                self._replace_air_child_rows(
+                                    conn, db_id,
+                                    bk_session.get("id"),
+                                    air_child_tables)
+
+                                conn.commit()
+                                stats["air_updated"] += 1
+                        else:
+                            # New session – insert
+                            bk_id = bk_session.get("id")
+                            cols = [k for k in bk_session.keys()
+                                    if k not in ('id',)]
+                            placeholders = [f":{c}" for c in cols]
+                            params = {c: bk_session.get(c) for c in cols}
+                            conn.execute(
+                                sa_text(f"INSERT INTO training_sessions "
+                                        f"({', '.join(cols)}) "
+                                        f"VALUES ({', '.join(placeholders)})"),
+                                params)
+
+                            # Retrieve the new id
+                            new_row = conn.execute(
+                                sa_text("SELECT id FROM training_sessions "
+                                        "WHERE session_number = :snum "
+                                        "AND dog_name = :dog"),
+                                {"snum": snum, "dog": dog}
+                            ).fetchone()
+                            if new_row:
+                                self._replace_air_child_rows(
+                                    conn, new_row[0], bk_id,
+                                    air_child_tables)
+
+                            conn.commit()
+                            stats["air_added"] += 1
+
+                except Exception:
+                    pass  # skip problematic sessions
+
+            # ---------------------------------------------------------------
+            # Trailing sessions
+            # ---------------------------------------------------------------
+            for bk_session in backup_data.get("trailing_sessions", []):
+                try:
+                    snum = bk_session.get("t_session_number")
+                    dog  = bk_session.get("t_dog_name")
+                    if snum is None or not dog:
+                        continue
+
+                    bk_time = self._parse_update_time_value(
+                        bk_session.get("update_time"))
+
+                    with database.get_connection() as conn:
+                        row = conn.execute(
+                            sa_text("SELECT id, update_time FROM t_training_sessions "
+                                    "WHERE t_session_number = :snum "
+                                    "AND t_dog_name = :dog"),
+                            {"snum": snum, "dog": dog}
+                        ).fetchone()
+
+                        if row:
+                            db_id = row[0]
+                            db_time = self._parse_update_time_value(row[1])
+
+                            if bk_time and (db_time is None or bk_time > db_time):
+                                cols = [k for k in bk_session.keys()
+                                        if k not in ('id',)]
+                                set_clause = ', '.join(
+                                    [f"{c} = :{c}" for c in cols])
+                                params = {c: bk_session.get(c) for c in cols}
+                                params["_db_id"] = db_id
+                                conn.execute(
+                                    sa_text(f"UPDATE t_training_sessions "
+                                            f"SET {set_clause} WHERE id = :_db_id"),
+                                    params)
+
+                                self._replace_trail_child_rows(
+                                    conn, db_id,
+                                    bk_session.get("id"),
+                                    trail_child_tables)
+
+                                conn.commit()
+                                stats["trail_updated"] += 1
+                        else:
+                            bk_id = bk_session.get("id")
+                            cols = [k for k in bk_session.keys()
+                                    if k not in ('id',)]
+                            placeholders = [f":{c}" for c in cols]
+                            params = {c: bk_session.get(c) for c in cols}
+                            conn.execute(
+                                sa_text(f"INSERT INTO t_training_sessions "
+                                        f"({', '.join(cols)}) "
+                                        f"VALUES ({', '.join(placeholders)})"),
+                                params)
+
+                            new_row = conn.execute(
+                                sa_text("SELECT id FROM t_training_sessions "
+                                        "WHERE t_session_number = :snum "
+                                        "AND t_dog_name = :dog"),
+                                {"snum": snum, "dog": dog}
+                            ).fetchone()
+                            if new_row:
+                                self._replace_trail_child_rows(
+                                    conn, new_row[0], bk_id,
+                                    trail_child_tables)
+
+                            conn.commit()
+                            stats["trail_added"] += 1
+
+                except Exception:
+                    pass
+
+            # --- restore original DB type ----------------------------------
+            config.DB_TYPE = old_db_type
+            database.engine.dispose()
+            reload(database)
+
+            # --- summary ---------------------------------------------------
+            total = sum(stats.values())
+
+            # --- refresh UI if anything changed ----------------------------
+            if total > 0:
+                self._refresh_ui_after_secondary_merge()
+
+            if total > 0:
+                msg = "Secondary backup merge complete!\n\n"
+                if stats["air_added"]:
+                    msg += f"  Added {stats['air_added']} Area Search session(s)\n"
+                if stats["air_updated"]:
+                    msg += f"  Updated {stats['air_updated']} Area Search session(s)\n"
+                if stats["trail_added"]:
+                    msg += f"  Added {stats['trail_added']} Trailing session(s)\n"
+                if stats["trail_updated"]:
+                    msg += f"  Updated {stats['trail_updated']} Trailing session(s)\n"
+                messagebox.showinfo("Merge Complete", msg)
+            else:
+                messagebox.showinfo(
+                    "Merge Complete",
+                    "All sessions in the secondary backup are already "
+                    "up-to-date in the database.")
+
+        except Exception as e:
+            # Restore DB type on error
+            try:
+                config.DB_TYPE = old_db_type
+                database.engine.dispose()
+                reload(database)
+            except Exception:
+                pass
+            messagebox.showerror("Merge Error",
+                                 f"Failed to merge from secondary backup:\n{e}")
+
+    # ------------------------------------------------------------------
+    # UI refresh after secondary merge
+    # ------------------------------------------------------------------
+
+    def _refresh_ui_after_secondary_merge(self):
+        """
+        Refresh all relevant UI elements after sessions have been merged
+        from a secondary backup.  This covers both the Area Search and
+        Trailing tabs so that session numbers, navigation buttons, and
+        combo-box lists are up-to-date.
+        """
+        try:
+            # --- Refresh setup-tab lists and entry-tab combo boxes ---------
+            self.ui.load_dogs_from_database()
+            self.ui.load_locations_from_database()
+            self.ui.load_terrain_from_database()
+            self.ui.load_distraction_from_database()
+
+            if hasattr(self.ui, 'a_dog_combo'):
+                self.ui.refresh_dog_list()
+            if hasattr(self.ui, 'a_location_combo'):
+                self.ui.refresh_location_list()
+            if hasattr(self.ui, 'a_terrain_combo'):
+                self.ui.refresh_terrain_list()
+            if hasattr(self.ui, 'trailing_entry'):
+                self.ui.refresh_distraction_list()
+
+            # --- Area Search session number --------------------------------
+            current_dog = sv.dog.get()
+            if current_dog:
+                try:
+                    db_ops = DatabaseOperations(self.ui)
+                    status_filter = sv.session_status_filter.get()
+                    filtered = db_ops.get_all_sessions_for_dog(
+                        current_dog, status_filter, entry_type="Airscent")
+                    next_num = len(filtered) + 1
+                    sv.session_number.set(str(next_num))
+                except Exception:
+                    pass
+
+            # --- Area Search navigation buttons ----------------------------
+            if hasattr(self.ui, 'navigation'):
+                try:
+                    self.ui.navigation.update_navigation_buttons()
+                except Exception:
+                    pass
+
+            # --- Trailing session number -----------------------------------
+            trailing_dog = sv.t_dog.get() if hasattr(sv, 't_dog') else ""
+            if trailing_dog and hasattr(self.ui, 'trailing_entry'):
+                try:
+                    next_t = self.ui.get_trailing_next_session_number(trailing_dog)
+                    sv.t_session.set(str(next_t))
+                except Exception:
+                    pass
+
+            # --- Trailing navigation buttons -------------------------------
+            if hasattr(self.ui, 'trailing_entry'):
+                try:
+                    self.ui._update_trailing_navigation_buttons()
+                except Exception:
+                    pass
+
+            # --- Re-snapshot forms so merge changes are not flagged as
+            #     unsaved edits ------------------------------------------
+            if hasattr(self.ui, 'form_mgmt'):
+                try:
+                    self.ui.form_mgmt.take_form_snapshot()
+                except Exception:
+                    pass
+            if hasattr(self.ui, 'trailing_entry') and hasattr(
+                    self.ui.trailing_entry, 'take_form_snapshot'):
+                try:
+                    self.ui.trailing_entry.take_form_snapshot()
+                except Exception:
+                    pass
+
+        except Exception:
+            pass  # Never block startup
+
+    # ------------------------------------------------------------------
+    # Child-table replacement helpers
+    # ------------------------------------------------------------------
+
+    def _replace_air_child_rows(self, conn, db_session_id, bk_session_id,
+                                child_index):
+        """
+        Delete existing child rows for *db_session_id* and re-insert
+        from the backup index keyed by *bk_session_id*.
+
+        Args:
+            conn: open database connection (caller manages commit)
+            db_session_id: the ``id`` in the local DB
+            bk_session_id: the ``id`` from the backup file (may be None)
+            child_index: dict of {table_key: {bk_session_id: [rows]}}
+        """
+        from sqlalchemy import text as sa_text
+
+        if bk_session_id is None:
+            return
+
+        # Delete existing child rows for this session
+        for db_table in ("selected_terrains", "a_selected_purposes",
+                         "subject_responses"):
+            conn.execute(
+                sa_text(f"DELETE FROM {db_table} WHERE session_id = :sid"),
+                {"sid": db_session_id})
+
+        # Insert backup child rows with the correct local session_id
+        for table_key in ("selected_terrains", "a_selected_purposes",
+                          "subject_responses"):
+            for row in child_index.get(table_key, {}).get(bk_session_id, []):
+                cols = [k for k in row.keys() if k not in ('id', 'session_id')]
+                if not cols:
+                    continue
+                col_names = ['session_id'] + cols
+                placeholders = [':session_id'] + [f':{c}' for c in cols]
+                params = {c: row.get(c) for c in cols}
+                params['session_id'] = db_session_id
+                conn.execute(
+                    sa_text(f"INSERT INTO {table_key} "
+                            f"({', '.join(col_names)}) "
+                            f"VALUES ({', '.join(placeholders)})"),
+                    params)
+
+    def _replace_trail_child_rows(self, conn, db_session_id, bk_session_id,
+                                  child_index):
+        """
+        Delete existing child rows for *db_session_id* and re-insert
+        from the backup index keyed by *bk_session_id*.
+
+        Args:
+            conn: open database connection (caller manages commit)
+            db_session_id: the ``id`` in the local DB
+            bk_session_id: the ``id`` from the backup file (may be None)
+            child_index: dict of {table_key: {bk_session_id: [rows]}}
+        """
+        from sqlalchemy import text as sa_text
+
+        if bk_session_id is None:
+            return
+
+        for db_table in ("t_selected_terrains", "t_selected_purposes",
+                         "t_distractions"):
+            conn.execute(
+                sa_text(f"DELETE FROM {db_table} WHERE t_session_id = :sid"),
+                {"sid": db_session_id})
+
+        for table_key in ("t_selected_terrains", "t_selected_purposes",
+                          "t_distractions"):
+            for row in child_index.get(table_key, {}).get(bk_session_id, []):
+                cols = [k for k in row.keys()
+                        if k not in ('id', 't_session_id')]
+                if not cols:
+                    continue
+                col_names = ['t_session_id'] + cols
+                placeholders = [':t_session_id'] + [f':{c}' for c in cols]
+                params = {c: row.get(c) for c in cols}
+                params['t_session_id'] = db_session_id
+                conn.execute(
+                    sa_text(f"INSERT INTO {table_key} "
+                            f"({', '.join(col_names)}) "
+                            f"VALUES ({', '.join(placeholders)})"),
+                    params)
+
     def _offer_rebuild_from_json(self, db_path, json_path, reason):
         """
         Offer to rebuild database from JSON backup files.
@@ -280,7 +931,7 @@ class MiscDataOperations:
         result = messagebox.askyesno(
             "Rebuild Database?",
             f"{reason}\n\n"
-            f"Found in {json_path}:\n" + "\n".join(f"  ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {item}" for item in restore_items) + "\n\n"
+            f"Found in {json_path}:\n" + "\n".join(f"  ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ {item}" for item in restore_items) + "\n\n"
             "Would you like to rebuild the database from these backups?",
             icon='question'
         )
@@ -681,6 +1332,9 @@ class MiscDataOperations:
                 sv.show_status_message("Database not configured - please complete Setup", "warning")
                 self._enable_sync_sensitive_buttons()  # Re-enable since we're done
                 return
+            
+            # Check if secondary backup folder has a newer backup than primary
+            self._check_secondary_for_newer_backup()
             
             # Check if database is healthy before deciding sync strategy
             db_healthy = self._check_db_health()
@@ -1231,24 +1885,23 @@ class MiscDataOperations:
     def _export_sessions_to_excel_after_sync(self):
         """
         Export sessions to Excel files after sync completion.
-        Creates Excel files in both primary and secondary JSON folders.
+        Only exports when a dedicated Excel folder has been configured in Setup.
         """
         try:
-            from backup_management import export_all_sessions_to_excel
-            from ui_utils import get_primary_json_folder, get_secondary_json_folder
+            excel_folder = sv.excel_folder.get().strip()
             
-            primary_folder = sv.db_path.get().strip()
-            secondary_folder = sv.backup_folder.get().strip()
-            
-            if not primary_folder:
+            # Only export when a dedicated Excel folder has been configured
+            if not excel_folder:
                 return
+            
+            from backup_management import export_all_sessions_to_excel
             
             db_type = sv.db_type.get()
             
             success, msg = export_all_sessions_to_excel(
                 db_type, 
-                primary_folder, 
-                secondary_folder if secondary_folder else None
+                excel_folder,
+                None  # No secondary for dedicated Excel folder
             )
             
             if success:
@@ -1324,7 +1977,7 @@ class MiscDataOperations:
         
         # Warning
         warning = tk.Label(dialog, 
-            text="ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Warning: Restoring will add missing data from the backup.\nExisting data will not be overwritten.",
+            text="ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Warning: Restoring will add missing data from the backup.\nExisting data will not be overwritten.",
             fg="orange", justify="center")
         warning.pack(pady=5)
         
@@ -1597,7 +2250,7 @@ class MiscDataOperations:
         """
         from sqlalchemy import text
         
-        # Map: (JSON key names to try) → actual DB table name
+        # Map: (JSON key names to try) â†’ actual DB table name
         # First key is the correct name (new backups), second is old wrong name.
         table_mappings = [
             (["selected_terrains", "session_terrains"], "selected_terrains"),

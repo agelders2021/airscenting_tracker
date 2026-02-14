@@ -155,7 +155,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         if secondary_folder and Path(secondary_folder).exists():
             self.lock_manager = LockManager(self.root, secondary_folder)
             if not self.lock_manager.check_startup_lock():
-                # User chose to exit – tear down and abort startup
+                # User chose to exit â€“ tear down and abort startup
                 self.root.destroy()
                 import sys
                 sys.exit(0)
@@ -878,27 +878,26 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
             pass
     
     def _export_sessions_to_excel(self, primary_folder, secondary_folder=None):
-        """Export all sessions to Excel files in Excel folder (or JSON folder as fallback)."""
+        """Export all sessions to Excel files in the dedicated Excel folder.
+        
+        If no Excel folder is configured in Setup, the export is skipped entirely.
+        """
         try:
+            excel_folder = sv.excel_folder.get().strip()
+            
+            # Only export when a dedicated Excel folder has been configured
+            if not excel_folder:
+                return
+            
             from backup_management import export_all_sessions_to_excel
             
             db_type = sv.db_type.get()
-            excel_folder = sv.excel_folder.get().strip()
             
-            # Use dedicated Excel folder if configured, otherwise fall back to JSON folder
-            if excel_folder:
-                success, msg = export_all_sessions_to_excel(
-                    db_type, 
-                    excel_folder,
-                    None  # No secondary for dedicated Excel folder
-                )
-            else:
-                # Fall back to JSON folder in primary storage
-                success, msg = export_all_sessions_to_excel(
-                    db_type, 
-                    primary_folder, 
-                    secondary_folder if secondary_folder else None
-                )
+            success, msg = export_all_sessions_to_excel(
+                db_type, 
+                excel_folder,
+                None  # No secondary for dedicated Excel folder
+            )
             # Silent - don't block exit
         except Exception as e:
             # Don't block exit on Excel export errors
