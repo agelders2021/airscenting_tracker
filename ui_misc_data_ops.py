@@ -478,17 +478,17 @@ class MiscDataOperations:
 
             # ---------------------------------------------------------------
             # Build lookup indexes for child-table rows in the backup.
-            # Key = backup session id  â†’  list of child rows
+            # Key = backup session id  Ã¢â€ â€™  list of child rows
             # ---------------------------------------------------------------
             air_child_tables = {
-                "selected_terrains": {},       # session_id â†’ [rows]
-                "a_selected_purposes": {},     # session_id â†’ [rows]
-                "subject_responses": {},       # session_id â†’ [rows]
+                "selected_terrains": {},       # session_id Ã¢â€ â€™ [rows]
+                "a_selected_purposes": {},     # session_id Ã¢â€ â€™ [rows]
+                "subject_responses": {},       # session_id Ã¢â€ â€™ [rows]
             }
             trail_child_tables = {
-                "t_selected_terrains": {},     # t_session_id â†’ [rows]
-                "t_selected_purposes": {},     # t_session_id â†’ [rows]
-                "t_distractions": {},          # t_session_id â†’ [rows]
+                "t_selected_terrains": {},     # t_session_id Ã¢â€ â€™ [rows]
+                "t_selected_purposes": {},     # t_session_id Ã¢â€ â€™ [rows]
+                "t_distractions": {},          # t_session_id Ã¢â€ â€™ [rows]
             }
 
             for table_key, idx_dict in air_child_tables.items():
@@ -550,7 +550,7 @@ class MiscDataOperations:
                                 conn.commit()
                                 stats["air_updated"] += 1
                         else:
-                            # New session â€“ insert
+                            # New session Ã¢â‚¬â€œ insert
                             bk_id = bk_session.get("id")
                             cols = [k for k in bk_session.keys()
                                     if k not in ('id',)]
@@ -2305,7 +2305,7 @@ class MiscDataOperations:
         """
         from sqlalchemy import text
         
-        # Map: (JSON key names to try) → actual DB table name
+        # Map: (JSON key names to try) â†’ actual DB table name
         # First key is the correct name (new backups), second is old wrong name.
         table_mappings = [
             (["selected_terrains", "session_terrains"], "selected_terrains"),

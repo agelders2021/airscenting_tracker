@@ -90,7 +90,7 @@ class AboutDialog:
         # Copyright
         copyright_label = tk.Label(
             frame,
-            text="Copyright Â© 2024 Al Gelders",
+            text="Copyright © 2024 Al Gelders",
             font=('Arial', 10),
             bg='white',
             fg='#34495e'

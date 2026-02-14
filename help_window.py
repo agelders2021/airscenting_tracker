@@ -1,25 +1,4 @@
 """
-SPDX-License-Identifier: GPL-3.0-or-later
-
-Copyright (C) 2026 Al Gelders
-
-This file is part of the airscenting an trailing logging programs
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""
-
-"""
 Help Window Module
 
 This module provides a searchable help dialog for the SAR K9 Training Records application.
@@ -38,6 +17,8 @@ import re
 # Help content organized by section
 HELP_SECTIONS = {
     "SAR K9 Training Record Introduction": """This is a preliminary help file to get the user started.  This window can always be viewed by pushing F1 on your keyboard.  It is advised that the user read this entire document one time to get an idea of how to use the program.  However, it is not necessary to memorize it since tooltips pop up when hovering the mouse over most of the more complicated entries.""",
+
+    "Backup": """Automatic Backup is managed with two methods.  A full backup is created each time the program is edited which is saved to the Primary Storage Folder.  If a Secondary Storage Folder is selected that backup is also saved here.  If this folder is shared with another user (such as a shared Google Drive) it is automatically used to ensure the most current session log. (More about this later.)""",
 
     "Setup": """• Select the primary storage folder.  The database and configuration files are saved here.  Click the **Browse** button and navigate to the location you wish to save this data.  On a modern Windows machine placing the folder either on a path included in Microsoft OneDrive or a Dropbox folder is recommended.  Then, in the event of a hardware failure, the training log can be recovered as soon as the hardware is repaired.
   • Click **on Initialize Data Structures** which creates an empty database. 
@@ -64,7 +45,19 @@ HELP_SECTIONS = {
     "Miscellaneous Items": """**Images** – photos or maps or GoPro mp4 files can be added either by browsing to the desired file or using Windows drag and drop.
 **View/Edit/Hide Prior Sessions(s)** – This can be useful if the user discovers that a prior session needs to be updated. Simply select a session or group of sessions to review.  If a session is to be updated, make the desired changes followed by clicking the **Update Session** button.  If more than one session is to be updated, click **View/Edit/Hide Prior Session(s)** again and select the session to update.
 The user also has the ability to hide a session.  This function is in lieu of a delete function which would be permanent and could lead to irreversible data loss. When in view mode simply click **Hide**. To return a session to the active list hidden sessions can be selected from the View/Edit/Hide window using the radio buttons at the bottom of the form. Then simply click **Restore**.
-**Export PDF** – generates human readable logs for review by team members or for certification. These documents are saved in the folder defined at setup time."""
+**Export PDF** – generates human readable logs for review by team members or for certification. These documents are saved in the folder defined at setup time.""",
+
+    "Backup Details": """As mentioned before, there are multiple methods of automatic backup. Those methods are:
+  • Full backup to the Primary Storage Folder
+  • Full backup to the Secondary Storage Folder
+  • Area Search and Trailing backup to Excel compatible files if the Excel File Folder is configured.  These files can be edited but extreme care must be taken to avoid corrupting data. Also, note that it may generate a ‘Conflict’ between remote data and local data.  Select Remote to incorporate the latest changes. If there is a question, the user should probably consult with the other user(s) prior to accepting changes.
+In the event of a hardware crash, once the hardware is repaired, first try starting the program.  If an error occurs stating the database is corrupted, then use the following procedure:
+  • Initialize the database
+  • Try restoring from the Primary Storage Folder
+  • If that fails, try to restore from the Secondary Storage Folder.
+  • As a last resort, try restoring from the Excel files.  Remember that Area Search and Trailing data are in separate files so it may be necessary to restore from both.""",
+
+    "Use Across Multiple Machines": """Limited synchronization is possible across multiple machines when the Secondary Storage Folder is located on a networked drive, Google Drive, Microsoft OneDrive, or Dropbox. This allows you to edit a session on one machine and have it duplicate on a second.  At startup the program checks that Secondary Folder and if there is newer data present the user is presented with a summary of changes which they can then choose to accept or reject.  Note, however, that this is not a true networked application.  This means that If multiple individuals are editing at the same time, data loss could occur.  Should a message pop up stating that there is another copy present, follow the prompts. If in doubt it is advisable to contact any other user prior to continuing. (If you were the one editing and you just forgot to exit the program, it is safe to continue)"""
 }
 
 # Index mapping terms to sections

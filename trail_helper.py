@@ -793,7 +793,7 @@ class TrailingHelper:
                 return None
             
             def format_temperature(value):
-                """Format temperature value - add °F suffix only if value is purely numeric"""
+                """Format temperature value - add Â°F suffix only if value is purely numeric"""
                 if not value or not str(value).strip():
                     return value
                 val_str = str(value).strip()
@@ -938,7 +938,7 @@ class TrailingHelper:
                 row = add_field('Weather (Laying)', session_data.get('t_weather_laying'))
                 if row:
                     weather_laying_data.append(row)
-                # Temperature with °F suffix if purely numeric
+                # Temperature with Â°F suffix if purely numeric
                 row = add_field('Temperature (Laying)', format_temperature(session_data.get('t_temp_laying')))
                 if row:
                     weather_laying_data.append(row)
@@ -961,7 +961,7 @@ class TrailingHelper:
                 row = add_field('Weather (Running)', session_data.get('t_weather_running'))
                 if row:
                     weather_running_data.append(row)
-                # Temperature with °F suffix if purely numeric
+                # Temperature with Â°F suffix if purely numeric
                 row = add_field('Temperature (Running)', format_temperature(session_data.get('t_temp_running')))
                 if row:
                     weather_running_data.append(row)

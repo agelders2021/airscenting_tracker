@@ -2923,7 +2923,7 @@ class SetupTab:
             
             messagebox.showinfo("Restore Complete", 
                 f"Database restored from:\n{Path(json_filepath).name}\n\n"
-                "âš ï¸ Please restart the program before entering session tabs.")
+                "⚠️ Please restart the program before entering session tabs.")
             
         except Exception as e:
             messagebox.showerror("Restore Error", f"Failed to restore from JSON:\n{e}")
@@ -2937,15 +2937,15 @@ class SetupTab:
         # First warn about what partial restore does
         result = messagebox.askyesno(
             "Partial Restore Warning",
-            "âš ï¸ IMPORTANT: Partial Restore from Excel\n\n"
+            "⚠️ IMPORTANT: Partial Restore from Excel\n\n"
             "This restores ONLY session data for one type of search\n"
             "(either Area Search OR Trailing).\n\n"
             "It does NOT restore:\n"
-            "  â€¢ Dog names\n"
-            "  â€¢ Training locations\n"
-            "  â€¢ Terrain types\n"
-            "  â€¢ Distraction types\n"
-            "  â€¢ Other ancillary data from the Setup tab\n\n"
+            "  • Dog names\n"
+            "  • Training locations\n"
+            "  • Terrain types\n"
+            "  • Distraction types\n"
+            "  • Other ancillary data from the Setup tab\n\n"
             "Do you want to continue?",
             icon='warning'
         )
@@ -2956,7 +2956,7 @@ class SetupTab:
         # Second warning about Excel data not being validated
         result = messagebox.askyesno(
             "Data Consistency Warning",
-            "âš ï¸ SECOND WARNING\n\n"
+            "⚠️ SECOND WARNING\n\n"
             "Any changes made directly in the Excel file are NOT checked\n"
             "for consistency when reloading.\n\n"
             "Invalid data may cause errors or unexpected behavior.\n\n"
@@ -3033,7 +3033,7 @@ class SetupTab:
                 
                 messagebox.showinfo("Restore Complete", 
                     f"{type_display} sessions restored:\n{msg}\n\n"
-                    "âš ï¸ Please restart the program before entering session tabs.")
+                    "⚠️ Please restart the program before entering session tabs.")
             else:
                 messagebox.showerror("Restore Error", msg)
             
