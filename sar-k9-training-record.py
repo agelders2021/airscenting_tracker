@@ -155,7 +155,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         if secondary_folder and Path(secondary_folder).exists():
             self.lock_manager = LockManager(self.root, secondary_folder)
             if not self.lock_manager.check_startup_lock():
-                # User chose to exit Ã¢â‚¬â€œ tear down and abort startup
+                # User chose to exit ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ tear down and abort startup
                 self.root.destroy()
                 import sys
                 sys.exit(0)
@@ -295,6 +295,9 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         
         # Enable geometry saving after startup
         self.root.after(1000, self._enable_geometry_save)
+        
+        # Check for and restore any inactivity snapshot from a previous forced exit
+        self.root.after(2000, self._check_and_restore_inactivity_snapshot)
         
         # Set up window close handler
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -799,9 +802,14 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
     def _lock_force_exit(self):
         """Called by LockManager on inactivity timeout.
 
-        Performs the exit backup and releases the lock but does NOT prompt
-        about unsaved form data.  The LockManager handles root.destroy().
+        Saves a snapshot of any unsaved form data, performs the exit backup,
+        and releases the lock but does NOT prompt about unsaved form data.
+        The LockManager handles root.destroy().
         """
+        try:
+            self._save_inactivity_snapshot()
+        except Exception:
+            pass
         try:
             self._perform_exit_backup()
         except Exception:
@@ -1037,6 +1045,455 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         except:
             pass
     
+    # =========================================================================
+    # INACTIVITY SNAPSHOT  (save unsaved form data on forced exit)
+    # =========================================================================
+
+    SNAPSHOT_FILENAME = "inactivity_snapshot.json"
+
+    def _get_snapshot_path(self):
+        """Return the Path to the inactivity snapshot file, or None."""
+        primary_folder = sv.db_path.get().strip()
+        if not primary_folder:
+            return None
+        json_folder = Path(primary_folder) / "JSON"
+        if json_folder.exists():
+            return json_folder / self.SNAPSHOT_FILENAME
+        return None
+
+    # -----------------------------------------------------------------
+    # Collecting form data
+    # -----------------------------------------------------------------
+
+    def _collect_air_form_data(self):
+        """Collect current Air Scenting form data into a dictionary.
+
+        Returns None if no meaningful data has been entered.
+        """
+        import tkinter as tk
+
+        # Quick check: is there any data worth saving?
+        purpose = sv.session_purpose.get()
+        field_support = sv.field_support.get()
+        location = sv.location.get()
+        search_area = sv.search_area_size.get()
+        num_subjects = sv.num_subjects.get()
+        handler_knowledge = sv.handler_knowledge.get()
+        weather = sv.weather.get()
+        temperature = sv.temperature.get()
+        wind_direction = sv.wind_direction.get()
+        wind_speed = sv.wind_speed.get()
+        search_type = sv.search_type.get()
+        drive_level = sv.drive_level.get()
+        subjects_found = sv.subjects_found.get()
+        a_percent_searched = sv.a_percent_searched.get()
+        start_time = sv.start_time.get()
+        finish_time = sv.finish_time.get()
+
+        try:
+            comments = self.a_comments_text.get("1.0", tk.END).strip()
+        except (AttributeError, tk.TclError):
+            comments = ""
+
+        purposes = self.get_selected_purposes() if hasattr(self, 'get_selected_purposes') else []
+        terrains = list(self.accumulated_terrains) if hasattr(self, 'accumulated_terrains') else []
+        map_files = list(self.map_files_list) if hasattr(self, 'map_files_list') else []
+
+        # Subject responses
+        subject_responses = []
+        try:
+            for i in range(1, 11):
+                item_id = f'subject_{i}'
+                tags = self.a_subject_responses_tree.item(item_id, 'tags')
+                if 'enabled' in tags:
+                    values = self.a_subject_responses_tree.item(item_id, 'values')
+                    tfr = values[1] if len(values) > 1 else ''
+                    refind = values[2] if len(values) > 2 else ''
+                    if tfr or refind:
+                        subject_responses.append({
+                            "subject_number": i,
+                            "tfr": tfr,
+                            "refind": refind
+                        })
+        except (AttributeError, tk.TclError):
+            pass
+
+        form_has_data = (
+            purpose or field_support or location or search_area or
+            num_subjects or handler_knowledge or weather or temperature or
+            wind_direction or wind_speed or search_type or drive_level or
+            subjects_found or a_percent_searched or start_time or finish_time or
+            comments or purposes or terrains or map_files or subject_responses
+        )
+
+        if not form_has_data:
+            return None
+
+        try:
+            date_val = self.a_date_picker.get_date().strftime("%Y-%m-%d")
+        except Exception:
+            date_val = sv.date.get()
+
+        return {
+            "date": date_val,
+            "session_number": sv.session_number.get(),
+            "handler": sv.handler.get(),
+            "dog_name": sv.dog.get(),
+            "session_purpose": purpose,
+            "field_support": field_support,
+            "location": location,
+            "search_area_size": search_area,
+            "num_subjects": num_subjects,
+            "handler_knowledge": handler_knowledge,
+            "weather": weather,
+            "temperature": temperature,
+            "wind_direction": wind_direction,
+            "wind_speed": wind_speed,
+            "search_type": search_type,
+            "drive_level": drive_level,
+            "subjects_found": subjects_found,
+            "a_percent_searched": a_percent_searched,
+            "start_time": start_time,
+            "finish_time": finish_time,
+            "comments": comments,
+            "selected_purposes": purposes,
+            "selected_terrains": terrains,
+            "map_files": map_files,
+            "subject_responses": subject_responses,
+        }
+
+    def _collect_trailing_form_data(self):
+        """Collect current Trailing form data into a dictionary.
+
+        Returns None if no meaningful data has been entered.
+        """
+        import tkinter as tk
+
+        if not hasattr(self, 'trailing_entry'):
+            return None
+
+        te = self.trailing_entry
+
+        # Check if trailing has unsaved changes compared to its snapshot
+        try:
+            if not te.has_unsaved_changes():
+                return None
+        except Exception:
+            pass
+
+        # Collect basic session data
+        try:
+            session_data = te.get_session_data()
+        except Exception:
+            return None
+
+        # Collect child table data (terrains, purposes, distractions)
+        try:
+            terrains = list(te.terrain_listbox.get(0, tk.END))
+        except (AttributeError, tk.TclError):
+            terrains = []
+
+        try:
+            purposes = list(te.purpose_listbox.get(0, tk.END))
+        except (AttributeError, tk.TclError):
+            purposes = []
+
+        distractions = []
+        try:
+            for item in te.distraction_tree.get_children():
+                values = te.distraction_tree.item(item, 'values')
+                if len(values) >= 2:
+                    distractions.append({
+                        "type": values[0],
+                        "response": values[1]
+                    })
+        except (AttributeError, tk.TclError):
+            pass
+
+        # Quick check: is there any real data?
+        has_data = False
+        for key, val in session_data.items():
+            if key in ('t_date', 't_session_number', 't_handler', 't_dog_name'):
+                continue  # Skip identity fields
+            if val:
+                has_data = True
+                break
+        if not has_data and not terrains and not purposes and not distractions:
+            return None
+
+        session_data["t_selected_terrains"] = terrains
+        session_data["t_selected_purposes"] = purposes
+        session_data["t_distractions"] = distractions
+
+        return session_data
+
+    # -----------------------------------------------------------------
+    # Save snapshot
+    # -----------------------------------------------------------------
+
+    def _save_inactivity_snapshot(self):
+        """Save unsaved form data from both tabs to a JSON snapshot file.
+
+        Called during forced exit (inactivity timeout) so that the data
+        can be recovered on the next startup.
+        """
+        snapshot_path = self._get_snapshot_path()
+        if not snapshot_path:
+            return
+
+        air_data = None
+        trailing_data = None
+
+        try:
+            air_data = self._collect_air_form_data()
+        except Exception:
+            pass
+
+        try:
+            trailing_data = self._collect_trailing_form_data()
+        except Exception:
+            pass
+
+        if not air_data and not trailing_data:
+            return  # Nothing unsaved to snapshot
+
+        snapshot = {
+            "snapshot_version": "1.0",
+            "snapshot_time": datetime.now().isoformat(),
+            "reason": "inactivity_timeout",
+        }
+        if air_data:
+            snapshot["air_scenting"] = air_data
+        if trailing_data:
+            snapshot["trailing"] = trailing_data
+
+        try:
+            with open(snapshot_path, 'w', encoding='utf-8') as f:
+                json.dump(snapshot, f, indent=2, default=str, ensure_ascii=False)
+        except Exception:
+            pass
+
+    # -----------------------------------------------------------------
+    # Restore snapshot on next startup
+    # -----------------------------------------------------------------
+
+    def _check_and_restore_inactivity_snapshot(self):
+        """Check for an inactivity snapshot and restore unsaved data.
+
+        Called during startup after all widgets and initial data are loaded.
+        If a snapshot is found the form data is restored, the user is warned,
+        and the snapshot file is deleted.
+        """
+        snapshot_path = self._get_snapshot_path()
+        if not snapshot_path or not snapshot_path.exists():
+            return
+
+        try:
+            with open(snapshot_path, 'r', encoding='utf-8') as f:
+                snapshot = json.load(f)
+        except Exception:
+            # Corrupt or unreadable - remove it
+            try:
+                snapshot_path.unlink()
+            except Exception:
+                pass
+            return
+
+        air_data = snapshot.get("air_scenting")
+        trailing_data = snapshot.get("trailing")
+        snapshot_time = snapshot.get("snapshot_time", "unknown")
+
+        restored_tabs = []
+
+        # Restore Air Scenting data
+        if air_data:
+            try:
+                self._restore_air_form_data(air_data)
+                restored_tabs.append("Area Search")
+            except Exception:
+                pass
+
+        # Restore Trailing data
+        if trailing_data:
+            try:
+                self._restore_trailing_form_data(trailing_data)
+                restored_tabs.append("Trailing")
+            except Exception:
+                pass
+
+        # Delete the snapshot file after processing
+        try:
+            snapshot_path.unlink()
+        except Exception:
+            pass
+
+        if not restored_tabs:
+            return
+
+        # Format a user-friendly timestamp
+        try:
+            dt = datetime.fromisoformat(snapshot_time)
+            friendly_time = dt.strftime("%B %d, %Y at %I:%M %p")
+        except Exception:
+            friendly_time = snapshot_time
+
+        tabs_text = " and ".join(restored_tabs)
+        messagebox.showwarning(
+            "Recovered Unsaved Data",
+            f"The program was closed automatically due to inactivity on "
+            f"{friendly_time}.\n\n"
+            f"Unsaved session data from the {tabs_text} tab"
+            f"{'s' if len(restored_tabs) > 1 else ''} has been restored "
+            f"into the form.\n\n"
+            f"Please review the data and save if correct."
+        )
+
+        self.show_status_message(
+            f"Recovered unsaved data in {tabs_text} from {friendly_time}",
+            "info"
+        )
+
+    def _restore_air_form_data(self, data):
+        """Populate the Air Scenting form from a snapshot dictionary."""
+        import tkinter as tk
+
+        # Basic StringVar fields
+        sv.date.set(data.get("date", ""))
+        try:
+            self.a_date_picker.set_date(
+                datetime.strptime(data["date"], "%Y-%m-%d"))
+        except Exception:
+            pass
+
+        sv.session_number.set(str(data.get("session_number", "")))
+        sv.handler.set(data.get("handler", ""))
+        sv.dog.set(data.get("dog_name", ""))
+        sv.session_purpose.set(data.get("session_purpose", ""))
+        sv.field_support.set(data.get("field_support", ""))
+        sv.location.set(data.get("location", ""))
+        sv.search_area_size.set(data.get("search_area_size", ""))
+        sv.num_subjects.set(data.get("num_subjects", ""))
+        sv.handler_knowledge.set(data.get("handler_knowledge", ""))
+        sv.weather.set(data.get("weather", ""))
+        sv.temperature.set(data.get("temperature", ""))
+        sv.wind_direction.set(data.get("wind_direction", ""))
+        sv.wind_speed.set(data.get("wind_speed", ""))
+        sv.search_type.set(data.get("search_type", ""))
+        sv.drive_level.set(data.get("drive_level", ""))
+        sv.subjects_found.set(data.get("subjects_found", ""))
+        sv.a_percent_searched.set(data.get("a_percent_searched", ""))
+        sv.start_time.set(data.get("start_time", ""))
+        sv.finish_time.set(data.get("finish_time", ""))
+
+        # Time pickers
+        from ui_form_management import TIME_PICKER_SET_BG, TIME_PICKER_NULL_BG
+        for time_key, picker_attr, null_attr, color_setter in [
+            ("start_time", "a_start_time_picker",
+             "a_start_time_is_null", "_set_start_time_picker_color"),
+            ("finish_time", "a_finish_time_picker",
+             "a_finish_time_is_null", "_set_finish_time_picker_color"),
+        ]:
+            time_str = data.get(time_key, "")
+            if time_str and hasattr(self, picker_attr):
+                try:
+                    picker = getattr(self, picker_attr)
+                    if ':' in time_str:
+                        h, m = time_str.split(':')
+                        picker.set24Hrs(int(h))
+                        picker.setMins(int(m))
+                    elif len(time_str) == 4 and time_str.isdigit():
+                        picker.set24Hrs(int(time_str[:2]))
+                        picker.setMins(int(time_str[2:]))
+                    setattr(self, null_attr, False)
+                    getattr(self, color_setter)(TIME_PICKER_SET_BG)
+                except Exception:
+                    pass
+
+        # Comments
+        try:
+            self.a_comments_text.delete("1.0", tk.END)
+            comments = data.get("comments", "")
+            if comments:
+                self.a_comments_text.insert("1.0", comments)
+        except (AttributeError, tk.TclError):
+            pass
+
+        # Terrains
+        terrains = data.get("selected_terrains", [])
+        if terrains:
+            self.accumulated_terrains = list(terrains)
+            if hasattr(self, 'a_accumulated_terrain_combo'):
+                self.a_accumulated_terrain_combo['values'] = terrains
+                sv.accumulated_terrain.set(terrains[0] if terrains else "")
+            if hasattr(self, 'a_terrain_listbox'):
+                self.a_terrain_listbox.delete(0, tk.END)
+                for t in terrains:
+                    self.a_terrain_listbox.insert(tk.END, t)
+
+        # Purposes
+        purposes = data.get("selected_purposes", [])
+        if purposes and hasattr(self, 'a_purpose_listbox'):
+            self.a_purpose_listbox.delete(0, tk.END)
+            sv.a_purpose_list.clear()
+            for p in purposes:
+                self.a_purpose_listbox.insert(tk.END, p)
+                sv.a_purpose_list.append(p)
+            if hasattr(self, '_update_purpose_scrollbar'):
+                self._update_purpose_scrollbar()
+
+        # Map files
+        map_files = data.get("map_files", [])
+        if map_files:
+            import os
+            self.map_files_list = list(map_files)
+            self.a_map_listbox.delete(0, tk.END)
+            for filepath in map_files:
+                self.a_map_listbox.insert(tk.END, os.path.basename(filepath))
+            self.a_view_map_button.config(state=tk.NORMAL)
+            self.a_delete_map_button.config(state=tk.NORMAL)
+
+        # Subject responses
+        subject_responses = data.get("subject_responses", [])
+        num_subj = data.get("num_subjects", "")
+        if num_subj:
+            self.form_mgmt.update_subjects_found(preserve_value=True)
+        for resp in subject_responses:
+            sn = resp.get("subject_number", 0)
+            item_id = f'subject_{sn}'
+            try:
+                if self.a_subject_responses_tree.exists(item_id):
+                    self.a_subject_responses_tree.item(item_id, tags='enabled')
+                    self.a_subject_responses_tree.item(item_id, values=(
+                        f'Subject {sn}',
+                        resp.get("tfr", ""),
+                        resp.get("refind", "")
+                    ))
+            except (AttributeError, tk.TclError):
+                pass
+
+    def _restore_trailing_form_data(self, data):
+        """Populate the Trailing form from a snapshot dictionary."""
+        if not hasattr(self, 'trailing_entry'):
+            return
+
+        te = self.trailing_entry
+
+        # Use the existing set_session_data for basic fields
+        te.set_session_data(data)
+
+        # Restore child lists
+        terrains = data.get("t_selected_terrains", [])
+        if terrains:
+            te.set_selected_terrains(terrains)
+
+        purposes = data.get("t_selected_purposes", [])
+        if purposes:
+            te.set_selected_purposes(purposes)
+
+        distractions = data.get("t_distractions", [])
+        if distractions:
+            te.set_distractions(distractions)
+
     # =========================================================================
     # AIRSCENTING METHODS (delegated from air_ui.py)
     # =========================================================================
