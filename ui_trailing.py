@@ -527,7 +527,12 @@ class TrailingEntryTab:
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Temperature (\N{Degree Sign}F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        tk.Entry(weather_frame, textvariable=sv.t_temp_laying, width=14).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        ttk.Combobox(weather_frame, textvariable=sv.t_temp_laying, width=12,
+                     values=['20\N{Degree Sign}F to 30\N{Degree Sign}F', '30\N{Degree Sign}F to 40\N{Degree Sign}F',
+                             '40\N{Degree Sign}F to 50\N{Degree Sign}F', '50\N{Degree Sign}F to 60\N{Degree Sign}F',
+                             '60\N{Degree Sign}F to 70\N{Degree Sign}F', '70\N{Degree Sign}F to 80\N{Degree Sign}F',
+                             '80\N{Degree Sign}F to 90\N{Degree Sign}F', '90\N{Degree Sign}F to 100\N{Degree Sign}F',
+                             '100\N{Degree Sign}F to 110\N{Degree Sign}F']).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="w", padx=5, pady=2)
         tk.Entry(weather_frame, textvariable=sv.t_humidity_laying, width=14).grid(row=1, column=3, sticky="w", padx=5, pady=2)
@@ -551,7 +556,12 @@ class TrailingEntryTab:
         wind_dir_combo.grid(row=0, column=3, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Temperature (\N{Degree Sign}F):").grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        tk.Entry(weather_frame, textvariable=sv.t_temp_running, width=14).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        ttk.Combobox(weather_frame, textvariable=sv.t_temp_running, width=12,
+                     values=['20\N{Degree Sign}F to 30\N{Degree Sign}F', '30\N{Degree Sign}F to 40\N{Degree Sign}F',
+                             '40\N{Degree Sign}F to 50\N{Degree Sign}F', '50\N{Degree Sign}F to 60\N{Degree Sign}F',
+                             '60\N{Degree Sign}F to 70\N{Degree Sign}F', '70\N{Degree Sign}F to 80\N{Degree Sign}F',
+                             '80\N{Degree Sign}F to 90\N{Degree Sign}F', '90\N{Degree Sign}F to 100\N{Degree Sign}F',
+                             '100\N{Degree Sign}F to 110\N{Degree Sign}F']).grid(row=1, column=1, sticky="w", padx=5, pady=2)
         
         tk.Label(weather_frame, text="Humidity (%):").grid(row=1, column=2, sticky="w", padx=5, pady=2)
         tk.Entry(weather_frame, textvariable=sv.t_humidity_running, width=14).grid(row=1, column=3, sticky="w", padx=5, pady=2)

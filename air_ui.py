@@ -242,7 +242,12 @@ def setup_airscent_tab(ui):
     
     # Row 2: Temperature, Wind Speed (under Wind Direction)
     tk.Label(search_frame, text="Temperature (\N{Degree Sign}F):").grid(row=2, column=0, sticky="w", padx=5, pady=2)
-    tk.Entry(search_frame, textvariable=sv.temperature, width=21).grid(row=2, column=1, sticky="w", padx=5, pady=2)
+    ttk.Combobox(search_frame, textvariable=sv.temperature, width=19,
+                 values=['20\N{Degree Sign}F to 30\N{Degree Sign}F', '30\N{Degree Sign}F to 40\N{Degree Sign}F',
+                         '40\N{Degree Sign}F to 50\N{Degree Sign}F', '50\N{Degree Sign}F to 60\N{Degree Sign}F',
+                         '60\N{Degree Sign}F to 70\N{Degree Sign}F', '70\N{Degree Sign}F to 80\N{Degree Sign}F',
+                         '80\N{Degree Sign}F to 90\N{Degree Sign}F', '90\N{Degree Sign}F to 100\N{Degree Sign}F',
+                         '100\N{Degree Sign}F to 110\N{Degree Sign}F']).grid(row=2, column=1, sticky="w", padx=5, pady=2)
     
     tk.Label(search_frame, text="Wind Speed:").grid(row=2, column=2, sticky="w", padx=5, pady=2)
     wind_speed_entry = tk.Entry(search_frame, textvariable=sv.wind_speed, width=18)
