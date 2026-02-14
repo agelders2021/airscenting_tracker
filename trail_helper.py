@@ -105,6 +105,7 @@ class TrailingHelper:
                 self.config["trailing"] = {}
             if current_handler:
                 self.config["trailing"]["default_handler"] = current_handler
+                self.config["trailing"]["last_handler"] = current_handler
             if current_dog:
                 self.config["trailing"]["last_dog"] = current_dog
             self.save_config()
@@ -792,14 +793,14 @@ class TrailingHelper:
                 return None
             
             def format_temperature(value):
-                """Format temperature value - add Ã‚Â°F suffix only if value is purely numeric"""
+                """Format temperature value - add °F suffix only if value is purely numeric"""
                 if not value or not str(value).strip():
                     return value
                 val_str = str(value).strip()
                 # Check if value is purely numeric (int or float)
                 try:
                     float(val_str)
-                    return f"{val_str}\N{Degree Sign}F"
+                    return f"{val_str}°F"
                 except ValueError:
                     # Mixed content - return as-is
                     return val_str
@@ -937,7 +938,7 @@ class TrailingHelper:
                 row = add_field('Weather (Laying)', session_data.get('t_weather_laying'))
                 if row:
                     weather_laying_data.append(row)
-                # Temperature with Ã‚Â°F suffix if purely numeric
+                # Temperature with °F suffix if purely numeric
                 row = add_field('Temperature (Laying)', format_temperature(session_data.get('t_temp_laying')))
                 if row:
                     weather_laying_data.append(row)
@@ -960,7 +961,7 @@ class TrailingHelper:
                 row = add_field('Weather (Running)', session_data.get('t_weather_running'))
                 if row:
                     weather_running_data.append(row)
-                # Temperature with Ã‚Â°F suffix if purely numeric
+                # Temperature with °F suffix if purely numeric
                 row = add_field('Temperature (Running)', format_temperature(session_data.get('t_temp_running')))
                 if row:
                     weather_running_data.append(row)

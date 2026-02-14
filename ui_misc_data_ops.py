@@ -478,17 +478,17 @@ class MiscDataOperations:
 
             # ---------------------------------------------------------------
             # Build lookup indexes for child-table rows in the backup.
-            # Key = backup session id  →  list of child rows
+            # Key = backup session id  â†’  list of child rows
             # ---------------------------------------------------------------
             air_child_tables = {
-                "selected_terrains": {},       # session_id → [rows]
-                "a_selected_purposes": {},     # session_id → [rows]
-                "subject_responses": {},       # session_id → [rows]
+                "selected_terrains": {},       # session_id â†’ [rows]
+                "a_selected_purposes": {},     # session_id â†’ [rows]
+                "subject_responses": {},       # session_id â†’ [rows]
             }
             trail_child_tables = {
-                "t_selected_terrains": {},     # t_session_id → [rows]
-                "t_selected_purposes": {},     # t_session_id → [rows]
-                "t_distractions": {},          # t_session_id → [rows]
+                "t_selected_terrains": {},     # t_session_id â†’ [rows]
+                "t_selected_purposes": {},     # t_session_id â†’ [rows]
+                "t_distractions": {},          # t_session_id â†’ [rows]
             }
 
             for table_key, idx_dict in air_child_tables.items():
@@ -550,7 +550,7 @@ class MiscDataOperations:
                                 conn.commit()
                                 stats["air_updated"] += 1
                         else:
-                            # New session – insert
+                            # New session â€“ insert
                             bk_id = bk_session.get("id")
                             cols = [k for k in bk_session.keys()
                                     if k not in ('id',)]
@@ -653,6 +653,32 @@ class MiscDataOperations:
                 except Exception:
                     pass
 
+            # --- ensure dog names from backup exist in dogs table ----------
+            # Sessions may reference dogs not yet in the local dogs table.
+            # Only dog names matter here; other setup lists are less critical.
+            if stats["air_added"] or stats["trail_added"] or stats["air_updated"] or stats["trail_updated"]:
+                try:
+                    from ui_utils import get_username
+                    for bk_dog in backup_data.get("dogs", []):
+                        dog_name = bk_dog.get("name")
+                        if not dog_name:
+                            continue
+                        with database.get_connection() as conn:
+                            exists = conn.execute(
+                                sa_text("SELECT id FROM dogs WHERE name = :name"),
+                                {"name": dog_name}
+                            ).fetchone()
+                            if not exists:
+                                conn.execute(
+                                    sa_text("INSERT INTO dogs (name, user_name) "
+                                            "VALUES (:name, :user_name)"),
+                                    {"name": dog_name,
+                                     "user_name": bk_dog.get("user_name", get_username())})
+                                conn.commit()
+                                stats["dogs_added"] = stats.get("dogs_added", 0) + 1
+                except Exception:
+                    pass  # non-fatal; sessions are already merged
+
             # --- restore original DB type ----------------------------------
             config.DB_TYPE = old_db_type
             database.engine.dispose()
@@ -667,6 +693,8 @@ class MiscDataOperations:
 
             if total > 0:
                 msg = "Secondary backup merge complete!\n\n"
+                if stats.get("dogs_added"):
+                    msg += f"  Added {stats['dogs_added']} dog name(s)\n"
                 if stats["air_added"]:
                     msg += f"  Added {stats['air_added']} Area Search session(s)\n"
                 if stats["air_updated"]:
@@ -931,7 +959,7 @@ class MiscDataOperations:
         result = messagebox.askyesno(
             "Rebuild Database?",
             f"{reason}\n\n"
-            f"Found in {json_path}:\n" + "\n".join(f"  ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ {item}" for item in restore_items) + "\n\n"
+            f"Found in {json_path}:\n" + "\n".join(f"  • {item}" for item in restore_items) + "\n\n"
             "Would you like to rebuild the database from these backups?",
             icon='question'
         )
@@ -1977,7 +2005,7 @@ class MiscDataOperations:
         
         # Warning
         warning = tk.Label(dialog, 
-            text="ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Warning: Restoring will add missing data from the backup.\nExisting data will not be overwritten.",
+            text="⚠️ Warning: Restoring will add missing data from the backup.\nExisting data will not be overwritten.",
             fg="orange", justify="center")
         warning.pack(pady=5)
         
@@ -2187,6 +2215,30 @@ class MiscDataOperations:
             # Restore related tables if present
             self._restore_related_tables(backup_data, database)
             
+            # Restore config settings from backup (excluding window geometry)
+            backup_config = backup_data.get("config", {})
+            if backup_config and hasattr(self.ui, 'config'):
+                # Keys to exclude from restore - window geometry is machine-specific
+                exclude_keys = {"window_geometry"}
+                
+                for key, value in backup_config.items():
+                    if key in exclude_keys:
+                        continue
+                    if isinstance(value, dict):
+                        # For nested sections (airscenting, trailing), merge
+                        # but still exclude window_geometry inside them
+                        if key not in self.ui.config:
+                            self.ui.config[key] = {}
+                        for subkey, subvalue in value.items():
+                            if subkey in exclude_keys:
+                                continue
+                            self.ui.config[key][subkey] = subvalue
+                    else:
+                        self.ui.config[key] = value
+                
+                self.ui.save_config()
+                stats["config_restored"] = True
+            
             # Restore original DB_TYPE
             config.DB_TYPE = old_db_type
             database.engine.dispose()
@@ -2207,8 +2259,9 @@ class MiscDataOperations:
                 self.ui.refresh_terrain_list()
             
             # Show summary
-            total = sum(stats.values())
-            if total > 0:
+            total = sum(v for v in stats.values() if isinstance(v, int))
+            config_restored = stats.get("config_restored", False)
+            if total > 0 or config_restored:
                 msg = "Restore complete!\n\n"
                 if stats["dogs_added"] > 0:
                     msg += f"Added {stats['dogs_added']} dog(s)\n"
@@ -2222,6 +2275,8 @@ class MiscDataOperations:
                     msg += f"Added {stats['air_sessions_added']} airscenting session(s)\n"
                 if stats["trail_sessions_added"] > 0:
                     msg += f"Added {stats['trail_sessions_added']} trailing session(s)\n"
+                if config_restored:
+                    msg += "Config settings restored\n"
                 messagebox.showinfo("Restore Complete", msg)
             else:
                 messagebox.showinfo("Restore Complete", 
@@ -2250,7 +2305,7 @@ class MiscDataOperations:
         """
         from sqlalchemy import text
         
-        # Map: (JSON key names to try) â†’ actual DB table name
+        # Map: (JSON key names to try) → actual DB table name
         # First key is the correct name (new backups), second is old wrong name.
         table_mappings = [
             (["selected_terrains", "session_terrains"], "selected_terrains"),
