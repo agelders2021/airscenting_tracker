@@ -2895,8 +2895,15 @@ class SetupTab:
             
             # Perform complete restore
             self._perform_complete_restore(json_file)
+            
+            # After restore, ensure image files are available in primary storage
+            self._sync_images_after_restore(backup_type)
         else:  # No - Partial restore from Excel
-            self._perform_partial_restore(json_folder)
+            restored = self._perform_partial_restore(json_folder)
+            
+            # After restore, ensure image files are available in primary storage
+            if restored:
+                self._sync_images_after_restore(backup_type)
     
     def _perform_complete_restore(self, json_filepath):
         """Perform complete restore from JSON backup file."""
@@ -2923,7 +2930,7 @@ class SetupTab:
             
             messagebox.showinfo("Restore Complete", 
                 f"Database restored from:\n{Path(json_filepath).name}\n\n"
-                "⚠️ Please restart the program before entering session tabs.")
+                "âš ï¸ Please restart the program before entering session tabs.")
             
         except Exception as e:
             messagebox.showerror("Restore Error", f"Failed to restore from JSON:\n{e}")
@@ -2931,32 +2938,36 @@ class SetupTab:
             traceback.print_exc()
     
     def _perform_partial_restore(self, json_folder):
-        """Perform partial restore from Excel file."""
+        """Perform partial restore from Excel file.
+        
+        Returns:
+            bool: True if restore was performed, False if cancelled or failed
+        """
         from tkinter import filedialog
         
         # First warn about what partial restore does
         result = messagebox.askyesno(
             "Partial Restore Warning",
-            "⚠️ IMPORTANT: Partial Restore from Excel\n\n"
+            "âš ï¸ IMPORTANT: Partial Restore from Excel\n\n"
             "This restores ONLY session data for one type of search\n"
             "(either Area Search OR Trailing).\n\n"
             "It does NOT restore:\n"
-            "  • Dog names\n"
-            "  • Training locations\n"
-            "  • Terrain types\n"
-            "  • Distraction types\n"
-            "  • Other ancillary data from the Setup tab\n\n"
+            "  â€¢ Dog names\n"
+            "  â€¢ Training locations\n"
+            "  â€¢ Terrain types\n"
+            "  â€¢ Distraction types\n"
+            "  â€¢ Other ancillary data from the Setup tab\n\n"
             "Do you want to continue?",
             icon='warning'
         )
         
         if not result:
-            return
+            return False
         
         # Second warning about Excel data not being validated
         result = messagebox.askyesno(
             "Data Consistency Warning",
-            "⚠️ SECOND WARNING\n\n"
+            "âš ï¸ SECOND WARNING\n\n"
             "Any changes made directly in the Excel file are NOT checked\n"
             "for consistency when reloading.\n\n"
             "Invalid data may cause errors or unexpected behavior.\n\n"
@@ -2966,7 +2977,7 @@ class SetupTab:
         )
         
         if not result:
-            return
+            return False
         
         # Let user pick an Excel file - prefer Excel folder if configured
         excel_folder = sv.excel_folder.get().strip()
@@ -2979,7 +2990,7 @@ class SetupTab:
         )
         
         if not excel_file:
-            return
+            return False
         
         # Determine session type from filename
         filename = Path(excel_file).name.lower()
@@ -3005,7 +3016,7 @@ class SetupTab:
         )
         
         if not result:
-            return
+            return False
         
         try:
             from sqlalchemy import text
@@ -3033,11 +3044,196 @@ class SetupTab:
                 
                 messagebox.showinfo("Restore Complete", 
                     f"{type_display} sessions restored:\n{msg}\n\n"
-                    "⚠️ Please restart the program before entering session tabs.")
+                    "âš ï¸ Please restart the program before entering session tabs.")
+                return True
             else:
                 messagebox.showerror("Restore Error", msg)
+                return False
             
         except Exception as e:
             messagebox.showerror("Restore Error", f"Failed to restore from Excel:\n{e}")
             import traceback
             traceback.print_exc()
+            return False
+
+    def _sync_images_after_restore(self, backup_type):
+        """
+        Ensure image files referenced by sessions are available in primary storage.
+        
+        For secondary restore: copies ALL image files from secondary Images folder
+            to primary Images folder, then verifies referenced images are present.
+        For primary restore: checks that referenced images exist in primary Images
+            folder; if any are missing, tries to copy them from secondary storage.
+        
+        Notifies user of any image files that cannot be found.
+        
+        Args:
+            backup_type: 'primary' or 'secondary' - which backup was restored from
+        """
+        from ui_utils import get_primary_images_folder, get_secondary_images_folder
+        
+        primary_images = get_primary_images_folder()
+        secondary_images = get_secondary_images_folder()
+        
+        # Create primary images folder if it doesn't exist
+        if not primary_images:
+            db_path = sv.db_path.get().strip()
+            if db_path:
+                primary_images = Path(db_path) / "Images"
+                try:
+                    primary_images.mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    return  # Cannot create, nothing more to do
+            else:
+                return  # No primary storage configured
+        
+        image_extensions = {'.jpg', '.jpeg', '.png', '.pdf', '.gif', '.bmp'}
+        copied_count = 0
+        copy_errors = []
+        
+        # When restoring from secondary, copy ALL images from secondary to primary
+        if backup_type == 'secondary' and secondary_images and secondary_images.exists():
+            for f in secondary_images.iterdir():
+                if f.is_file() and f.suffix.lower() in image_extensions:
+                    dest = primary_images / f.name
+                    if not dest.exists():
+                        try:
+                            shutil.copy2(str(f), str(dest))
+                            copied_count += 1
+                        except Exception as e:
+                            copy_errors.append(f"{f.name} (copy failed: {e})")
+        
+        # Verify all image files referenced in sessions exist in primary
+        referenced_images = self._collect_referenced_image_filenames()
+        missing_files = []
+        
+        for img_name in referenced_images:
+            primary_path = primary_images / img_name
+            if primary_path.exists():
+                continue  # Already present
+            
+            # Try to copy from secondary
+            if secondary_images and secondary_images.exists():
+                secondary_path = secondary_images / img_name
+                if secondary_path.exists():
+                    try:
+                        shutil.copy2(str(secondary_path), str(primary_path))
+                        copied_count += 1
+                        continue
+                    except Exception:
+                        pass
+            
+            # Could not find this image anywhere
+            missing_files.append(img_name)
+        
+        # Notify user about results
+        if copied_count > 0 or missing_files or copy_errors:
+            msg = ""
+            if copied_count > 0:
+                msg += f"Copied {copied_count} image file(s) to primary storage.\n\n"
+            
+            all_missing = missing_files + copy_errors
+            if all_missing:
+                msg += f"WARNING: {len(all_missing)} image file(s) could not be found or copied:\n\n"
+                for name in all_missing[:20]:
+                    msg += f"  - {name}\n"
+                if len(all_missing) > 20:
+                    msg += f"\n  ... and {len(all_missing) - 20} more."
+            
+            if all_missing:
+                messagebox.showwarning("Image Files", msg)
+            elif copied_count > 0:
+                messagebox.showinfo("Image Files", msg)
+    
+    def _collect_referenced_image_filenames(self):
+        """
+        Collect all image filenames referenced by sessions in the database.
+        
+        Queries both airscenting (image_files) and trailing (t_map_files)
+        session tables to find all referenced image filenames.
+        
+        Returns:
+            set: Unique image filenames referenced in the database
+        """
+        referenced = set()
+        try:
+            from sqlalchemy import text
+            import database
+            
+            with database.get_connection() as conn:
+                # Airscenting sessions - image_files column
+                try:
+                    result = conn.execute(text(
+                        "SELECT image_files FROM training_sessions "
+                        "WHERE image_files IS NOT NULL AND image_files != ''"
+                    ))
+                    for row in result:
+                        filenames = self._parse_image_filenames(row[0])
+                        referenced.update(filenames)
+                except Exception:
+                    pass
+                
+                # Trailing sessions - t_map_files column
+                try:
+                    result = conn.execute(text(
+                        "SELECT t_map_files FROM t_training_sessions "
+                        "WHERE t_map_files IS NOT NULL AND t_map_files != ''"
+                    ))
+                    for row in result:
+                        filenames = self._parse_image_filenames(row[0])
+                        referenced.update(filenames)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        
+        return referenced
+    
+    def _parse_image_filenames(self, value):
+        """
+        Parse image filenames from a database value.
+        
+        Handles multiple formats:
+        - JSON array string: '["img1.jpg", "img2.png"]'
+        - Python list (already parsed)
+        - Single filename string
+        - Comma-separated filenames
+        
+        Args:
+            value: The raw value from the database column
+            
+        Returns:
+            list: Extracted filenames (basename only, no paths)
+        """
+        if not value:
+            return []
+        
+        filenames = []
+        
+        # Try JSON array first
+        if isinstance(value, str) and value.startswith('['):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    for item in parsed:
+                        if isinstance(item, str) and item.strip():
+                            filenames.append(Path(item).name)
+                    return filenames
+            except (json.JSONDecodeError, ValueError):
+                pass
+        
+        # Handle Python list
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, str) and item.strip():
+                    filenames.append(Path(item).name)
+            return filenames
+        
+        # Treat as single filename or comma-separated
+        if isinstance(value, str) and value.strip():
+            for part in value.split(','):
+                part = part.strip()
+                if part:
+                    filenames.append(Path(part).name)
+        
+        return filenames

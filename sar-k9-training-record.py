@@ -155,7 +155,7 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
         if secondary_folder and Path(secondary_folder).exists():
             self.lock_manager = LockManager(self.root, secondary_folder)
             if not self.lock_manager.check_startup_lock():
-                # User chose to exit â€“ tear down and abort startup
+                # User chose to exit Ã¢â‚¬â€œ tear down and abort startup
                 self.root.destroy()
                 import sys
                 sys.exit(0)
@@ -872,6 +872,14 @@ class TrainingLoggerUI(AirScentingHelper, TrailingHelper):
             
             # Also export sessions to Excel files
             self._export_sessions_to_excel(primary_folder, secondary_folder)
+            
+            # Sync image files between primary and secondary Images folders
+            try:
+                from backup_sync import sync_image_folders
+                sync_image_folders(Path(primary_folder),
+                                   Path(secondary_folder) if secondary_folder else None)
+            except Exception:
+                pass  # Don't block exit on image sync errors
             
         except Exception as e:
             # Don't block exit on backup errors

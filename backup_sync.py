@@ -336,7 +336,7 @@ class DatabaseOps:
                            a_percent_searched, start_time, finish_time
                     FROM training_sessions
                 """))
-                # Fetch ALL rows immediately before any other queries â€”
+                # Fetch ALL rows immediately before any other queries Ã¢â‚¬â€
                 # prevents cursor invalidation on some DB backends.
                 rows = result.fetchall()
                 
@@ -452,7 +452,7 @@ class DatabaseOps:
                            update_time, uuid, status, checksum, primary_timestamp, secondary_timestamp, user_name
                     FROM t_training_sessions
                 """))
-                # Fetch ALL rows immediately before any other queries â€”
+                # Fetch ALL rows immediately before any other queries Ã¢â‚¬â€
                 # prevents cursor invalidation on some DB backends.
                 rows = result.fetchall()
                 
@@ -1201,7 +1201,7 @@ def write_json_file(folder_path: Path, session: SessionInfo) -> Optional[datetim
         data = session.data.copy()
         
         # Strip DB-specific fields that are meaningless in JSON backup.
-        # 'id' is the auto-increment primary key â€” different on every machine.
+        # 'id' is the auto-increment primary key Ã¢â‚¬â€ different on every machine.
         # 'primary_timestamp' and 'secondary_timestamp' are sync bookkeeping.
         for strip_key in ('id', 'primary_timestamp', 'secondary_timestamp'):
             data.pop(strip_key, None)
@@ -1329,10 +1329,10 @@ class BackupSyncManager:
         Perform complete synchronization.
         
         Simplified approach - compares local (DB) vs remote (secondary) per session:
-        - Same checksum â†’ skip (in sync)
-        - Different checksum â†’ conflict, ask user
-        - New in remote only â†’ import
-        - New in local only â†’ push to secondary
+        - Same checksum Ã¢â€ â€™ skip (in sync)
+        - Different checksum Ã¢â€ â€™ conflict, ask user
+        - New in remote only Ã¢â€ â€™ import
+        - New in local only Ã¢â€ â€™ push to secondary
         Primary JSON simply mirrors the DB after all decisions are made.
         
         Args:
@@ -1392,13 +1392,13 @@ class BackupSyncManager:
         local_keys = set(db_sessions.keys())
         remote_keys = set(secondary_sessions.keys())
         
-        # Sessions only in local â†’ will push to secondary later
+        # Sessions only in local Ã¢â€ â€™ will push to secondary later
         local_only = local_keys - remote_keys
         
-        # Sessions only in remote â†’ new, import them
+        # Sessions only in remote Ã¢â€ â€™ new, import them
         remote_only = remote_keys - local_keys
         
-        # Sessions in both â†’ compare stored checksums
+        # Sessions in both Ã¢â€ â€™ compare stored checksums
         shared_keys = local_keys & remote_keys
         
         conflicts = []
@@ -1417,7 +1417,7 @@ class BackupSyncManager:
             if local_checksum and remote_checksum and local_checksum == remote_checksum:
                 in_sync_count += 1
             else:
-                # Checksums differ â†’ real content conflict, user must decide.
+                # Checksums differ Ã¢â€ â€™ real content conflict, user must decide.
                 # Show update_time so user knows which is newer.
                 local_time = local_session.update_time or datetime.min
                 remote_time = remote_session.update_time or remote_session.file_mtime or datetime.min
@@ -1491,7 +1491,7 @@ class BackupSyncManager:
                 if ts:
                     self.sync_results['secondary_writes'] += 1
                     # write_json_file computed and stored the checksum on
-                    # the session object â€” store the same value in DB so
+                    # the session object Ã¢â‚¬â€ store the same value in DB so
                     # next sync comparison uses identical stored checksums.
                     if local_session.checksum:
                         self.db_ops.store_checksum(
@@ -1511,7 +1511,7 @@ class BackupSyncManager:
                 primary_session = primary_sessions.get(key)
                 
                 if primary_session is None:
-                    # Missing from primary â†’ write it
+                    # Missing from primary Ã¢â€ â€™ write it
                     ts = write_json_file(self.primary_folder, db_session)
                     if ts:
                         self.sync_results['primary_writes'] += 1
@@ -1883,7 +1883,7 @@ def update_session_checksum(db_type: str, session_type: str,
     2. Compute a content checksum over all user data.
     3. Store the checksum in the DB's ``checksum`` column.
     4. Write JSON backup files (primary and secondary) so they are
-       always up-to-date â€” not just after the next startup sync.
+       always up-to-date Ã¢â‚¬â€ not just after the next startup sync.
     
     Args:
         db_type: Database type ('sqlite', 'postgres', etc.)
@@ -1931,7 +1931,7 @@ def update_session_checksum(db_type: str, session_type: str,
             if secondary_folder:
                 write_json_file(secondary_folder, target_session)
         except Exception as e:
-            # JSON write failure is non-fatal â€” sync will catch up later
+            # JSON write failure is non-fatal Ã¢â‚¬â€ sync will catch up later
             print(f"Warning: Could not write JSON backup: {e}")
         
         return checksum
@@ -2016,6 +2016,93 @@ def save_session_with_backup(session_data: dict, session_type: str,
     db_ops.update_timestamps(session, primary_ts, secondary_ts, checksum)
     
     return True, "Backup saved successfully", checksum
+
+
+# ==============================================================================
+# IMAGE FOLDER SYNC (standalone)
+# ==============================================================================
+
+def sync_image_folders(primary_base: Optional[Path] = None,
+                       secondary_base: Optional[Path] = None) -> int:
+    """
+    Ensure both primary and secondary Images folders are complete.
+
+    Copies any image that exists in one folder but not the other, in
+    both directions.  Safe to call at any time (exit backup, startup,
+    manual sync).  Silently returns 0 when either folder is missing
+    or not configured.
+
+    Args:
+        primary_base:   Root of primary storage   (contains an ``Images`` subfolder).
+                        Falls back to ``sv.db_path`` when *None*.
+        secondary_base: Root of secondary storage  (contains an ``Images`` subfolder).
+                        Falls back to ``sv.backup_folder`` when *None*.
+
+    Returns:
+        Number of image files copied (in either direction).
+    """
+    # Resolve folder paths from sv if not provided explicitly
+    if primary_base is None or secondary_base is None:
+        try:
+            import sv
+            if primary_base is None:
+                p = sv.db_path.get().strip()
+                primary_base = Path(p) if p else None
+            if secondary_base is None:
+                s = sv.backup_folder.get().strip()
+                secondary_base = Path(s) if s else None
+        except Exception:
+            pass
+
+    if not primary_base or not secondary_base:
+        return 0
+
+    primary_images = Path(primary_base) / "Images"
+    secondary_images = Path(secondary_base) / "Images"
+
+    # Both folders must exist (or be creatable) for sync to work
+    if not primary_images.exists():
+        return 0
+
+    if not secondary_images.exists():
+        try:
+            secondary_images.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            return 0
+
+    image_extensions = {'.jpg', '.jpeg', '.png', '.pdf', '.gif', '.bmp'}
+    count = 0
+
+    # Catalogue each folder
+    primary_files = {}
+    for f in primary_images.iterdir():
+        if f.is_file() and f.suffix.lower() in image_extensions:
+            primary_files[f.name] = f
+
+    secondary_files = {}
+    for f in secondary_images.iterdir():
+        if f.is_file() and f.suffix.lower() in image_extensions:
+            secondary_files[f.name] = f
+
+    # Primary -> Secondary
+    for name, filepath in primary_files.items():
+        if name not in secondary_files:
+            try:
+                shutil.copy2(str(filepath), str(secondary_images / name))
+                count += 1
+            except Exception:
+                pass
+
+    # Secondary -> Primary
+    for name, filepath in secondary_files.items():
+        if name not in primary_files:
+            try:
+                shutil.copy2(str(filepath), str(primary_images / name))
+                count += 1
+            except Exception:
+                pass
+
+    return count
 
 
 # ==============================================================================

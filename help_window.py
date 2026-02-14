@@ -36,7 +36,8 @@ HELP_SECTIONS = {
   • **Add Session Purpose **and** Session** **Purposes** – these are paired fields that can accumulate multiple training purposes. 
   • **Add Session Purpose** – selects one purpose at a time to be added to accumulated purposes.  Use either use the dropdown list or type in a custom purpose followed by **Enter**.
   • **Session Purposes** – is the list of all purposes of this training session.  If a purpose is added by mistake, simply double-click that entry to remove it.
-  • **Add Terrain Type **and** Accumulated Terrains** behave in the same manner as the Session Purpose pair described above.""",
+  • **Add Terrain Type **and** Accumulated Terrains** behave in the same manner as the Session Purpose pair described above.
+  • The program automatically exits after 15 minutes of non-use without saving any data. (This may be removed in a later release.)""",
 
     "Area Search Session Specific Items": """On the Area Search Training Session Tab **Number of Subjects****,**** Subjects Found **and the table to the right of **Subjects Found** work in tandem.  Notice that ‘Subjects Found’ is disabled until the number of subjects is entered.  Once that is done select the number of subjects found which enables the table to the right.  For each subject found a single click under the heading ‘Indication on Initial Find’ or ‘Indication on Refind’ presents a dropdown box to fill in the dog’s action.""",
 
@@ -57,7 +58,7 @@ In the event of a hardware crash, once the hardware is repaired, first try start
   • If that fails, try to restore from the Secondary Storage Folder.
   • As a last resort, try restoring from the Excel files.  Remember that Area Search and Trailing data are in separate files so it may be necessary to restore from both.""",
 
-    "Use Across Multiple Machines": """Limited synchronization is possible across multiple machines when the Secondary Storage Folder is located on a networked drive, Google Drive, Microsoft OneDrive, or Dropbox. This allows you to edit a session on one machine and have it duplicate on a second.  At startup the program checks that Secondary Folder and if there is newer data present the user is presented with a summary of changes which they can then choose to accept or reject.  Note, however, that this is not a true networked application.  This means that If multiple individuals are editing at the same time, data loss could occur.  Should a message pop up stating that there is another copy present, follow the prompts. If in doubt it is advisable to contact any other user prior to continuing. (If you were the one editing and you just forgot to exit the program, it is safe to continue)"""
+    "Use Across Multiple Machines": """Limited synchronization is possible across multiple machines when the Secondary Storage Folder is located on a networked drive, Google Drive, Microsoft OneDrive, or Dropbox. This allows you to edit a session on one machine and have it duplicate itself on a second.  At startup the program checks that Secondary Folder and if there is newer data present the user is presented with a summary of changes which they can then choose to accept or reject.  Note, however, that this is not a true networked application.  This means that if multiple individuals are editing at the same time, data loss could occur.  Should a message pop up stating that there is another user is editing, follow the prompts. If in doubt it is advisable to contact any other user prior to continuing. (If you were the one editing and you just forgot to exit the program, it is safe to continue)"""
 }
 
 # Index mapping terms to sections
